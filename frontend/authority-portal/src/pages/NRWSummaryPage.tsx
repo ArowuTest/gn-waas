@@ -1,3 +1,4 @@
+import { exportNRWSummaryCSV, exportNRWSummaryPDF } from '../utils/exportUtils'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useNRWSummary } from '../hooks/useQueries'
@@ -63,14 +64,30 @@ export default function NRWSummaryPage() {
           <h1 className="text-2xl font-black text-gray-900 mb-1">NRW Summary</h1>
           <p className="text-gray-500 text-sm">IWA/AWWA Water Balance — District Performance (Last 30 Days)</p>
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
-          title="Refresh"
-        >
-          <RefreshCw className={`w-4 h-4 text-gray-500 ${isFetching ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportNRWSummaryCSV(summaries ?? [])}
+            className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1"
+            title="Export to CSV"
+          >
+            📥 CSV
+          </button>
+          <button
+            onClick={() => exportNRWSummaryPDF(summaries ?? [], 'District NRW Performance')}
+            className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1"
+            title="Export to PDF"
+          >
+            🖨 PDF
+          </button>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+            title="Refresh"
+          >
+            <RefreshCw className={`w-4 h-4 text-gray-500 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Summary KPIs */}

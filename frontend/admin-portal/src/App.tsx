@@ -60,7 +60,7 @@ function AppRoutes() {
         <Route path="field-jobs" element={<PlaceholderPage title="Field Jobs" />} />
         <Route path="gra" element={<PlaceholderPage title="GRA Compliance" />} />
         <Route path="reports" element={<PlaceholderPage title="Reports" />} />
-        <Route path="users" element={<PlaceholderPage title="User Management" />} />
+        <Route path="users" element={<UserManagementPage />} />
         <Route path="settings" element={<PlaceholderPage title="System Settings" />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

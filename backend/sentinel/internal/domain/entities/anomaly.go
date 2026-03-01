@@ -82,3 +82,20 @@ type SupplySchedule struct {
 	EffectiveFrom     time.Time `json:"effective_from"`
 	EffectiveTo       *time.Time `json:"effective_to"`
 }
+
+// WaterBalanceSummary is the read model for the latest water balance record
+type WaterBalanceSummary struct {
+	DistrictID                  interface{} `json:"district_id"`
+	PeriodStart                 interface{} `json:"period_start"`
+	PeriodEnd                   interface{} `json:"period_end"`
+	SystemInputM3               float64     `json:"system_input_m3"`
+	TotalAuthorisedM3           float64     `json:"total_authorised_m3"`
+	TotalApparentLossesM3       float64     `json:"total_apparent_losses_m3"`
+	TotalRealLossesM3           float64     `json:"total_real_losses_m3"`
+	NRWPercent                  float64     `json:"nrw_percent"`
+	ILI                         float64     `json:"ili"`
+	IWAGrade                    string      `json:"iwa_grade"`
+	EstimatedRevenueRecoveryGHS float64     `json:"estimated_revenue_recovery_ghs"`
+	DataConfidenceScore         float64     `json:"data_confidence_score"`
+	ComputedAt                  interface{} `json:"computed_at"`
+}

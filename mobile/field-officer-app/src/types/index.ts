@@ -15,6 +15,7 @@ export interface User {
 
 export interface FieldJob {
   id: string
+  job_reference?: string
   audit_event_id: string
   account_number: string
   customer_name: string

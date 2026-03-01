@@ -1,32 +1,42 @@
-# Node
+# ── Node / Frontend ──────────────────────────────────────────
 node_modules/
+**/node_modules/
 dist/
+**/dist/
 .env.local
 .env.*.local
+*.tsbuildinfo
 
-# Go
+# ── Go ───────────────────────────────────────────────────────
 *.exe
 *.test
 vendor/
+coverage.out
+coverage.html
 
-# IDE
+# ── IDE ──────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
+*.swo
 
-# OS
+# ── OS ───────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# Build artifacts
+# ── Build artifacts ──────────────────────────────────────────
 *.o
 *.a
 *.so
 
-# Test coverage
-coverage.out
-coverage.html
-
-# Logs
+# ── Logs ─────────────────────────────────────────────────────
 *.log
+
+# ── CI (managed separately) ──────────────────────────────────
 .github/workflows/
+
+# ── Secrets ──────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+.env

@@ -54,6 +54,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	configHandler   := handler.NewSystemConfigHandler(configRepo, logger)
 	accountHandler  := handler.NewAccountHandler(accountRepo, logger)
 	nrwHandler      := handler.NewNRWHandler(nrwRepo, logger)
+	adminUserHandler := handler.NewAdminUserHandler(db, logger)
 	healthHandler   := handler.NewHealthHandler()
 
 	// ── Fiber app ─────────────────────────────────────────────────────────────
@@ -152,6 +153,15 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		nrwHandler.GetMyDistrictSummary,
 	)
 	reports.Get("/nrw/:district_id/trend", nrwHandler.GetDistrictNRWTrend)
+
+	// ── Admin User Management (SYSTEM_ADMIN only) ───────────────────────────
+	adminUsers := api.Group("/admin/users",
+		middleware.RequireRoles("SYSTEM_ADMIN"),
+	)
+	adminUsers.Get("/", adminUserHandler.ListUsers)
+	adminUsers.Post("/", adminUserHandler.CreateUser)
+	adminUsers.Patch("/:id", adminUserHandler.UpdateUser)
+	adminUsers.Post("/:id/reset-password", adminUserHandler.ResetPassword)
 
 	// ── System Config (admin only) ────────────────────────────────────────────
 	sysConfig := api.Group("/config",

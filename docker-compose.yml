@@ -342,3 +342,27 @@ services:
     networks:
       gnwaas-network:
         ipv4_address: 172.20.0.30
+
+  # ============================================================
+  # NATS Message Broker (async event bus between services)
+  # ============================================================
+  nats:
+    image: nats:2.10-alpine
+    container_name: gnwaas-nats
+    restart: unless-stopped
+    ports:
+      - "4222:4222"   # Client connections
+      - "8222:8222"   # HTTP monitoring
+    command: >
+      --name gnwaas-nats
+      --http_port 8222
+      --max_payload 1MB
+      --max_connections 1000
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      gnwaas-network:
+        ipv4_address: 172.20.0.31

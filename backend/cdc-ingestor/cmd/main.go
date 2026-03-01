@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,7 +12,14 @@ import (
 	"github.com/ArowuTest/gn-waas/backend/cdc-ingestor/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
+	natsgo "github.com/nats-io/nats.go"
 	"go.uber.org/zap"
+)
+
+// NATS subject constants (mirrors shared/go/messaging)
+const (
+	subjectCDCSyncCompleted = "gnwaas.cdc.sync.completed"
+	subjectSentinelTrigger  = "gnwaas.sentinel.scan.trigger"
 )
 
 func main() {
@@ -61,14 +69,64 @@ func main() {
 	// ── CDC Sync Service ──────────────────────────────────────────────────────
 	cdcSvc := service.NewCDCSyncService(mapper, gnwaasDB, logger)
 
+	// ── NATS Connection (optional — graceful degradation if unavailable) ──────
+	var nc *natsgo.Conn
+	natsURL := getEnv("NATS_URL", "")
+	if natsURL != "" {
+		nc, err = natsgo.Connect(
+			natsURL,
+			natsgo.Name("cdc-ingestor"),
+			natsgo.MaxReconnects(10),
+			natsgo.ReconnectWait(2*time.Second),
+		)
+		if err != nil {
+			logger.Warn("NATS unavailable — running without async messaging", zap.Error(err))
+			nc = nil
+		} else {
+			logger.Info("NATS connected", zap.String("url", natsURL))
+			defer nc.Drain()
+		}
+	} else {
+		logger.Info("NATS_URL not set — async messaging disabled")
+	}
+
+	// publishSyncCompleted publishes a CDC sync completed event to NATS
+	publishSyncCompleted := func(status *service.SyncStatus) {
+		if nc == nil {
+			return
+		}
+		event := map[string]interface{}{
+			"sync_type":       status.SyncType,
+			"records_synced":  status.RecordsSynced,
+			"completed_at":    status.CompletedAt,
+			"status":          status.Status,
+		}
+		data, _ := json.Marshal(event)
+		if err := nc.Publish(subjectCDCSyncCompleted, data); err != nil {
+			logger.Warn("Failed to publish CDC sync event", zap.Error(err))
+		} else {
+			logger.Debug("Published CDC sync completed event",
+				zap.String("sync_type", status.SyncType),
+				zap.Int("records", status.RecordsSynced),
+			)
+		}
+	}
+
 	// ── HTTP Server ───────────────────────────────────────────────────────────
 	app := fiber.New(fiber.Config{AppName: "GN-WAAS CDC Ingestor v1.0"})
 
 	app.Get("/health", func(c *fiber.Ctx) error {
+		natsStatus := "disabled"
+		if nc != nil && nc.IsConnected() {
+			natsStatus = "connected"
+		} else if natsURL != "" {
+			natsStatus = "disconnected"
+		}
 		return c.JSON(fiber.Map{
-			"service": "cdc-ingestor",
-			"status":  "healthy",
-			"gwl_configured": mapper.IsGWLConfigured(),
+			"service":         "cdc-ingestor",
+			"status":          "healthy",
+			"gwl_configured":  mapper.IsGWLConfigured(),
+			"nats_status":     natsStatus,
 		})
 	})
 
@@ -90,11 +148,40 @@ func main() {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 
+		// Publish async event so Sentinel can trigger a scan
+		if status.Status == "SUCCESS" {
+			publishSyncCompleted(status)
+		}
+
 		httpStatus := 200
 		if status.Status == "FAILED" {
 			httpStatus = 500
 		}
 		return c.Status(httpStatus).JSON(status)
+	})
+
+	// POST /api/v1/cdc/sync-all — sync all types sequentially
+	app.Post("/api/v1/cdc/sync-all", func(c *fiber.Ctx) error {
+		results := make(map[string]*service.SyncStatus)
+		for _, syncType := range []string{"accounts", "billing", "meters"} {
+			syncCtx, syncCancel := context.WithTimeout(c.Context(), 10*time.Minute)
+			status, err := cdcSvc.RunSync(syncCtx, syncType)
+			syncCancel()
+			if err != nil {
+				logger.Error("CDC sync-all error", zap.String("type", syncType), zap.Error(err))
+				results[syncType] = &service.SyncStatus{
+					SyncType: syncType,
+					Status:   "FAILED",
+					ErrorMessage: err.Error(),
+				}
+				continue
+			}
+			results[syncType] = status
+			if status.Status == "SUCCESS" {
+				publishSyncCompleted(status)
+			}
+		}
+		return c.JSON(results)
 	})
 
 	// GET /api/v1/cdc/status — last sync status per type
