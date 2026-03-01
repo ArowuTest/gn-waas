@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/notification"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/storage"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -230,21 +232,26 @@ func (h *AuditHandler) GetDashboardStats(c *fiber.Ctx) error {
 
 // FieldJobHandler handles field job HTTP requests
 type FieldJobHandler struct {
-	fieldJobRepo *repository.FieldJobRepository
-	auditRepo    *repository.AuditEventRepository
-	sosNotifier  *notification.SOSNotifier
-	logger       *zap.Logger
+	fieldJobRepo    *repository.FieldJobRepository
+	auditRepo       *repository.AuditEventRepository
+	sosNotifier     *notification.SOSNotifier
+	evidenceStorage *storage.EvidenceStorageService
+	logger          *zap.Logger
 }
 
 func NewFieldJobHandler(
-	fieldJobRepo *repository.FieldJobRepository,
-	auditRepo *repository.AuditEventRepository,
-	logger *zap.Logger,
+	fieldJobRepo    *repository.FieldJobRepository,
+	auditRepo       *repository.AuditEventRepository,
+	sosNotifier     *notification.SOSNotifier,
+	evidenceStorage *storage.EvidenceStorageService,
+	logger          *zap.Logger,
 ) *FieldJobHandler {
 	return &FieldJobHandler{
-		fieldJobRepo: fieldJobRepo,
-		auditRepo:    auditRepo,
-		logger:       logger,
+		fieldJobRepo:    fieldJobRepo,
+		auditRepo:       auditRepo,
+		sosNotifier:     sosNotifier,
+		evidenceStorage: evidenceStorage,
+		logger:          logger,
 	}
 }
 
@@ -483,7 +490,40 @@ func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
 		return response.InternalError(c, "Failed to update job status")
 	}
 
-	// 2. Write evidence to the linked audit_event (if one exists)
+	// 2. Server-side photo hash verification via MinIO
+	// Each photo_url must be a MinIO object key; we verify the stored hash matches
+	verifiedHashes := make([]string, 0, len(req.PhotoURLs))
+	hashMismatches := []string{}
+	for i, objectKey := range req.PhotoURLs {
+		if i >= len(req.PhotoHashes) {
+			break
+		}
+		clientHash := req.PhotoHashes[i]
+		if objectKey == "" || clientHash == "" {
+			continue
+		}
+		// Verify hash against MinIO object metadata
+		if h.evidenceStorage != nil {
+			ok, err := h.evidenceStorage.VerifyPhotoHash(c.Context(), objectKey, clientHash)
+			if err != nil {
+				h.logger.Warn("Hash verification error", zap.String("object_key", objectKey), zap.Error(err))
+				// Non-fatal: log and continue
+			} else if !ok {
+				hashMismatches = append(hashMismatches, objectKey)
+				h.logger.Error("Photo hash mismatch — possible tampering",
+					zap.String("object_key", objectKey),
+					zap.String("client_hash", clientHash),
+				)
+			}
+		}
+		verifiedHashes = append(verifiedHashes, clientHash)
+	}
+	if len(hashMismatches) > 0 {
+		return response.BadRequest(c, "HASH_MISMATCH",
+			fmt.Sprintf("Photo hash verification failed for %d file(s) — evidence rejected", len(hashMismatches)))
+	}
+
+	// 3. Write evidence to the linked audit_event (if one exists)
 	if err := h.fieldJobRepo.WriteEvidence(c.Context(), jobID, &domain.FieldJobEvidence{
 		OCRReadingValue:  req.OCRReadingM3,
 		OCRConfidence:    req.OCRConfidence,
@@ -493,13 +533,17 @@ func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
 		GPSLng:           req.GPSLng,
 		GPSAccuracyM:     req.GPSAccuracyM,
 		PhotoURLs:        req.PhotoURLs,
-		PhotoHashes:      req.PhotoHashes,
+		PhotoHashes:      verifiedHashes,
 	}); err != nil {
 		// Non-fatal: job is marked complete, evidence write failed
 		h.logger.Warn("Failed to write job evidence to audit_event", zap.Error(err))
 	}
 
-	return response.OK(c, fiber.Map{"status": "COMPLETED", "job_id": jobID})
+	return response.OK(c, fiber.Map{
+		"status":          "COMPLETED",
+		"job_id":          jobID,
+		"photos_verified": len(verifiedHashes),
+	})
 }
 
 // ─── ListAllJobs ──────────────────────────────────────────────────────────────

@@ -1,4 +1,0 @@
-# DEPRECATED — This file is kept for reference only.
-# The active CI/CD pipeline is at .github/workflows/main.yml
-# This file was the original draft and contained incorrect paths (services/ instead of backend/).
-# It has been superseded by the corrected pipeline in .github/workflows/main.yml.

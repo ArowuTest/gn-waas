@@ -13,10 +13,16 @@ import (
 )
 
 func main() {
-	// Logger
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		panic("failed to create logger: " + err.Error())
+	// Logger — production uses JSON structured logging, dev uses human-readable
+	var logger *zap.Logger
+	var logErr error
+	if os.Getenv("APP_ENV") == "production" {
+		logger, logErr = zap.NewProduction()
+	} else {
+		logger, logErr = zap.NewDevelopment()
+	}
+	if logErr != nil {
+		panic("failed to create logger: " + logErr.Error())
 	}
 	defer logger.Sync()
 

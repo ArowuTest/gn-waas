@@ -73,7 +73,12 @@ func loadConfigFloat(ctx context.Context, db *pgxpool.Pool, logger *zap.Logger, 
 }
 
 func main() {
-	logger, _ := zap.NewDevelopment()
+	var logger *zap.Logger
+	if os.Getenv("APP_ENV") == "production" {
+		logger, _ = zap.NewProduction()
+	} else {
+		logger, _ = zap.NewDevelopment()
+	}
 	defer logger.Sync()
 
 	logger.Info("GN-WAAS Sentinel Service starting")

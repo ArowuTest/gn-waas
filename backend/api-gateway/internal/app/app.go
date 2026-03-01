@@ -9,8 +9,10 @@ import (
 	"github.com/ArowuTest/gn-waas/shared/go/middleware"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/config"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/handler"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/notification"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/storage"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
+	"github.com/ansrivas/fiberprometheus/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -49,21 +51,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	accountRepo  := repository.NewAccountRepository(db, logger)
 	nrwRepo      := repository.NewNRWReportRepository(db, logger)
 
-	// ── Handlers ─────────────────────────────────────────────────────────────
-	auditHandler    := handler.NewAuditHandler(auditRepo, fieldJobRepo, userRepo, logger)
-	fieldJobHandler := handler.NewFieldJobHandler(fieldJobRepo, auditRepo, logger)
-	districtHandler := handler.NewDistrictHandler(districtRepo, logger)
-	userHandler     := handler.NewUserHandler(userRepo, logger)
-	configHandler   := handler.NewSystemConfigHandler(configRepo, logger)
-	accountHandler  := handler.NewAccountHandler(accountRepo, logger)
-	nrwHandler      := handler.NewNRWHandler(nrwRepo, logger)
-	flagRepo        := repository.NewAnomalyFlagRepository(db, logger)
-	flagHandler     := handler.NewAnomalyFlagHandler(flagRepo, logger)
-	gwlCaseRepo     := repository.NewGWLCaseRepository(db, logger)
-	gwlHandler       := handler.NewGWLHandler(gwlCaseRepo, logger)
-	reportHandler    := handler.NewReportHandler(gwlCaseRepo, logger)
-	adminUserHandler := handler.NewAdminUserHandler(db, logger)
-	healthHandler   := handler.NewHealthHandler()
+	// ── SOS Notifier ─────────────────────────────────────────────────────────
+	sosNotifier := notification.NewSOSNotifier(logger)
 
 	// ── Evidence Storage (MinIO presigned URL service) ────────────────────────
 	evidenceStorage, evidenceErr := storage.NewEvidenceStorageService(
@@ -78,6 +67,23 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		logger.Warn("Evidence storage init failed — photos will not be persisted to MinIO",
 			zap.Error(evidenceErr))
 	}
+
+	// ── Handlers ─────────────────────────────────────────────────────────────
+	auditHandler    := handler.NewAuditHandler(auditRepo, fieldJobRepo, userRepo, logger)
+	fieldJobHandler := handler.NewFieldJobHandler(fieldJobRepo, auditRepo, sosNotifier, evidenceStorage, logger)
+	districtHandler := handler.NewDistrictHandler(districtRepo, logger)
+	userHandler     := handler.NewUserHandler(userRepo, logger)
+	configHandler   := handler.NewSystemConfigHandler(configRepo, logger)
+	accountHandler  := handler.NewAccountHandler(accountRepo, logger)
+	nrwHandler      := handler.NewNRWHandler(nrwRepo, logger)
+	flagRepo        := repository.NewAnomalyFlagRepository(db, logger)
+	flagHandler     := handler.NewAnomalyFlagHandler(flagRepo, logger)
+	gwlCaseRepo     := repository.NewGWLCaseRepository(db, logger)
+	gwlHandler       := handler.NewGWLHandler(gwlCaseRepo, logger)
+	reportHandler    := handler.NewReportHandler(gwlCaseRepo, logger)
+	adminUserHandler := handler.NewAdminUserHandler(db, logger)
+	healthHandler   := handler.NewHealthHandler()
+
 	evidenceHandler := handler.NewEvidenceHandler(evidenceStorage, logger)
 
 	// ── Fiber app ─────────────────────────────────────────────────────────────
@@ -92,6 +98,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	})
 
 	// ── Global middleware ─────────────────────────────────────────────────────
+	// ── Prometheus metrics (/metrics — no auth required for scraping) ─────────
+	prom := fiberprometheus.New("gnwaas_api_gateway")
+	prom.RegisterAt(app, "/metrics")
+	app.Use(prom.Middleware)
+
 	app.Use(middleware.RecoverMiddleware(logger))
 	app.Use(middleware.RequestLogger(logger))
 	app.Use(middleware.CORS())

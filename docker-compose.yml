@@ -29,7 +29,7 @@ services:
     environment:
       POSTGRES_DB: gnwaas
       POSTGRES_USER: gnwaas_user
-      POSTGRES_PASSWORD: gnwaas_dev_password_2026
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
     ports:
       - "5432:5432"
@@ -80,20 +80,20 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: gnwaas_user
-      KC_DB_PASSWORD: gnwaas_dev_password_2026
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
       KC_HOSTNAME: localhost
       KC_HOSTNAME_PORT: 8080
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: gnwaas_keycloak_admin_2026
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-gnwaas_keycloak_admin_2026}
       KC_REALM_NAME: gnwaas
     ports:
       - "8080:8080"
     volumes:
       - keycloak_data:/opt/keycloak/data
-      - ./infra/keycloak/realm:/opt/keycloak/data/import:ro
+      - ./infrastructure/keycloak:/opt/keycloak/data/import:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -110,8 +110,8 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: gnwaas_minio
-      MINIO_ROOT_PASSWORD: gnwaas_minio_2026
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-gnwaas_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-gnwaas_minio_2026}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -131,7 +131,7 @@ services:
   # ============================================================
   api-gateway:
     build:
-      context: ./services/api-gateway
+      context: ./backend/api-gateway
       dockerfile: Dockerfile
     container_name: gnwaas-api-gateway
     restart: unless-stopped
@@ -142,7 +142,7 @@ services:
       DB_PORT: 5432
       DB_NAME: gnwaas
       DB_USER: gnwaas_user
-      DB_PASSWORD: gnwaas_dev_password_2026
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: gnwaas_redis_2026
@@ -150,8 +150,8 @@ services:
       KEYCLOAK_REALM: gnwaas
       KEYCLOAK_CLIENT_ID: gnwaas-api
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: gnwaas_minio
-      MINIO_SECRET_KEY: gnwaas_minio_2026
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-gnwaas_minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-gnwaas_minio_2026}
       SENTINEL_SERVICE_URL: http://sentinel:3002
       TARIFF_SERVICE_URL: http://tariff-engine:3003
       GRA_SERVICE_URL: http://gra-bridge:3004
@@ -159,6 +159,12 @@ services:
       CDC_SERVICE_URL: http://cdc-ingestor:3006
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -175,7 +181,7 @@ services:
   # ============================================================
   sentinel:
     build:
-      context: ./services/sentinel
+      context: ./backend/sentinel
       dockerfile: Dockerfile
     container_name: gnwaas-sentinel
     restart: unless-stopped
@@ -186,12 +192,18 @@ services:
       DB_PORT: 5432
       DB_NAME: gnwaas
       DB_USER: gnwaas_user
-      DB_PASSWORD: gnwaas_dev_password_2026
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: gnwaas_redis_2026
     ports:
       - "3002:3002"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -204,7 +216,7 @@ services:
   # ============================================================
   tariff-engine:
     build:
-      context: ./services/tariff-engine
+      context: ./backend/tariff-engine
       dockerfile: Dockerfile
     container_name: gnwaas-tariff-engine
     restart: unless-stopped
@@ -215,9 +227,15 @@ services:
       DB_PORT: 5432
       DB_NAME: gnwaas
       DB_USER: gnwaas_user
-      DB_PASSWORD: gnwaas_dev_password_2026
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
     ports:
       - "3003:3003"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -241,13 +259,19 @@ services:
       DB_PORT: 5432
       DB_NAME: gnwaas
       DB_USER: gnwaas_user
-      DB_PASSWORD: gnwaas_dev_password_2026
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
       GRA_API_BASE_URL: https://vsdc.gra.gov.gh/api/v8.1
       GRA_API_KEY: ""
       GRA_BUSINESS_TIN: ""
       GRA_SANDBOX_MODE: "true"
     ports:
       - "3004:3004"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -260,7 +284,7 @@ services:
   # ============================================================
   ocr-service:
     build:
-      context: ./services/ocr-service
+      context: ./backend/ocr-service
       dockerfile: Dockerfile
     container_name: gnwaas-ocr-service
     restart: unless-stopped
@@ -271,10 +295,10 @@ services:
       DB_PORT: 5432
       DB_NAME: gnwaas
       DB_USER: gnwaas_user
-      DB_PASSWORD: gnwaas_dev_password_2026
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: gnwaas_minio
-      MINIO_SECRET_KEY: gnwaas_minio_2026
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-gnwaas_minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-gnwaas_minio_2026}
     ports:
       - "3005:3005"
     depends_on:
@@ -302,7 +326,7 @@ services:
       DB_PORT: 5432
       DB_NAME: gnwaas
       DB_USER: gnwaas_user
-      DB_PASSWORD: gnwaas_dev_password_2026
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
       GWL_DB_HOST: ""
       GWL_DB_PORT: "5432"
       GWL_DB_NAME: ""
@@ -337,6 +361,12 @@ services:
     restart: unless-stopped
     ports:
       - "5173:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       - api-gateway
     networks:
@@ -361,6 +391,12 @@ services:
     restart: unless-stopped
     ports:
       - "5174:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       - api-gateway
     networks:
@@ -383,6 +419,12 @@ services:
     restart: unless-stopped
     ports:
       - "5175:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       - api-gateway
     networks:

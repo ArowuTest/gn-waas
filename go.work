@@ -10,4 +10,5 @@ use (
 	./backend/tariff-engine
 	./database/generated/gnwaas
 	./shared/go
+	./shared/go/messaging
 )
