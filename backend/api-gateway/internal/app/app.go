@@ -306,6 +306,26 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	anomalyFlags := api.Group("/anomaly-flags")
 	anomalyFlags.Get("/", flagHandler.ListAnomalyFlags)
 
+	// ── Sentinel routes (admin portal compatibility) ───────────────────────────
+	// The admin portal hooks use /sentinel/* paths — proxy to anomaly-flags handler
+	sentinel := api.Group("/sentinel",
+		middleware.RequireRoles("SYSTEM_ADMIN", "AUDIT_SUPERVISOR", "DISTRICT_MANAGER", "EXECUTIVE"),
+	)
+	sentinel.Get("/anomalies", flagHandler.ListAnomalyFlags)
+	sentinel.Get("/anomalies/:id", flagHandler.GetAnomalyFlag)
+	sentinel.Get("/summary/:district_id", flagHandler.GetDistrictSummary)
+	sentinel.Post("/scan/:district_id",
+		middleware.RequireRoles("SYSTEM_ADMIN", "AUDIT_SUPERVISOR"),
+		flagHandler.TriggerScan,
+	)
+
+	// ── OCR proxy (Flutter calls /ocr/process via api-gateway) ────────────────
+	// Proxies to the ocr-service on port 3005 (or OCR_SERVICE_URL env var)
+	ocr := api.Group("/ocr",
+		middleware.RequireRoles("FIELD_OFFICER", "SYSTEM_ADMIN", "AUDIT_SUPERVISOR"),
+	)
+	ocr.Post("/process", fieldJobHandler.ProxyOCRProcess)
+
 	reports := api.Group("/reports")
 	reports.Get("/nrw", nrwHandler.GetNRWSummary)
 	reports.Get("/nrw/my-district",

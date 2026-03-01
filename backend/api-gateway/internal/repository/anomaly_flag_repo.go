@@ -22,6 +22,8 @@ type AnomalyFlag struct {
 	EstimatedLossGHS    float64    `json:"estimated_loss_ghs"`
 	ConfirmedLossGHS    *float64   `json:"confirmed_loss_ghs,omitempty"`
 	RecoveredGHS        *float64   `json:"recovered_ghs,omitempty"`
+	AlertLevel          *string    `json:"alert_level,omitempty"`
+	AnomalyType         *string    `json:"anomaly_type,omitempty"`
 	Description         string     `json:"description"`
 	DetectedAt          time.Time  `json:"detected_at"`
 	ResolvedAt          *time.Time `json:"resolved_at,omitempty"`
@@ -106,6 +108,25 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 		flags = append(flags, f)
 	}
 	return flags, total, nil
+}
+
+// GetByID returns a single anomaly flag by ID
+func (r *AnomalyFlagRepository) GetByID(ctx context.Context, id uuid.UUID) (*AnomalyFlag, error) {
+	var f AnomalyFlag
+	err := r.db.QueryRow(ctx, `
+		SELECT id, district_id, account_id, flag_type, severity, status,
+		       gwl_status, estimated_loss_ghs, confirmed_loss_ghs, recovered_ghs,
+		       description, detected_at, resolved_at, created_at
+		FROM anomaly_flags WHERE id = $1`, id,
+	).Scan(
+		&f.ID, &f.DistrictID, &f.AccountID, &f.FlagType, &f.Severity, &f.Status,
+		&f.GWLStatus, &f.EstimatedLossGHS, &f.ConfirmedLossGHS, &f.RecoveredGHS,
+		&f.Description, &f.DetectedAt, &f.ResolvedAt, &f.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &f, nil
 }
 
 // itoa converts int to string for SQL placeholder building

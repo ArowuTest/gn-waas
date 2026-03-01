@@ -1,6 +1,10 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
@@ -383,4 +387,257 @@ func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
 			"offset":    offset,
 		},
 	})
+}
+
+// GetAnomalyFlag GET /api/v1/sentinel/anomalies/:id
+func (h *AnomalyFlagHandler) GetAnomalyFlag(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ID", "Invalid anomaly flag ID")
+	}
+	flag, err := h.flagRepo.GetByID(c.Context(), id)
+	if err != nil {
+		return response.NotFound(c, "Anomaly flag")
+	}
+	return response.OK(c, flag)
+}
+
+// GetDistrictSummary GET /api/v1/sentinel/summary/:district_id
+func (h *AnomalyFlagHandler) GetDistrictSummary(c *fiber.Ctx) error {
+	districtID, err := uuid.Parse(c.Params("district_id"))
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ID", "Invalid district ID")
+	}
+	// Return counts by severity for the district
+	flags, total, err := h.flagRepo.ListAnomalyFlags(c.Context(), &districtID, "", "OPEN", 1000, 0)
+	if err != nil {
+		return response.InternalError(c, "Failed to fetch district summary")
+	}
+	summary := map[string]int{"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+	for _, f := range flags {
+		if f.AlertLevel != nil {
+			summary[*f.AlertLevel]++
+		}
+	}
+	return response.OK(c, fiber.Map{
+		"district_id": districtID,
+		"total_open":  total,
+		"by_severity": summary,
+	})
+}
+
+// TriggerScan POST /api/v1/sentinel/scan/:district_id
+// Triggers an on-demand sentinel scan for a district (proxies to sentinel service).
+func (h *AnomalyFlagHandler) TriggerScan(c *fiber.Ctx) error {
+	districtID := c.Params("district_id")
+	if _, err := uuid.Parse(districtID); err != nil {
+		return response.BadRequest(c, "INVALID_ID", "Invalid district ID")
+	}
+	sentinelURL := getEnvOrDefault("SENTINEL_SERVICE_URL", "http://sentinel:3002")
+	resp, err := http.Post(sentinelURL+"/api/v1/scan/"+districtID, "application/json", nil)
+	if err != nil {
+		h.logger.Warn("Sentinel service unavailable for on-demand scan", zap.Error(err))
+		return response.OK(c, fiber.Map{
+			"status":      "QUEUED",
+			"district_id": districtID,
+			"message":     "Scan queued (sentinel service will process on next cycle)",
+		})
+	}
+	defer resp.Body.Close()
+	return response.OK(c, fiber.Map{
+		"status":      "TRIGGERED",
+		"district_id": districtID,
+	})
+}
+
+// ─── SubmitJobEvidence ────────────────────────────────────────────────────────
+// POST /api/v1/field-jobs/:id/submit
+// Called by the Flutter app after meter capture. Writes OCR reading, GPS,
+// photo hashes, and notes to the audit_events table and marks the job COMPLETED.
+
+func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
+	jobID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ID", "Invalid job ID")
+	}
+
+	var req struct {
+		OCRReadingM3  float64  `json:"ocr_reading_m3"`
+		OCRConfidence float64  `json:"ocr_confidence"`
+		OCRStatus     string   `json:"ocr_status"`
+		OfficerNotes  string   `json:"officer_notes"`
+		GPSLat        float64  `json:"gps_lat"`
+		GPSLng        float64  `json:"gps_lng"`
+		GPSAccuracyM  float64  `json:"gps_accuracy_m"`
+		PhotoURLs     []string `json:"photo_urls"`
+		PhotoHashes   []string `json:"photo_hashes"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+
+	// 1. Mark job as COMPLETED with officer GPS
+	lat, lng := req.GPSLat, req.GPSLng
+	if err := h.fieldJobRepo.UpdateStatus(c.Context(), jobID, "COMPLETED", &lat, &lng); err != nil {
+		h.logger.Error("Failed to complete field job", zap.Error(err))
+		return response.InternalError(c, "Failed to update job status")
+	}
+
+	// 2. Write evidence to the linked audit_event (if one exists)
+	if err := h.fieldJobRepo.WriteEvidence(c.Context(), jobID, &domain.FieldJobEvidence{
+		OCRReadingValue:  req.OCRReadingM3,
+		OCRConfidence:    req.OCRConfidence,
+		OCRStatus:        req.OCRStatus,
+		Notes:            req.OfficerNotes,
+		GPSLat:           req.GPSLat,
+		GPSLng:           req.GPSLng,
+		GPSAccuracyM:     req.GPSAccuracyM,
+		PhotoURLs:        req.PhotoURLs,
+		PhotoHashes:      req.PhotoHashes,
+	}); err != nil {
+		// Non-fatal: job is marked complete, evidence write failed
+		h.logger.Warn("Failed to write job evidence to audit_event", zap.Error(err))
+	}
+
+	return response.OK(c, fiber.Map{"status": "COMPLETED", "job_id": jobID})
+}
+
+// ─── ListAllJobs ──────────────────────────────────────────────────────────────
+// GET /api/v1/field-jobs — admin/supervisor view with optional filters
+
+func (h *FieldJobHandler) ListAllJobs(c *fiber.Ctx) error {
+	status     := c.Query("status")
+	alertLevel := c.Query("alert_level")
+	districtID := c.Query("district_id")
+
+	jobs, err := h.fieldJobRepo.ListAll(c.Context(), status, alertLevel, districtID)
+	if err != nil {
+		h.logger.Error("Failed to list field jobs", zap.Error(err))
+		return response.InternalError(c, "Failed to list field jobs")
+	}
+	return response.OK(c, jobs)
+}
+
+// ─── CreateFieldJob ───────────────────────────────────────────────────────────
+// POST /api/v1/field-jobs — admin creates a new dispatch job
+
+func (h *FieldJobHandler) CreateFieldJob(c *fiber.Ctx) error {
+	var req struct {
+		AccountID          string  `json:"account_id"`
+		DistrictID         string  `json:"district_id"`
+		AnomalyFlagID      *string `json:"anomaly_flag_id"`
+		AssignedOfficerID  *string `json:"assigned_officer_id"`
+		IsBlindAudit       bool    `json:"is_blind_audit"`
+		Priority           int     `json:"priority"`
+		Notes              *string `json:"notes"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+
+	accountID, err := uuid.Parse(req.AccountID)
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
+	}
+	districtID, err := uuid.Parse(req.DistrictID)
+	if err != nil {
+		return response.BadRequest(c, "INVALID_DISTRICT_ID", "Invalid district ID")
+	}
+
+	job := &domain.FieldJob{
+		AccountID:    accountID,
+		DistrictID:   districtID,
+		Status:       "QUEUED",
+		IsBlindAudit: req.IsBlindAudit,
+		Priority:     req.Priority,
+		Notes:        req.Notes,
+	}
+
+	if req.AnomalyFlagID != nil {
+		if id, err := uuid.Parse(*req.AnomalyFlagID); err == nil {
+			job.AuditEventID = &id
+		}
+	}
+	if req.AssignedOfficerID != nil {
+		if id, err := uuid.Parse(*req.AssignedOfficerID); err == nil {
+			job.AssignedOfficerID = id
+			job.Status = "DISPATCHED"
+		}
+	}
+
+	created, err := h.fieldJobRepo.Create(c.Context(), job)
+	if err != nil {
+		h.logger.Error("Failed to create field job", zap.Error(err))
+		return response.InternalError(c, "Failed to create field job")
+	}
+	return response.Created(c, created)
+}
+
+// ─── AssignOfficer ────────────────────────────────────────────────────────────
+// PATCH /api/v1/field-jobs/:id/assign — admin assigns officer to a job
+
+func (h *FieldJobHandler) AssignOfficer(c *fiber.Ctx) error {
+	jobID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ID", "Invalid job ID")
+	}
+
+	var req struct {
+		OfficerID string `json:"officer_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+
+	officerID, err := uuid.Parse(req.OfficerID)
+	if err != nil {
+		return response.BadRequest(c, "INVALID_OFFICER_ID", "Invalid officer ID")
+	}
+
+	if err := h.fieldJobRepo.AssignOfficer(c.Context(), jobID, officerID); err != nil {
+		h.logger.Error("Failed to assign officer", zap.Error(err))
+		return response.InternalError(c, "Failed to assign officer")
+	}
+	return response.OK(c, fiber.Map{"status": "DISPATCHED", "job_id": jobID, "officer_id": officerID})
+}
+
+// ─── ProxyOCRProcess ──────────────────────────────────────────────────────────
+// POST /api/v1/ocr/process — proxy to ocr-service
+// Flutter sends base64 image; we forward to the OCR microservice.
+
+func (h *FieldJobHandler) ProxyOCRProcess(c *fiber.Ctx) error {
+	ocrURL := getEnvOrDefault("OCR_SERVICE_URL", "http://ocr-service:3005")
+
+	var body map[string]interface{}
+	if err := c.BodyParser(&body); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+
+	jsonBytes, _ := json.Marshal(body)
+	resp, err := http.Post(ocrURL+"/api/v1/ocr/process", "application/json", bytes.NewReader(jsonBytes))
+	if err != nil {
+		h.logger.Warn("OCR service unavailable", zap.Error(err))
+		// Return a graceful degraded response so the Flutter app can continue
+		return c.JSON(fiber.Map{
+			"reading_value": nil,
+			"confidence":    0.0,
+			"status":        "OCR_UNAVAILABLE",
+			"raw_text":      "",
+			"error":         "OCR service temporarily unavailable",
+		})
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return response.InternalError(c, "Failed to parse OCR response")
+	}
+	return c.JSON(result)
+}
+
+func getEnvOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

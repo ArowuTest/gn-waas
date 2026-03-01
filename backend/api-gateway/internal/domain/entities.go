@@ -79,6 +79,19 @@ type FieldJob struct {
 	UpdatedAt             time.Time  `db:"updated_at" json:"updated_at"`
 }
 
+// FieldJobEvidence holds the evidence submitted by a field officer after meter capture
+type FieldJobEvidence struct {
+	OCRReadingValue float64
+	OCRConfidence   float64
+	OCRStatus       string
+	Notes           string
+	GPSLat          float64
+	GPSLng          float64
+	GPSAccuracyM    float64
+	PhotoURLs       []string
+	PhotoHashes     []string
+}
+
 // User represents a GN-WAAS system user
 type User struct {
 	ID           uuid.UUID  `db:"id" json:"id"`

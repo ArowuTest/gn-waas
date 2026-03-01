@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -339,6 +340,120 @@ func (r *SystemConfigRepository) Update(ctx context.Context, key, value string, 
 		UPDATE system_config
 		SET config_value = $1, updated_at = NOW(), updated_by = $2
 		WHERE config_key = $3`, value, updatedBy, key)
+	return err
+}
+
+// WriteEvidence writes field officer evidence to the linked audit_event record.
+// Called after SubmitJobEvidence to persist OCR reading, GPS, and photo hashes.
+func (r *FieldJobRepository) WriteEvidence(ctx context.Context, jobID uuid.UUID, ev *domain.FieldJobEvidence) error {
+	photoURLsJSON, _ := json.Marshal(ev.PhotoURLs)
+	photoHashesJSON, _ := json.Marshal(ev.PhotoHashes)
+
+	_, err := r.db.Exec(ctx, `
+		UPDATE audit_events
+		SET
+			ocr_reading_value       = $1,
+			ocr_status              = $2::ocr_status,
+			gps_latitude            = $3,
+			gps_longitude           = $4,
+			gps_precision_m         = $5,
+			meter_photo_url         = COALESCE(($6::jsonb)->0, NULL)::text,
+			evidence_data           = evidence_data ||
+				jsonb_build_object(
+					'photo_urls',    $6::jsonb,
+					'photo_hashes',  $7::jsonb,
+					'ocr_confidence', $8,
+					'officer_notes',  $9
+				),
+			updated_at              = NOW()
+		WHERE field_job_id = $10`,
+		ev.OCRReadingValue,
+		ev.OCRStatus,
+		ev.GPSLat,
+		ev.GPSLng,
+		ev.GPSAccuracyM,
+		string(photoURLsJSON),
+		string(photoHashesJSON),
+		ev.OCRConfidence,
+		ev.Notes,
+		jobID,
+	)
+	return err
+}
+
+// ListAll returns all field jobs with optional filters for admin/supervisor view.
+func (r *FieldJobRepository) ListAll(ctx context.Context, status, alertLevel, districtID string) ([]*EnrichedFieldJob, error) {
+	query := `
+		SELECT
+			fj.id, fj.job_reference, fj.audit_event_id, fj.account_id, fj.district_id,
+			fj.assigned_officer_id, fj.status, fj.is_blind_audit,
+			fj.target_gps_lat, fj.target_gps_lng, fj.gps_fence_radius_m,
+			fj.dispatched_at, fj.arrived_at, fj.completed_at,
+			fj.officer_gps_lat, fj.officer_gps_lng, fj.gps_verified,
+			fj.biometric_verified, fj.priority, fj.requires_security_escort,
+			fj.sos_triggered, fj.sos_triggered_at, fj.notes, fj.created_at, fj.updated_at,
+			COALESCE(wa.account_holder_name, 'Unknown Customer') AS customer_name,
+			COALESCE(wa.gwl_account_number, '')                  AS account_number,
+			COALESCE(wa.address_line1, '')                       AS address,
+			af.anomaly_type,
+			af.alert_level::text,
+			af.estimated_loss_ghs
+		FROM field_jobs fj
+		LEFT JOIN water_accounts wa ON wa.id = fj.account_id
+		LEFT JOIN LATERAL (
+			SELECT anomaly_type, alert_level, estimated_loss_ghs
+			FROM anomaly_flags
+			WHERE account_id = fj.account_id AND status = 'OPEN'
+			ORDER BY created_at DESC LIMIT 1
+		) af ON true
+		WHERE ($1 = '' OR fj.status = $1)
+		  AND ($2 = '' OR af.alert_level::text = $2)
+		  AND ($3 = '' OR fj.district_id::text = $3)
+		ORDER BY
+			CASE fj.status WHEN 'SOS' THEN 0 WHEN 'ON_SITE' THEN 1 WHEN 'EN_ROUTE' THEN 2
+			WHEN 'DISPATCHED' THEN 3 WHEN 'QUEUED' THEN 4 ELSE 5 END,
+			fj.priority DESC,
+			fj.created_at DESC
+		LIMIT 500`
+
+	rows, err := r.db.Query(ctx, query, status, alertLevel, districtID)
+	if err != nil {
+		return nil, fmt.Errorf("ListAll field jobs failed: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []*EnrichedFieldJob
+	for rows.Next() {
+		j := &EnrichedFieldJob{}
+		if err := rows.Scan(
+			&j.ID, &j.JobReference, &j.AuditEventID, &j.AccountID, &j.DistrictID,
+			&j.AssignedOfficerID, &j.Status, &j.IsBlindAudit,
+			&j.TargetGPSLat, &j.TargetGPSLng, &j.GPSFenceRadiusM,
+			&j.DispatchedAt, &j.ArrivedAt, &j.CompletedAt,
+			&j.OfficerGPSLat, &j.OfficerGPSLng, &j.GPSVerified,
+			&j.BiometricVerified, &j.Priority, &j.RequiresSecurityEscort,
+			&j.SOSTriggered, &j.SOSTriggeredAt, &j.Notes, &j.CreatedAt, &j.UpdatedAt,
+			&j.AccountHolderName, &j.GWLAccountNumber, &j.AddressLine1,
+			&j.AnomalyType, &j.AlertLevel, &j.EstimatedLossGHS,
+		); err != nil {
+			return nil, fmt.Errorf("ListAll scan failed: %w", err)
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
+// AssignOfficer assigns a field officer to a job and sets status to DISPATCHED.
+func (r *FieldJobRepository) AssignOfficer(ctx context.Context, jobID, officerID uuid.UUID) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE field_jobs
+		SET assigned_officer_id = $1,
+		    status              = 'DISPATCHED',
+		    dispatched_at       = NOW(),
+		    updated_at          = NOW()
+		WHERE id = $2`,
+		officerID, jobID,
+	)
 	return err
 }
 

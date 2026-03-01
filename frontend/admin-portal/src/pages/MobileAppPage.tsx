@@ -95,7 +95,7 @@ export function MobileAppPage() {
   const { data: fieldConfigs } = useQuery({
     queryKey: ['system-config', 'FIELD'],
     queryFn: async () => {
-      const res = await apiClient.get('/admin/config?category=FIELD')
+      const res = await apiClient.get('/config/FIELD')
       return res.data.data as SystemConfig[]
     },
   })
@@ -142,10 +142,7 @@ export function MobileAppPage() {
         Object.entries(updates).map(([k, v]) => {
           const configKey = keyMap[k]
           if (!configKey) return Promise.resolve()
-          return apiClient.patch('/admin/config', {
-            config_key:   configKey,
-            config_value: String(v),
-          })
+          return apiClient.patch(`/config/${configKey}`, { value: String(v) })
         })
       )
     },

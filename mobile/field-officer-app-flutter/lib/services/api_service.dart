@@ -172,7 +172,9 @@ class ApiService {
   // ─── Audit / Submission ────────────────────────────────────────────────────
 
   Future<void> submitJobEvidence(JobSubmission submission) async {
-    await _dio.post('/audits', data: submission.toJson());
+    // POST /field-jobs/:id/submit — dedicated endpoint that writes OCR reading,
+    // GPS, photo hashes to audit_events and marks the job COMPLETED.
+    await _dio.post('/field-jobs/${submission.jobId}/submit', data: submission.toJson());
   }
 
   // ─── OCR ──────────────────────────────────────────────────────────────────
