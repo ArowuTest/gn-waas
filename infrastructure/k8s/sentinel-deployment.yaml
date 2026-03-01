@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinel
+  namespace: gnwaas
+  labels:
+    app: sentinel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sentinel
+  template:
+    metadata:
+      labels:
+        app: sentinel
+    spec:
+      containers:
+        - name: sentinel
+          image: ghcr.io/arowtest/gn-waas/sentinel:latest
+          ports:
+            - containerPort: 3002
+          envFrom:
+            - configMapRef:
+                name: gnwaas-config
+            - secretRef:
+                name: gnwaas-secrets
+          env:
+            - name: APP_PORT
+              value: "3002"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentinel-service
+  namespace: gnwaas
+spec:
+  selector:
+    app: sentinel
+  ports:
+    - port: 3002
+      targetPort: 3002
+  type: ClusterIP
+---
+# CronJob: Run sentinel scan on all pilot districts every 6 hours
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sentinel-scheduled-scan
+  namespace: gnwaas
+spec:
+  schedule: "0 */6 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: scan-trigger
+              image: curlimages/curl:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Trigger scan for all pilot districts
+                  for district_id in $(curl -s http://api-gateway-service:3000/api/v1/districts | jq -r '.data[] | select(.is_pilot_district==true) | .id'); do
+                    curl -s -X POST http://sentinel-service:3002/api/v1/sentinel/scan/$district_id
+                    echo "Scanned district: $district_id"
+                  done
+          restartPolicy: OnFailure

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gnwaas-config
+  namespace: gnwaas
+data:
+  APP_ENV: "production"
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "gnwaas"
+  DB_SSL_MODE: "require"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  KEYCLOAK_URL: "https://auth.gnwaas.nita.gov.gh"
+  KEYCLOAK_REALM: "gnwaas"
+  KEYCLOAK_CLIENT_ID: "gnwaas-api-gateway"
+  SENTINEL_SERVICE_URL: "http://sentinel-service:3002"
+  TARIFF_SERVICE_URL: "http://tariff-engine-service:3001"
+  GRA_SERVICE_URL: "http://gra-bridge-service:3003"
+  OCR_SERVICE_URL: "http://ocr-service:3005"
+  MINIO_ENDPOINT: "minio-service:9000"
+  MINIO_BUCKET: "gnwaas-evidence"
+  TZ: "Africa/Accra"

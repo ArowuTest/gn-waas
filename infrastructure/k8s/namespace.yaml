@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gnwaas
+  labels:
+    app.kubernetes.io/name: gnwaas
+    app.kubernetes.io/managed-by: kubectl
+    environment: production
