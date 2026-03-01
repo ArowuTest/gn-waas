@@ -9,4 +9,5 @@ use (
 	./backend/gra-bridge
 	./backend/ocr-service
 	./backend/cdc-ingestor
+	./backend/meter-ingestor
 )

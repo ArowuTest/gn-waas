@@ -54,6 +54,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	configHandler   := handler.NewSystemConfigHandler(configRepo, logger)
 	accountHandler  := handler.NewAccountHandler(accountRepo, logger)
 	nrwHandler      := handler.NewNRWHandler(nrwRepo, logger)
+	gwlCaseRepo     := repository.NewGWLCaseRepository(db, logger)
+	gwlHandler       := handler.NewGWLHandler(gwlCaseRepo, logger)
 	adminUserHandler := handler.NewAdminUserHandler(db, logger)
 	healthHandler   := handler.NewHealthHandler()
 
@@ -176,6 +178,30 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	)
 	sysConfig.Get("/:category", configHandler.GetConfigByCategory)
 	sysConfig.Patch("/:key", configHandler.UpdateConfig)
+
+	// ── GWL Case Management Portal ───────────────────────────────────────────
+	// All GWL routes require GWL_SUPERVISOR, GWL_BILLING_OFFICER, or GWL_MANAGER role
+	gwlRoles := middleware.RequireRoles("GWL_SUPERVISOR", "GWL_BILLING_OFFICER", "GWL_MANAGER", "SYSTEM_ADMIN")
+	gwl := api.Group("/gwl", gwlRoles)
+
+	// Case queue and summary
+	gwl.Get("/cases/summary", gwlHandler.GetCaseSummary)
+	gwl.Get("/cases", gwlHandler.ListCases)
+	gwl.Get("/cases/:id", gwlHandler.GetCase)
+	gwl.Get("/cases/:id/actions", gwlHandler.GetCaseActions)
+
+	// Case workflow actions
+	gwl.Post("/cases/:id/assign", gwlHandler.AssignToFieldOfficer)
+	gwl.Patch("/cases/:id/status", gwlHandler.UpdateCaseStatus)
+	gwl.Post("/cases/:id/reclassify", gwlHandler.RequestReclassification)
+	gwl.Post("/cases/:id/credit", gwlHandler.RequestCredit)
+
+	// Reclassification and credit management
+	gwl.Get("/reclassifications", gwlHandler.ListReclassifications)
+	gwl.Get("/credits", gwlHandler.ListCredits)
+
+	// Monthly reports
+	gwl.Get("/reports/monthly", gwlHandler.GetMonthlyReport)
 
 	return &App{
 		fiber:  app,
