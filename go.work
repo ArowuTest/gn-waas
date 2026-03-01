@@ -1,12 +1,12 @@
 go 1.22
 
 use (
-	./services/api-gateway
-	./services/cdc-ingestor
-	./services/tariff-engine
-	./services/shadow-ledger
-	./services/sentinel
-	./services/ocr-service
-	./services/gra-bridge
-	./pkg/shared
+	./shared/go
+	./database/generated
+	./backend/api-gateway
+	./backend/tariff-engine
+	./backend/sentinel
+	./backend/gra-bridge
+	./backend/ocr-service
+	./backend/cdc-ingestor
 )

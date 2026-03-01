@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "GN-WAAS Field Officer",
+    "slug": "gnwaas-field-officer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1b5e20"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "gh.gov.nita.gnwaas.fieldofficer",
+      "infoPlist": {
+        "NSCameraUsageDescription": "GN-WAAS requires camera access to capture meter photos as audit evidence.",
+        "NSLocationWhenInUseUsageDescription": "GN-WAAS requires location to GPS-lock meter readings and verify officer proximity.",
+        "NSFaceIDUsageDescription": "GN-WAAS uses Face ID for secure officer authentication.",
+        "NSPhotoLibraryUsageDescription": "GN-WAAS may save meter photos to your photo library."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1b5e20"
+      },
+      "package": "gh.gov.nita.gnwaas.fieldofficer",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      "expo-location",
+      "expo-secure-store",
+      "expo-local-authentication"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "gnwaas-field-officer"
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+# GN-WAAS gnorm configuration
+# Run: gnorm gen postgres --config database/gnorm/gnorm.toml
+# Requires: live PostgreSQL connection with migrations applied
+
+[schema]
+  [schema.postgres]
+    host     = "localhost"
+    port     = 5432
+    dbname   = "gnwaas"
+    user     = "gnwaas_user"
+    password = ""          # set via GNORM_DB_PASSWORD env var
+    sslmode  = "disable"
+
+[output]
+  dir = "database/generated"
+
+# Generate one file per table
+[[templates]]
+  glob = "database/gnorm/templates/table.gotmpl"
+  output = "{{.Schema}}/{{.Table.DBName}}.go"
+
+[[templates]]
+  glob = "database/gnorm/templates/enums.gotmpl"
+  output = "{{.Schema}}/enums.go"
+
+[params]
+  package = "gnwaas"
+  module  = "github.com/ArowuTest/gn-waas/database/generated"
