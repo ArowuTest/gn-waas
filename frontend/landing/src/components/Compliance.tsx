@@ -4,8 +4,8 @@ export default function Compliance() {
     { name: 'GRA VSDC', desc: 'VAT invoice signing', color: 'green' },
     { name: 'IWA/AWWA', desc: 'Water balance standard', color: 'teal' },
     { name: 'NITA Ghana', desc: 'Data centre certified', color: 'purple' },
-    { name: 'Keycloak', desc: 'Self-hosted identity', color: 'orange' },
     { name: 'ISO 27001', desc: 'Security framework', color: 'red' },
+    { name: 'GDPR Aligned', desc: 'Data privacy controls', color: 'orange' },
   ]
 
   return (

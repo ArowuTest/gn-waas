@@ -9,7 +9,7 @@ const features = [
   {
     icon: Smartphone,
     title: 'Mobile Field App',
-    desc: 'React Native app for field officers. Camera, GPS, offline sync, biometric auth, and SOS button.',
+    desc: 'Offline-first app for field officers. Camera, GPS evidence capture, background sync, and biometric auth.',
   },
   {
     icon: Lock,
@@ -24,7 +24,7 @@ const features = [
   {
     icon: Globe,
     title: 'Ghana Data Sovereignty',
-    desc: 'Self-hosted Keycloak. Deployed on NITA-certified data centres. No foreign cloud dependency.',
+    desc: 'Fully self-hosted. Deployed on NITA-certified data centres. No foreign cloud dependency.',
   },
   {
     icon: ShieldCheck,
