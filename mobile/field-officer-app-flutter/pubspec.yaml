@@ -1,0 +1,72 @@
+name: gnwaas_field_officer
+description: "GN-WAAS Field Officer App — Ghana National Water Audit & Assurance System"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP & API
+  dio: ^5.4.3
+  http: ^1.2.1
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Navigation
+  go_router: ^13.2.0
+
+  # Secure storage (tokens)
+  flutter_secure_storage: ^9.0.0
+
+  # SQLite offline storage
+  sqflite: ^2.3.3
+  path: ^1.9.0
+
+  # Connectivity
+  connectivity_plus: ^6.0.3
+
+  # Location / GPS
+  geolocator: ^12.0.0
+
+  # Camera & image
+  camera: ^0.11.0+2
+  image_picker: ^1.1.2
+
+  # Biometric auth
+  local_auth: ^2.2.0
+
+  # Crypto (photo hashing)
+  crypto: ^3.0.3
+
+  # JSON serialization
+  json_annotation: ^4.9.0
+
+  # UI
+  cupertino_icons: ^1.0.6
+
+  # Utilities
+  intl: ^0.19.0
+  uuid: ^4.4.0
+  shared_preferences: ^2.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.9
+  json_serializable: ^6.8.0
+  mockito: ^5.4.4
+  mocktail: ^1.0.4
+  sqflite_common_ffi: ^2.3.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
