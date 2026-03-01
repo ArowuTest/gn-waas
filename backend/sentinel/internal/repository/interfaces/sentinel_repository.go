@@ -6,6 +6,7 @@ import (
 
 	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/domain/entities"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // AnomalyFlagRepository defines the contract for anomaly flag data access
@@ -103,6 +104,9 @@ type WaterAccountRepository interface {
 
 // DistrictRepository defines the contract for district data access
 type DistrictRepository interface {
+	// DB returns the underlying database pool for direct queries
+	DB() *pgxpool.Pool
+
 	// GetByID returns a district by ID
 	GetByID(ctx context.Context, id uuid.UUID) (*entities.District, error)
 

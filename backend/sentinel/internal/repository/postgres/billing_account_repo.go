@@ -262,6 +262,9 @@ func NewDistrictRepository(db *pgxpool.Pool, logger *zap.Logger) *DistrictReposi
 	return &DistrictRepository{db: db, logger: logger}
 }
 
+// DB returns the underlying database pool for direct queries
+func (r *DistrictRepository) DB() *pgxpool.Pool { return r.db }
+
 func (r *DistrictRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.District, error) {
 	d := &entities.District{}
 	err := r.db.QueryRow(ctx,

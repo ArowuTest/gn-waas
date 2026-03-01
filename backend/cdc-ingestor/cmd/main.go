@@ -72,6 +72,17 @@ func main() {
 	// ── CDC Sync Service ──────────────────────────────────────────────────────
 	cdcSvc := service.NewCDCSyncService(mapper, gnwaasDB, logger)
 
+	// ── Demo Mode: synthetic data generator ───────────────────────────────────
+	// When GWL_DB_HOST is not set, the CDC ingestor runs in DEMO mode.
+	// DemoSyncService generates realistic meter readings and bills using
+	// real account data from the GN-WAAS database, applying PURC 2026 tariffs.
+	// This replicates exactly what the live CDC sync would write.
+	demoSvc := service.NewDemoSyncService(gnwaasDB, logger)
+	isLiveMode := mapper.IsGWLConfigured()
+	if !isLiveMode {
+		logger.Info("CDC DEMO MODE ACTIVE — synthetic GWL data will be generated on each sync trigger")
+	}
+
 	// ── NATS Connection (optional — graceful degradation if unavailable) ──────
 	var nc *natsgo.Conn
 	natsURL := getEnv("NATS_URL", "")
@@ -134,17 +145,60 @@ func main() {
 	})
 
 	// POST /api/v1/cdc/sync/:type — manual trigger (also called by K8s CronJob)
+	// In DEMO mode (no GWL_DB_HOST), uses DemoSyncService to generate synthetic data.
+	// In LIVE mode, uses CDCSyncService to sync from the real GWL database.
 	app.Post("/api/v1/cdc/sync/:type", func(c *fiber.Ctx) error {
 		syncType := c.Params("type")
-		if syncType != "accounts" && syncType != "billing" && syncType != "meters" {
+		if syncType != "accounts" && syncType != "billing" && syncType != "meters" && syncType != "demo" {
 			return c.Status(400).JSON(fiber.Map{
-				"error": "invalid sync type — must be: accounts, billing, meters",
+				"error": "invalid sync type — must be: accounts, billing, meters, demo",
 			})
 		}
 
 		syncCtx, syncCancel := context.WithTimeout(c.Context(), 10*time.Minute)
 		defer syncCancel()
 
+		// DEMO MODE: generate synthetic data
+		if !isLiveMode || syncType == "demo" {
+			result, err := demoSvc.RunDemoSync(syncCtx)
+			if err != nil {
+				logger.Error("Demo sync error", zap.Error(err))
+				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			}
+
+			// Publish NATS event so Sentinel auto-triggers scans
+			if nc != nil {
+				event := map[string]interface{}{
+					"sync_id":          "demo-" + result.SyncedAt.Format("20060102-150405"),
+					"synced_at":        result.SyncedAt,
+					"accounts_synced":  result.AccountsFound,
+					"bills_synced":     result.BillsSynced,
+					"readings_synced":  result.ReadingsSynced,
+					"district_codes":   result.DistrictCodes,
+				}
+				data, _ := json.Marshal(event)
+				if err := nc.Publish(subjectCDCSyncCompleted, data); err != nil {
+					logger.Warn("Failed to publish demo sync event", zap.Error(err))
+				} else {
+					logger.Info("Published demo sync completed event to NATS",
+						zap.Int("districts", len(result.DistrictCodes)),
+					)
+				}
+			}
+
+			return c.JSON(fiber.Map{
+				"mode":             "DEMO",
+				"status":           "SUCCESS",
+				"readings_synced":  result.ReadingsSynced,
+				"bills_synced":     result.BillsSynced,
+				"accounts_found":   result.AccountsFound,
+				"districts":        result.DistrictCodes,
+				"synced_at":        result.SyncedAt,
+				"message":          "Demo sync completed — synthetic GWL data written to GN-WAAS tables",
+			})
+		}
+
+		// LIVE MODE: sync from real GWL database
 		status, err := cdcSvc.RunSync(syncCtx, syncType)
 		if err != nil {
 			logger.Error("CDC sync error", zap.Error(err))

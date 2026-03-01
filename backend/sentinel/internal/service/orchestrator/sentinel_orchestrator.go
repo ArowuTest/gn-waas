@@ -354,3 +354,38 @@ func (o *SentinelOrchestrator) runCategoryMismatchCheck(ctx context.Context, dis
 
 	return flags, nil
 }
+
+// RunScanByCode resolves a district by its code and runs a full scan.
+// This is called by the NATS subscriber when CDC sync or meter anomaly events arrive.
+func (o *SentinelOrchestrator) RunScanByCode(ctx context.Context, districtCode string) (*ScanSummary, error) {
+	// Resolve district UUID from code
+	var districtID uuid.UUID
+	err := o.districtRepo.DB().QueryRow(ctx,
+		`SELECT id FROM districts WHERE district_code = $1 AND is_active = true`,
+		districtCode,
+	).Scan(&districtID)
+	if err != nil {
+		return nil, fmt.Errorf("district not found for code %s: %w", districtCode, err)
+	}
+
+	start := time.Now()
+	result, err := o.RunDistrictScan(ctx, districtID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ScanSummary{
+		DistrictCode:   districtCode,
+		AnomaliesFound: result.FlagsCreated,
+		CriticalCount:  0, // populated by anomaly repo if needed
+		Duration:       time.Since(start),
+	}, nil
+}
+
+// ScanSummary is a lightweight result for NATS-triggered scans
+type ScanSummary struct {
+	DistrictCode   string
+	AnomaliesFound int
+	CriticalCount  int
+	Duration       time.Duration
+}

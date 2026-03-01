@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -16,7 +17,35 @@ import (
 	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/service/reconciler"
 	"github.com/gofiber/fiber/v2"
 	pgxpool "github.com/jackc/pgx/v5/pgxpool"
+	natsgo "github.com/nats-io/nats.go"
 	"go.uber.org/zap"
+)
+
+// ─── NATS event payloads (mirrors cdc-ingestor and meter-ingestor) ────────────
+
+// CDCSyncCompletedEvent is published by the CDC ingestor after a successful sync.
+// Sentinel subscribes to this to trigger automatic district scans.
+type CDCSyncCompletedEvent struct {
+	SyncID          string    `json:"sync_id"`
+	SyncedAt        time.Time `json:"synced_at"`
+	AccountsSynced  int       `json:"accounts_synced"`
+	BillsSynced     int       `json:"bills_synced"`
+	ReadingsSynced  int       `json:"readings_synced"`
+	DistrictCodes   []string  `json:"district_codes"` // districts that had new data
+}
+
+// SentinelTriggerEvent is published by the meter-ingestor when an inline anomaly is detected.
+type SentinelTriggerEvent struct {
+	DistrictCode string    `json:"district_code"`
+	Reason       string    `json:"reason"`
+	TriggeredAt  time.Time `json:"triggered_at"`
+}
+
+// NATS subjects
+const (
+	subjectCDCSyncCompleted  = "gnwaas.cdc.sync.completed"
+	subjectSentinelTrigger   = "gnwaas.sentinel.scan.trigger"
+	subjectMeterReadingRcvd  = "gnwaas.meter.reading.received"
 )
 
 func main() {
@@ -28,7 +57,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Database connection
+	// ── Database ──────────────────────────────────────────────────────────────
 	dsn := fmt.Sprintf("host=%s port=%s dbname=%s user=%s password=%s sslmode=%s",
 		getEnv("DB_HOST", "localhost"),
 		getEnv("DB_PORT", "5432"),
@@ -47,28 +76,111 @@ func main() {
 	if err := db.Ping(ctx); err != nil {
 		logger.Fatal("Database ping failed", zap.Error(err))
 	}
+	logger.Info("Connected to GN-WAAS database")
 
-	// Repositories
-	anomalyRepo := postgres.NewAnomalyFlagRepository(db, logger)
-	billingRepo := postgres.NewGWLBillingRepository(db, logger)
-	accountRepo := postgres.NewWaterAccountRepository(db, logger)
+	// ── Repositories ──────────────────────────────────────────────────────────
+	anomalyRepo  := postgres.NewAnomalyFlagRepository(db, logger)
+	billingRepo  := postgres.NewGWLBillingRepository(db, logger)
+	accountRepo  := postgres.NewWaterAccountRepository(db, logger)
 	districtRepo := postgres.NewDistrictRepository(db, logger)
 
-	// Services (thresholds from system_config - using defaults here)
+	// ── Services (thresholds loaded from system_config at runtime) ────────────
 	reconcilerSvc := reconciler.NewReconcilerService(logger, 15.0)
-	phantomSvc := phantom_checker.NewPhantomCheckerService(logger, 6)
-	nightFlowSvc := night_flow.NewNightFlowAnalyser(logger, 30.0)
+	phantomSvc    := phantom_checker.NewPhantomCheckerService(logger, 6)
+	nightFlowSvc  := night_flow.NewNightFlowAnalyser(logger, 30.0)
 
-	// Orchestrator
+	// ── Orchestrator ──────────────────────────────────────────────────────────
 	orch := orchestrator.NewSentinelOrchestrator(
 		anomalyRepo, billingRepo, accountRepo, districtRepo, nil,
 		reconcilerSvc, phantomSvc, nightFlowSvc, logger,
 	)
 
-	// Handler
+	// ── HTTP Handler ──────────────────────────────────────────────────────────
 	sentinelHandler := handler.NewSentinelHandler(orch, anomalyRepo, districtRepo, logger)
 
-	// HTTP Server
+	// ── NATS Subscriber ───────────────────────────────────────────────────────
+	// Sentinel subscribes to two subjects:
+	//   1. gnwaas.cdc.sync.completed  → scan all districts that had new data
+	//   2. gnwaas.sentinel.scan.trigger → scan a specific district immediately
+	//      (published by meter-ingestor when inline pre-check flags an anomaly)
+	natsURL := getEnv("NATS_URL", "")
+	if natsURL != "" {
+		nc, natsErr := natsgo.Connect(natsURL,
+			natsgo.Name("gnwaas-sentinel"),
+			natsgo.ReconnectWait(3*time.Second),
+			natsgo.MaxReconnects(20),
+			natsgo.DisconnectErrHandler(func(_ *natsgo.Conn, err error) {
+				logger.Warn("NATS disconnected", zap.Error(err))
+			}),
+			natsgo.ReconnectHandler(func(nc *natsgo.Conn) {
+				logger.Info("NATS reconnected", zap.String("url", nc.ConnectedUrl()))
+			}),
+		)
+		if natsErr != nil {
+			logger.Warn("NATS connection failed — sentinel will not auto-scan on CDC events",
+				zap.Error(natsErr))
+		} else {
+			defer nc.Close()
+			logger.Info("Connected to NATS", zap.String("url", natsURL))
+
+			// ── Subscribe: CDC sync completed → scan affected districts ──────
+			_, subErr := nc.Subscribe(subjectCDCSyncCompleted, func(msg *natsgo.Msg) {
+				var evt CDCSyncCompletedEvent
+				if err := json.Unmarshal(msg.Data, &evt); err != nil {
+					logger.Error("Failed to parse CDCSyncCompletedEvent", zap.Error(err))
+					return
+				}
+
+				logger.Info("CDC sync completed — triggering sentinel scans",
+					zap.String("sync_id", evt.SyncID),
+					zap.Int("accounts_synced", evt.AccountsSynced),
+					zap.Int("bills_synced", evt.BillsSynced),
+					zap.Int("readings_synced", evt.ReadingsSynced),
+					zap.Strings("districts", evt.DistrictCodes),
+				)
+
+				// If specific districts are listed, scan only those.
+				// Otherwise scan all active districts.
+				if len(evt.DistrictCodes) > 0 {
+					for _, districtCode := range evt.DistrictCodes {
+						go runDistrictScan(orch, districtCode, "cdc_sync_completed", logger)
+					}
+				} else {
+					go runAllDistrictScans(db, orch, "cdc_sync_completed", logger)
+				}
+			})
+			if subErr != nil {
+				logger.Error("Failed to subscribe to CDC sync events", zap.Error(subErr))
+			} else {
+				logger.Info("Subscribed to CDC sync events", zap.String("subject", subjectCDCSyncCompleted))
+			}
+
+			// ── Subscribe: Meter anomaly trigger → scan specific district ────
+			_, subErr2 := nc.Subscribe(subjectSentinelTrigger, func(msg *natsgo.Msg) {
+				var evt SentinelTriggerEvent
+				if err := json.Unmarshal(msg.Data, &evt); err != nil {
+					logger.Error("Failed to parse SentinelTriggerEvent", zap.Error(err))
+					return
+				}
+
+				logger.Info("Sentinel scan triggered by meter anomaly",
+					zap.String("district_code", evt.DistrictCode),
+					zap.String("reason", evt.Reason),
+				)
+
+				go runDistrictScan(orch, evt.DistrictCode, "meter_anomaly_trigger", logger)
+			})
+			if subErr2 != nil {
+				logger.Error("Failed to subscribe to sentinel trigger events", zap.Error(subErr2))
+			} else {
+				logger.Info("Subscribed to sentinel trigger events", zap.String("subject", subjectSentinelTrigger))
+			}
+		}
+	} else {
+		logger.Info("NATS_URL not set — sentinel will only scan via HTTP API calls")
+	}
+
+	// ── HTTP Server ───────────────────────────────────────────────────────────
 	app := fiber.New(fiber.Config{AppName: "GN-WAAS Sentinel v1.0"})
 
 	app.Get("/health", sentinelHandler.HealthCheck)
@@ -81,7 +193,7 @@ func main() {
 	api.Patch("/anomalies/:id/resolve", sentinelHandler.ResolveAnomaly)
 	api.Patch("/anomalies/:id/false-positive", sentinelHandler.MarkFalsePositive)
 
-	// Graceful shutdown
+	// ── Graceful shutdown ─────────────────────────────────────────────────────
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -98,6 +210,77 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	_ = app.ShutdownWithContext(shutdownCtx)
+}
+
+// runDistrictScan triggers a full sentinel scan for a single district by its code.
+// It resolves the district UUID from the code, then calls the orchestrator.
+func runDistrictScan(
+	orch *orchestrator.SentinelOrchestrator,
+	districtCode string,
+	trigger string,
+	logger *zap.Logger,
+) {
+	scanCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	logger.Info("Running sentinel scan",
+		zap.String("district_code", districtCode),
+		zap.String("trigger", trigger),
+	)
+
+	result, err := orch.RunScanByCode(scanCtx, districtCode)
+	if err != nil {
+		logger.Error("Sentinel scan failed",
+			zap.String("district_code", districtCode),
+			zap.String("trigger", trigger),
+			zap.Error(err),
+		)
+		return
+	}
+
+	logger.Info("Sentinel scan completed",
+		zap.String("district_code", districtCode),
+		zap.String("trigger", trigger),
+		zap.Int("anomalies_found", result.AnomaliesFound),
+		zap.Int("critical", result.CriticalCount),
+		zap.Duration("duration", result.Duration),
+	)
+}
+
+// runAllDistrictScans fetches all active districts and scans each one.
+func runAllDistrictScans(
+	db *pgxpool.Pool,
+	orch *orchestrator.SentinelOrchestrator,
+	trigger string,
+	logger *zap.Logger,
+) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	rows, err := db.Query(ctx,
+		`SELECT district_code FROM districts WHERE is_active = true ORDER BY district_name`)
+	if err != nil {
+		logger.Error("Failed to fetch districts for scan", zap.Error(err))
+		return
+	}
+	defer rows.Close()
+
+	var codes []string
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err == nil {
+			codes = append(codes, code)
+		}
+	}
+
+	logger.Info("Running sentinel scans for all active districts",
+		zap.Int("district_count", len(codes)),
+		zap.String("trigger", trigger),
+	)
+
+	for _, code := range codes {
+		go runDistrictScan(orch, code, trigger, logger)
+	}
 }
 
 func getEnv(key, defaultVal string) string {
