@@ -61,7 +61,8 @@ function AppRoutes() {
         <Route path="gra" element={<PlaceholderPage title="GRA Compliance" />} />
         <Route path="reports" element={<PlaceholderPage title="Reports" />} />
         <Route path="users" element={<UserManagementPage />} />
-        <Route path="settings" element={<PlaceholderPage title="System Settings" />} />
+        <Route path="districts" element={<DistrictConfigPage />} />
+        <Route path="settings" element={<AuditThresholdsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

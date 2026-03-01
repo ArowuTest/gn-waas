@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/gofiber/fiber/v2"
@@ -153,4 +156,106 @@ func (h *HealthHandler) HealthCheck(c *fiber.Ctx) error {
 		"status":  "healthy",
 		"version": "1.0.0",
 	})
+}
+
+// CreateDistrict godoc
+// POST /api/v1/admin/districts
+func (h *DistrictHandler) CreateDistrict(c *fiber.Ctx) error {
+	role, _ := c.Locals("user_role").(string)
+	if role != "SYSTEM_ADMIN" {
+		return response.Unauthorized(c, "Only SYSTEM_ADMIN can create districts")
+	}
+
+	var req struct {
+		DistrictCode       string  `json:"district_code"`
+		DistrictName       string  `json:"district_name"`
+		Region             string  `json:"region"`
+		PopulationEstimate int     `json:"population_estimate"`
+		TotalConnections   int     `json:"total_connections"`
+		SupplyStatus       string  `json:"supply_status"`
+		ZoneType           string  `json:"zone_type"`
+		IsPilotDistrict    bool    `json:"is_pilot_district"`
+		IsActive           bool    `json:"is_active"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+	if req.DistrictCode == "" || req.DistrictName == "" {
+		return response.BadRequest(c, "MISSING_FIELDS", "district_code and district_name are required")
+	}
+
+	var id uuid.UUID
+	err := h.districtRepo.DB().QueryRow(c.Context(), `
+		INSERT INTO districts
+			(district_code, district_name, region, population_estimate,
+			 total_connections, supply_status, zone_type, is_pilot_district, is_active)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		RETURNING id`,
+		req.DistrictCode, req.DistrictName, req.Region,
+		req.PopulationEstimate, req.TotalConnections,
+		req.SupplyStatus, req.ZoneType,
+		req.IsPilotDistrict, req.IsActive,
+	).Scan(&id)
+	if err != nil {
+		h.logger.Error("CreateDistrict failed", zap.Error(err))
+		return response.InternalError(c, "Failed to create district")
+	}
+
+	return c.Status(201).JSON(fiber.Map{"success": true, "id": id})
+}
+
+// UpdateDistrict godoc
+// PATCH /api/v1/admin/districts/:id
+func (h *DistrictHandler) UpdateDistrict(c *fiber.Ctx) error {
+	role, _ := c.Locals("user_role").(string)
+	if role != "SYSTEM_ADMIN" {
+		return response.Unauthorized(c, "Only SYSTEM_ADMIN can update districts")
+	}
+
+	districtID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ID", "Invalid district ID")
+	}
+
+	var req struct {
+		DistrictName       *string `json:"district_name"`
+		Region             *string `json:"region"`
+		PopulationEstimate *int    `json:"population_estimate"`
+		TotalConnections   *int    `json:"total_connections"`
+		SupplyStatus       *string `json:"supply_status"`
+		ZoneType           *string `json:"zone_type"`
+		IsPilotDistrict    *bool   `json:"is_pilot_district"`
+		IsActive           *bool   `json:"is_active"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+
+	setClauses := []string{"updated_at = NOW()"}
+	args := []interface{}{}
+	idx := 1
+
+	if req.DistrictName != nil    { setClauses = append(setClauses, fmt.Sprintf("district_name=$%d", idx)); args = append(args, *req.DistrictName); idx++ }
+	if req.Region != nil          { setClauses = append(setClauses, fmt.Sprintf("region=$%d", idx)); args = append(args, *req.Region); idx++ }
+	if req.PopulationEstimate != nil { setClauses = append(setClauses, fmt.Sprintf("population_estimate=$%d", idx)); args = append(args, *req.PopulationEstimate); idx++ }
+	if req.TotalConnections != nil { setClauses = append(setClauses, fmt.Sprintf("total_connections=$%d", idx)); args = append(args, *req.TotalConnections); idx++ }
+	if req.SupplyStatus != nil    { setClauses = append(setClauses, fmt.Sprintf("supply_status=$%d", idx)); args = append(args, *req.SupplyStatus); idx++ }
+	if req.ZoneType != nil        { setClauses = append(setClauses, fmt.Sprintf("zone_type=$%d", idx)); args = append(args, *req.ZoneType); idx++ }
+	if req.IsPilotDistrict != nil { setClauses = append(setClauses, fmt.Sprintf("is_pilot_district=$%d", idx)); args = append(args, *req.IsPilotDistrict); idx++ }
+	if req.IsActive != nil        { setClauses = append(setClauses, fmt.Sprintf("is_active=$%d", idx)); args = append(args, *req.IsActive); idx++ }
+
+	args = append(args, districtID)
+	query := fmt.Sprintf("UPDATE districts SET %s WHERE id=$%d",
+		strings.Join(setClauses, ", "), idx)
+
+	result, err := h.districtRepo.DB().Exec(c.Context(), query, args...)
+	if err != nil {
+		h.logger.Error("UpdateDistrict failed", zap.Error(err))
+		return response.InternalError(c, "Failed to update district")
+	}
+	if result.RowsAffected() == 0 {
+		return response.NotFound(c, "district")
+	}
+
+	return response.OK(c, fiber.Map{"success": true, "id": districtID})
 }

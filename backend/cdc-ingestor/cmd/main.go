@@ -35,6 +35,9 @@ func main() {
 
 	logger.Info("GN-WAAS CDC Ingestor starting", zap.String("env", env))
 
+	// ── Startup Validation ────────────────────────────────────────────────────
+	validateConfig(logger)
+
 	// ── GN-WAAS Database (target) ─────────────────────────────────────────────
 	gnwaasDSN := fmt.Sprintf(
 		"host=%s port=%s dbname=%s user=%s password=%s sslmode=%s pool_max_conns=5",
@@ -242,4 +245,70 @@ func getEnv(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+// validateConfig checks required environment variables and logs warnings for missing optional ones.
+// It calls logger.Fatal if any required variable is missing in production mode.
+func validateConfig(logger *zap.Logger) {
+	env := getEnv("APP_ENV", "development")
+	isProd := env == "production"
+
+	required := []struct{ key, desc string }{
+		{"DB_HOST",     "GN-WAAS PostgreSQL host"},
+		{"DB_NAME",     "GN-WAAS database name"},
+		{"DB_USER",     "GN-WAAS database user"},
+		{"DB_PASSWORD", "GN-WAAS database password"},
+	}
+
+	optional := []struct{ key, desc, defaultVal string }{
+		{"GWL_DB_HOST",          "GWL source database host (leave blank for demo mode)", ""},
+		{"NATS_URL",             "NATS messaging URL",                                   "nats://localhost:4222"},
+		{"SYNC_INTERVAL_MINUTES","Sync interval in minutes",                             "15"},
+		{"SYNC_BATCH_SIZE",      "Records per sync batch",                               "500"},
+	}
+
+	allOK := true
+	for _, r := range required {
+		if os.Getenv(r.key) == "" {
+			if isProd {
+				logger.Error("REQUIRED environment variable not set",
+					zap.String("variable", r.key),
+					zap.String("description", r.desc),
+				)
+				allOK = false
+			} else {
+				logger.Warn("Environment variable not set (using default)",
+					zap.String("variable", r.key),
+					zap.String("description", r.desc),
+				)
+			}
+		}
+	}
+
+	if !allOK {
+		logger.Fatal("Startup aborted: missing required environment variables. See .env.example for reference.")
+	}
+
+	gwlConfigured := os.Getenv("GWL_DB_HOST") != ""
+	if !gwlConfigured {
+		logger.Warn("GWL_DB_HOST not set — running in DEMO mode (no live GWL sync)")
+	} else {
+		logger.Info("GWL source database configured", zap.String("host", os.Getenv("GWL_DB_HOST")))
+	}
+
+	for _, o := range optional {
+		val := os.Getenv(o.key)
+		if val == "" {
+			logger.Info("Optional config using default",
+				zap.String("variable", o.key),
+				zap.String("default", o.defaultVal),
+			)
+		}
+	}
+
+	logger.Info("Configuration validation passed",
+		zap.String("env", env),
+		zap.Bool("gwl_configured", gwlConfigured),
+		zap.Bool("nats_configured", os.Getenv("NATS_URL") != ""),
+	)
 }

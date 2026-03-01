@@ -414,3 +414,6 @@ func (r *FieldJobRepository) GetByOfficerEnriched(ctx context.Context, officerID
 	}
 	return jobs, rows.Err()
 }
+
+// DB returns the underlying database pool for direct queries
+func (r *DistrictRepository) DB() *pgxpool.Pool { return r.db }

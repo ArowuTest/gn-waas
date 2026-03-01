@@ -163,6 +163,13 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	adminUsers.Patch("/:id", adminUserHandler.UpdateUser)
 	adminUsers.Post("/:id/reset-password", adminUserHandler.ResetPassword)
 
+	// ── Admin District Management (SYSTEM_ADMIN only) ───────────────────────
+	adminDistricts := api.Group("/admin/districts",
+		middleware.RequireRoles("SYSTEM_ADMIN"),
+	)
+	adminDistricts.Post("/", districtHandler.CreateDistrict)
+	adminDistricts.Patch("/:id", districtHandler.UpdateDistrict)
+
 	// ── System Config (admin only) ────────────────────────────────────────────
 	sysConfig := api.Group("/config",
 		middleware.RequireRoles("SYSTEM_ADMIN"),
