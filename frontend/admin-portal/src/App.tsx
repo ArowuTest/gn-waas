@@ -7,6 +7,8 @@ import { DashboardPage } from './pages/DashboardPage'
 import { AnomaliesPage } from './pages/AnomaliesPage'
 import { AuditsPage } from './pages/AuditsPage'
 import { NRWAnalysisPage } from './pages/NRWAnalysisPage'
+import { FieldJobsPage } from './pages/FieldJobsPage'
+import { MobileAppPage } from './pages/MobileAppPage'
 import type { ReactNode } from 'react'
 
 const queryClient = new QueryClient({
@@ -57,7 +59,8 @@ function AppRoutes() {
         <Route path="audits" element={<AuditsPage />} />
         <Route path="nrw" element={<NRWAnalysisPage />} />
         {/* Placeholder routes for future pages */}
-        <Route path="field-jobs" element={<PlaceholderPage title="Field Jobs" />} />
+        <Route path="field-jobs" element={<FieldJobsPage />} />
+        <Route path="mobile-app" element={<MobileAppPage />} />
         <Route path="gra" element={<PlaceholderPage title="GRA Compliance" />} />
         <Route path="reports" element={<PlaceholderPage title="Reports" />} />
         <Route path="users" element={<UserManagementPage />} />

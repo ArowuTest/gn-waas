@@ -342,6 +342,29 @@ func (r *SystemConfigRepository) Update(ctx context.Context, key, value string, 
 	return err
 }
 
+// GetFloat64 returns a float64 config value by key, with a default fallback.
+// Used by the /api/v1/config/mobile endpoint.
+func (r *SystemConfigRepository) GetFloat64(ctx context.Context, key string, defaultVal float64) (float64, error) {
+	cfg, err := r.GetByKey(ctx, key)
+	if err != nil || cfg == nil {
+		return defaultVal, nil
+	}
+	var v float64
+	if _, err := fmt.Sscanf(cfg.ConfigValue, "%f", &v); err != nil {
+		return defaultVal, nil
+	}
+	return v, nil
+}
+
+// GetString returns a string config value by key, with a default fallback.
+func (r *SystemConfigRepository) GetString(ctx context.Context, key string, defaultVal string) (string, error) {
+	cfg, err := r.GetByKey(ctx, key)
+	if err != nil || cfg == nil {
+		return defaultVal, nil
+	}
+	return cfg.ConfigValue, nil
+}
+
 // EnrichedFieldJob extends FieldJob with joined account data for the mobile app
 type EnrichedFieldJob struct {
 	domain.FieldJob

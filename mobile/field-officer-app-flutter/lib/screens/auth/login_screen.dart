@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/models.dart';
 import '../../providers/providers.dart';
 
 
@@ -40,14 +41,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleBiometric() async {
+    final api = ref.read(apiServiceProvider);
+
+    // Check if we have a stored refresh token to exchange
+    final storedRefresh = await api.getStoredRefreshToken();
+    if (storedRefresh == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please sign in with your password once to enable biometric login.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
     final bio = ref.read(biometricServiceProvider);
     final success = await bio.authenticate(
       reason: 'Authenticate to access GN-WAAS Field Officer App',
     );
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Biometric authentication successful')),
-      );
+
+    if (!success) return;
+
+    // Biometric verified — exchange refresh token for fresh JWT
+    if (mounted) {
+      setState(() {}); // show loading
+    }
+    try {
+      final data = await api.refreshToken();
+      final user = User.fromJson(data['user'] as Map<String, dynamic>);
+      final token = (data['access_token'] ?? data['token']) as String;
+      await ref.read(authProvider.notifier).loginWithToken(token, user);
+    } catch (e) {
+      // Refresh token expired — force password login
+      await api.logout();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session expired. Please sign in with your password.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

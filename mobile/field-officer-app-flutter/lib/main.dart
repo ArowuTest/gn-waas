@@ -2,10 +2,22 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:flutter/foundation.dart';
+import 'providers/providers.dart';
 import 'router/router.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialise SQLite FFI for desktop/test environments
+  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.linux ||
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.macOS)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   runApp(
     const ProviderScope(
       child: GNWAASApp(),
@@ -19,6 +31,10 @@ class GNWAASApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+
+    // Eagerly fetch remote config on startup (non-blocking)
+    // This ensures admin-controlled settings are loaded before first job
+    ref.watch(mobileConfigProvider);
 
     return MaterialApp.router(
       title: 'GN-WAAS Field Officer',

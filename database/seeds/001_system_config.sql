@@ -49,3 +49,14 @@ INSERT INTO system_config (config_key, config_value, config_type, description, c
 ('system.pilot_district_code',           'TEMA-EAST',   'STRING', 'Active pilot district code', 'SYSTEM'),
 ('system.data_retention_years',          '7',      'NUMBER',  'Audit data retention period (years)', 'SYSTEM'),
 ('system.session_timeout_minutes',       '30',     'NUMBER',  'Admin portal session timeout (minutes)', 'SYSTEM');
+
+-- Mobile app version control (admin-controlled via Mobile App page)
+INSERT INTO system_config (config_key, config_value, config_type, description, category) VALUES
+('mobile.app_min_version',    '1.0.0',  'STRING',  'Minimum Flutter app version required (older versions prompted to update)', 'MOBILE'),
+('mobile.app_latest_version', '1.0.0',  'STRING',  'Latest Flutter app version (displayed in About screen)', 'MOBILE'),
+('mobile.force_update',       'false',  'BOOLEAN', 'Block app usage until officer updates to minimum version', 'MOBILE'),
+('mobile.maintenance_mode',   'false',  'BOOLEAN', 'Disable field officer login and show maintenance message', 'MOBILE'),
+('mobile.maintenance_message','',       'STRING',  'Message shown to field officers during maintenance mode', 'MOBILE'),
+('field.sync_interval_seconds','30',    'NUMBER',  'How often the Flutter app syncs pending submissions (seconds)', 'FIELD'),
+('field.ocr_conflict_tolerance_pct','2.0','NUMBER','Flag if OCR reading differs from manual entry by more than this %', 'FIELD')
+ON CONFLICT (config_key) DO NOTHING;

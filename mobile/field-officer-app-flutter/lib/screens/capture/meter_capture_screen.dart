@@ -60,7 +60,10 @@ class _MeterCaptureScreenState extends ConsumerState<MeterCaptureScreen> {
     try {
       final loc = ref.read(locationServiceProvider);
       final pos = await loc.getCurrentPosition();
-      final within = loc.isWithinFence(pos.lat, pos.lng, job.gpsLat, job.gpsLng);
+      // Use admin-controlled geofence radius from remote config
+      final configAsync = ref.read(mobileConfigProvider);
+      final geofenceRadius = configAsync.whenOrNull(data: (c) => c.geofenceRadiusM) ?? 100.0;
+      final within = loc.isWithinFenceWithRadius(pos.lat, pos.lng, job.gpsLat, job.gpsLng, geofenceRadius);
 
       if (within) {
         setState(() => _gpsStatus = 'ok');

@@ -11,8 +11,9 @@ class ApiService {
   late final Dio _dio;
   final FlutterSecureStorage _secureStorage;
 
-  static const String _tokenKey = 'gnwaas_token';
-  static const String _userKey  = 'gnwaas_user';
+  static const String _tokenKey        = 'gnwaas_token';
+  static const String _userKey         = 'gnwaas_user';
+  static const String _refreshTokenKey = 'gnwaas_refresh_token';
 
   ApiService({FlutterSecureStorage? secureStorage})
       : _secureStorage = secureStorage ?? const FlutterSecureStorage() {
@@ -49,16 +50,81 @@ class ApiService {
       'email':    email,
       'password': password,
     });
-    final data = res.data['data'] as Map<String, dynamic>;
-    await _secureStorage.write(key: _tokenKey, value: data['access_token'] as String);
-    await _secureStorage.write(key: _userKey,  value: jsonEncode(data['user']));
+
+    // Backend returns either:
+    //   { access_token, token_type, expires_in, user, refresh_token? }  (dev mode)
+    //   { data: { access_token, user, refresh_token? } }                 (production wrapper)
+    final body = res.data as Map<String, dynamic>;
+    final data = body.containsKey('data')
+        ? body['data'] as Map<String, dynamic>
+        : body;
+
+    final token = (data['access_token'] ?? data['token']) as String;
+    await _secureStorage.write(key: _tokenKey, value: token);
+
+    // Normalise user object (backend may return 'name' or 'full_name')
+    final rawUser = data['user'] as Map<String, dynamic>;
+    final normUser = _normaliseUser(rawUser);
+    await _secureStorage.write(key: _userKey, value: jsonEncode(normUser));
+
+    // Store refresh token for biometric login
+    final refreshToken = data['refresh_token'] as String?;
+    if (refreshToken != null) {
+      await _secureStorage.write(key: _refreshTokenKey, value: refreshToken);
+    }
+
+    return {...data, 'access_token': token, 'user': normUser};
+  }
+
+  /// Exchange a stored refresh token for a fresh access token (used by biometric login)
+  Future<Map<String, dynamic>> refreshToken() async {
+    final storedRefresh = await _secureStorage.read(key: _refreshTokenKey);
+    if (storedRefresh == null) throw Exception('No refresh token stored');
+
+    final res = await _dio.post('/auth/refresh', data: {
+      'refresh_token': storedRefresh,
+      'grant_type':    'refresh_token',
+    });
+
+    final body = res.data as Map<String, dynamic>;
+    final data = body.containsKey('data')
+        ? body['data'] as Map<String, dynamic>
+        : body;
+
+    final token = (data['access_token'] ?? data['token']) as String;
+    await _secureStorage.write(key: _tokenKey, value: token);
+
+    final newRefresh = data['refresh_token'] as String?;
+    if (newRefresh != null) {
+      await _secureStorage.write(key: _refreshTokenKey, value: newRefresh);
+    }
+
+    final rawUser = data['user'] as Map<String, dynamic>?;
+    if (rawUser != null) {
+      final normUser = _normaliseUser(rawUser);
+      await _secureStorage.write(key: _userKey, value: jsonEncode(normUser));
+    }
+
     return data;
   }
+
+  /// Normalise user object: backend may return 'name' instead of 'full_name'
+  Map<String, dynamic> _normaliseUser(Map<String, dynamic> raw) => {
+    'id':           raw['id'] ?? raw['sub'] ?? '',
+    'email':        raw['email'] ?? '',
+    'full_name':    raw['full_name'] ?? raw['name'] ?? raw['preferred_username'] ?? '',
+    'role':         raw['role'] ?? raw['roles']?.first ?? 'FIELD_OFFICER',
+    'badge_number': raw['badge_number'],
+    'district_id':  raw['district_id'],
+  };
 
   Future<void> logout() async {
     await _secureStorage.delete(key: _tokenKey);
     await _secureStorage.delete(key: _userKey);
+    await _secureStorage.delete(key: _refreshTokenKey);
   }
+
+  Future<String?> getStoredRefreshToken() => _secureStorage.read(key: _refreshTokenKey);
 
   Future<String?> getStoredToken() => _secureStorage.read(key: _tokenKey);
 

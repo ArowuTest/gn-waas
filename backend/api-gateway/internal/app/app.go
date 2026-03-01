@@ -99,6 +99,51 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── Health check (no auth) ────────────────────────────────────────────────
 	app.Get("/health", healthHandler.HealthCheck)
 
+	// ── Mobile app config (no auth — needed before login) ────────────────────
+	// Returns field.* system_config values that control mobile app behaviour.
+	// Admin changes these via the admin portal Settings → Mobile App page.
+	// Values are read live from system_config table so admin changes take effect immediately.
+	app.Get("/api/v1/config/mobile", func(c *fiber.Ctx) error {
+		ctx := c.Context()
+
+		// Helper: read float with default
+		getFloat := func(key string, def float64) float64 {
+			v, _ := configRepo.GetFloat64(ctx, key, def)
+			return v
+		}
+		getBool := func(key string, def bool) bool {
+			s, _ := configRepo.GetString(ctx, key, fmt.Sprintf("%v", def))
+			return s == "true" || s == "1"
+		}
+		getString := func(key string, def string) string {
+			s, _ := configRepo.GetString(ctx, key, def)
+			return s
+		}
+		getInt := func(key string, def int) int {
+			v, _ := configRepo.GetFloat64(ctx, key, float64(def))
+			return int(v)
+		}
+
+		return c.JSON(fiber.Map{
+			"success": true,
+			"data": fiber.Map{
+				"geofence_radius_m":          getFloat("field.gps_fence_radius_m", 100.0),
+				"require_biometric":          getBool("field.require_biometric", true),
+				"blind_audit_default":        getBool("field.blind_audit_default", true),
+				"require_surroundings_photo": getBool("field.require_surroundings_photo", true),
+				"max_photo_age_minutes":      getInt("field.max_photo_age_minutes", 5),
+				"ocr_conflict_tolerance_pct": getFloat("field.ocr_conflict_tolerance_pct", 2.0),
+				"sync_interval_seconds":      getInt("field.sync_interval_seconds", 30),
+				"max_jobs_per_officer":       getInt("audit.max_jobs_per_officer", 5),
+				"app_min_version":            getString("mobile.app_min_version", "1.0.0"),
+				"app_latest_version":         getString("mobile.app_latest_version", "1.0.0"),
+				"force_update":               getBool("mobile.force_update", false),
+				"maintenance_mode":           getBool("mobile.maintenance_mode", false),
+				"maintenance_message":        getString("mobile.maintenance_message", ""),
+			},
+		})
+	})
+
 	// ── Auth middleware config ────────────────────────────────────────────────
 	authCfg := middleware.AuthConfig{
 		KeycloakURL: cfg.Keycloak.URL,
@@ -161,6 +206,47 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 				"email": body.Email,
 				"role":  "AUDIT_SUPERVISOR",
 				"name":  "Dev User",
+			},
+		})
+	})
+
+	// ── Auth: Refresh Token ───────────────────────────────────────────────────
+	// POST /api/v1/auth/refresh — exchange refresh token for new access token
+	// In production: proxied to Keycloak token endpoint
+	// In dev mode: returns a new mock token
+	authGroup.Post("/refresh", func(c *fiber.Ctx) error {
+		if !cfg.Server.DevMode {
+			// Production: proxy to Keycloak token endpoint
+			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+				"error": "Use Keycloak OIDC token refresh in production",
+				"keycloak_token_url": cfg.Keycloak.URL + "/realms/" + cfg.Keycloak.Realm + "/protocol/openid-connect/token",
+			})
+		}
+		var body struct {
+			RefreshToken string `json:"refresh_token"`
+			GrantType    string `json:"grant_type"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "invalid request body"})
+		}
+		if body.RefreshToken == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "refresh_token required"})
+		}
+		// Dev mode: validate mock refresh token and return new access token
+		if len(body.RefreshToken) < 10 {
+			return c.Status(401).JSON(fiber.Map{"error": "invalid or expired refresh token"})
+		}
+		return c.JSON(fiber.Map{
+			"access_token":  "dev-refreshed-token-" + body.RefreshToken[:8],
+			"token_type":    "Bearer",
+			"expires_in":    3600,
+			"refresh_token": "dev-refresh-" + body.RefreshToken[:8] + "-new",
+			"user": fiber.Map{
+				"id":         "a0000001-0000-0000-0000-000000000001",
+				"email":      "officer@gnwaas.gov.gh",
+				"full_name":  "Dev Field Officer",
+				"role":       "FIELD_OFFICER",
+				"district_id": "d0000001-0000-0000-0000-000000000001",
 			},
 		})
 	})

@@ -8,6 +8,7 @@ import '../services/offline_storage_service.dart';
 import '../services/sync_service.dart';
 import '../services/location_service.dart';
 import '../services/biometric_service.dart';
+import '../services/remote_config_service.dart';
 
 // ─── Service Providers ────────────────────────────────────────────────────────
 
@@ -29,6 +30,16 @@ final locationServiceProvider = Provider<LocationService>(
 final biometricServiceProvider = Provider<BiometricService>(
   (ref) => BiometricService(),
 );
+
+final remoteConfigServiceProvider = Provider<RemoteConfigService>(
+  (ref) => RemoteConfigService(),
+);
+
+// Async provider that fetches config on app startup
+final mobileConfigProvider = FutureProvider<MobileConfig>((ref) async {
+  final svc = ref.read(remoteConfigServiceProvider);
+  return svc.fetchConfig();
+});
 
 // ─── Auth State ───────────────────────────────────────────────────────────────
 
@@ -95,6 +106,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _api.logout();
     state = const AuthState();
+  }
+
+  /// Called after successful biometric authentication — sets state directly
+  Future<void> loginWithToken(String token, User user) async {
+    state = AuthState(user: user, token: token);
   }
 
   String _parseError(Object e) {
