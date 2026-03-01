@@ -10,6 +10,7 @@ import (
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/handler"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -58,6 +59,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	flagHandler     := handler.NewAnomalyFlagHandler(flagRepo, logger)
 	gwlCaseRepo     := repository.NewGWLCaseRepository(db, logger)
 	gwlHandler       := handler.NewGWLHandler(gwlCaseRepo, logger)
+	reportHandler    := handler.NewReportHandler(gwlCaseRepo, logger)
 	adminUserHandler := handler.NewAdminUserHandler(db, logger)
 	healthHandler   := handler.NewHealthHandler()
 
@@ -77,6 +79,22 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	app.Use(middleware.RequestLogger(logger))
 	app.Use(middleware.CORS())
 	app.Use(middleware.SecurityHeaders())
+
+	// ── Rate limiting ─────────────────────────────────────────────────────────
+	// Global rate limit: 300 requests/minute per IP (protects all endpoints)
+	app.Use(limiter.New(limiter.Config{
+		Max:        300,
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Rate limit exceeded. Please slow down.",
+				"retry_after": "60s",
+			})
+		},
+	}))
 
 	// ── Health check (no auth) ────────────────────────────────────────────────
 	app.Get("/health", healthHandler.HealthCheck)
@@ -101,6 +119,20 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── API v1 routes ─────────────────────────────────────────────────────────
 	// ── Auth endpoints (no JWT required) ─────────────────────────────────────
 	authGroup := app.Group("/api/v1/auth")
+	// Strict rate limit on login: 10 attempts/minute per IP (brute-force protection)
+	authGroup.Use(limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Too many login attempts. Please wait 60 seconds before trying again.",
+				"retry_after": "60s",
+			})
+		},
+	}))
 	authGroup.Post("/login", func(c *fiber.Ctx) error {
 		// In production: redirect to Keycloak OIDC
 		// In DEV_MODE: return a mock token for testing
@@ -242,6 +274,10 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// Monthly reports
 	gwl.Get("/reports/monthly", gwlHandler.GetMonthlyReport)
+
+	// ── Report export endpoints (server-generated PDF + CSV) ──────────────────
+	reports.Get("/monthly/pdf", reportHandler.GetMonthlyReportPDF)
+	reports.Get("/monthly/csv", reportHandler.GetMonthlyReportCSV)
 
 	return &App{
 		fiber:  app,

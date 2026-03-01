@@ -15,11 +15,12 @@ const calculationVersion = "1.0.0"
 
 // TariffService implements the core PURC 2026 tariff calculation logic
 // All rates are loaded from the database (admin-configurable)
-// No hardcoded values - all thresholds come from system_config or tariff_rates tables
+// All thresholds are read from system_config at calculation time.
 type TariffService struct {
 	tariffRepo interfaces.TariffRateRepository
 	vatRepo    interfaces.VATConfigRepository
 	shadowRepo interfaces.ShadowBillRepository
+	configRepo interfaces.SystemConfigRepository
 	logger     *zap.Logger
 }
 
@@ -28,12 +29,14 @@ func NewTariffService(
 	tariffRepo interfaces.TariffRateRepository,
 	vatRepo interfaces.VATConfigRepository,
 	shadowRepo interfaces.ShadowBillRepository,
+	configRepo interfaces.SystemConfigRepository,
 	logger *zap.Logger,
 ) *TariffService {
 	return &TariffService{
 		tariffRepo: tariffRepo,
 		vatRepo:    vatRepo,
 		shadowRepo: shadowRepo,
+		configRepo: configRepo,
 		logger:     logger,
 	}
 }
@@ -137,15 +140,20 @@ func (s *TariffService) CalculateShadowBill(
 		calc.VariancePct = roundPct((calc.VarianceGHS / req.GWLTotalGHS) * 100)
 	}
 
-	// Flag if variance exceeds threshold
-	// Note: threshold loaded from system_config in production
-	// Using 15% as the default (matches seed data)
-	varianceThreshold := 15.0
+	// Load variance threshold from system_config (admin-configurable via admin portal)
+	// Default: 15.0% — matches seed data value SHADOW_BILL_VARIANCE_THRESHOLD
+	varianceThreshold, err := s.configRepo.GetFloat64(ctx, "SHADOW_BILL_VARIANCE_THRESHOLD", 15.0)
+	if err != nil {
+		s.logger.Warn("Failed to load variance threshold from system_config, using default 15%",
+			zap.Error(err),
+		)
+		varianceThreshold = 15.0
+	}
 	absVariancePct := math.Abs(calc.VariancePct)
 	if absVariancePct > varianceThreshold {
 		calc.IsFlagged = true
 		calc.FlagReason = fmt.Sprintf(
-			"Shadow bill variance of %.2f%% exceeds threshold of %.2f%%",
+			"Shadow bill variance of %.2f%% exceeds configured threshold of %.2f%%",
 			calc.VariancePct, varianceThreshold,
 		)
 	}

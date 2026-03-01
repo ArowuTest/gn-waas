@@ -4,6 +4,8 @@ import {
   ActivityIndicator, ScrollView,
 } from 'react-native'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import * as FileSystem from 'expo-file-system'
+import * as Crypto from 'expo-crypto'
 import * as Haptics from 'expo-haptics'
 import { getCurrentPosition, isWithinFence } from '../../utils/gps'
 import { useJobStore } from '../../store/jobStore'
@@ -55,11 +57,24 @@ export default function MeterCaptureScreen({ navigation }: { navigation: { goBac
       if (!photo) return
 
       const pos = await getCurrentPosition()
-      const mockHash = `sha256:${Math.random().toString(36).substring(2, 18)}`
+      // Compute SHA-256 of the photo file for tamper-evidence
+      let photoHash = 'sha256:unknown'
+      try {
+        const fileInfo = await FileSystem.readAsStringAsync(photo.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        })
+        const digest = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          fileInfo,
+        )
+        photoHash = `sha256:${digest}`
+      } catch (hashErr) {
+        console.warn('Photo hash computation failed:', hashErr)
+      }
 
       const meterPhoto: MeterPhoto = {
         uri: photo.uri,
-        hash: mockHash,
+        hash: photoHash,
         gps_lat: pos.lat,
         gps_lng: pos.lng,
         gps_accuracy: pos.accuracy,

@@ -66,3 +66,11 @@ type VarianceSummary struct {
 	MaxVariancePct    float64   `json:"max_variance_pct"`
 	EstimatedLossGHS  float64   `json:"estimated_loss_ghs"`
 }
+
+// SystemConfigRepository defines the contract for system configuration data access
+type SystemConfigRepository interface {
+	// GetFloat64 returns a float64 config value by key, with a default fallback
+	GetFloat64(ctx context.Context, key string, defaultVal float64) (float64, error)
+	// GetString returns a string config value by key, with a default fallback
+	GetString(ctx context.Context, key string, defaultVal string) (string, error)
+}

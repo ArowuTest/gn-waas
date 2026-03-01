@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native'
 import * as LocalAuthentication from 'expo-local-authentication'
+import * as SecureStore from 'expo-secure-store'
 import { useAuthStore } from '../../store/authStore'
 import { apiClient } from '../../utils/api'
 
@@ -21,7 +22,12 @@ export default function LoginScreen() {
     setLoading(true)
     try {
       const res = await apiClient.post('/api/v1/auth/login', { email, password })
-      await login(res.data.data.token, res.data.data.user)
+      const { token, user, refresh_token } = res.data.data
+      // Store refresh token for future biometric logins
+      if (refresh_token) {
+        await SecureStore.setItemAsync('gnwaas_refresh_token', refresh_token)
+      }
+      await login(token, user)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       Alert.alert('Login Failed', msg || 'Invalid credentials. Please try again.')
@@ -36,13 +42,52 @@ export default function LoginScreen() {
       Alert.alert('Not Available', 'Biometric authentication is not available on this device.')
       return
     }
+
+    // Check if we have a stored refresh token to exchange
+    const storedToken = await SecureStore.getItemAsync('gnwaas_refresh_token')
+    if (!storedToken) {
+      Alert.alert(
+        'Sign In First',
+        'Please sign in with your password once to enable biometric login.',
+      )
+      return
+    }
+
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage: 'Authenticate to access GN-WAAS',
       fallbackLabel: 'Use Password',
+      disableDeviceFallback: false,
     })
-    if (result.success) {
-      // In production: exchange biometric token for JWT
-      Alert.alert('Success', 'Biometric authentication successful.')
+
+    if (!result.success) {
+      if (result.error !== 'user_cancel') {
+        Alert.alert('Authentication Failed', 'Biometric verification was not successful.')
+      }
+      return
+    }
+
+    // Biometric verified — exchange stored refresh token for a fresh JWT
+    setLoading(true)
+    try {
+      const res = await apiClient.post('/api/v1/auth/refresh', {
+        refresh_token: storedToken,
+        grant_type: 'refresh_token',
+      })
+      const { token, user } = res.data.data
+      // Store new refresh token if provided
+      if (res.data.data.refresh_token) {
+        await SecureStore.setItemAsync('gnwaas_refresh_token', res.data.data.refresh_token)
+      }
+      await login(token, user)
+    } catch (err: unknown) {
+      // Refresh token expired — force full password login
+      await SecureStore.deleteItemAsync('gnwaas_refresh_token')
+      Alert.alert(
+        'Session Expired',
+        'Your session has expired. Please sign in with your password.',
+      )
+    } finally {
+      setLoading(false)
     }
   }
 

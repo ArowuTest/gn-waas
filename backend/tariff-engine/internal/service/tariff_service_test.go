@@ -88,11 +88,21 @@ func (m *mockShadowBillRepo) GetVarianceSummary(ctx context.Context, districtID 
 	return nil, nil
 }
 
+// mockSystemConfigRepo returns the default threshold (15%) for all tests
+type mockSystemConfigRepo struct{}
+
+func (m *mockSystemConfigRepo) GetFloat64(_ context.Context, _ string, defaultVal float64) (float64, error) {
+	return defaultVal, nil
+}
+func (m *mockSystemConfigRepo) GetString(_ context.Context, _ string, defaultVal string) (string, error) {
+	return defaultVal, nil
+}
+
 func floatPtr(f float64) *float64 { return &f }
 
 func newTestService() *service.TariffService {
 	logger, _ := zap.NewDevelopment()
-	return service.NewTariffService(&mockTariffRateRepo{}, &mockVATRepo{}, &mockShadowBillRepo{}, logger)
+	return service.NewTariffService(&mockTariffRateRepo{}, &mockVATRepo{}, &mockShadowBillRepo{}, &mockSystemConfigRepo{}, logger)
 }
 
 // ---- Tests ----

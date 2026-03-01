@@ -27,9 +27,10 @@ func New(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger) *App {
 	tariffRepo := postgres.NewTariffRateRepository(db, logger)
 	vatRepo := postgres.NewVATConfigRepository(db, logger)
 	shadowRepo := postgres.NewShadowBillRepository(db, logger)
+	configRepo := postgres.NewSystemConfigRepository(db, logger)
 
 	// Services
-	tariffSvc := service.NewTariffService(tariffRepo, vatRepo, shadowRepo, logger)
+	tariffSvc := service.NewTariffService(tariffRepo, vatRepo, shadowRepo, configRepo, logger)
 
 	// Handlers
 	tariffHandler := handler.NewTariffHandler(tariffSvc, tariffRepo, vatRepo, shadowRepo, logger)

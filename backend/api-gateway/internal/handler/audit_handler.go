@@ -5,6 +5,7 @@ import (
 
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/notification"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -227,6 +228,7 @@ func (h *AuditHandler) GetDashboardStats(c *fiber.Ctx) error {
 type FieldJobHandler struct {
 	fieldJobRepo *repository.FieldJobRepository
 	auditRepo    *repository.AuditEventRepository
+	sosNotifier  *notification.SOSNotifier
 	logger       *zap.Logger
 }
 
@@ -308,15 +310,28 @@ func (h *FieldJobHandler) TriggerSOS(c *fiber.Ctx) error {
 		return response.InternalError(c, "Failed to trigger SOS")
 	}
 
+	// Dispatch SOS alert to supervisors via webhook + SMS
+	officerID, _ := c.Locals("user_id").(string)
+	officerName, _ := c.Locals("user_name").(string)
+	h.sosNotifier.SendSOSAlert(c.Context(), notification.SOSAlert{
+		JobID:       id.String(),
+		OfficerID:   officerID,
+		OfficerName: officerName,
+		OfficerLat:  req.OfficerLat,
+		OfficerLng:  req.OfficerLng,
+	})
+
 	h.logger.Warn("SOS TRIGGERED",
 		zap.String("job_id", id.String()),
+		zap.String("officer_id", officerID),
+		zap.String("officer_name", officerName),
 		zap.Float64("lat", req.OfficerLat),
 		zap.Float64("lng", req.OfficerLng),
 	)
 
 	return response.OK(c, fiber.Map{
-		"message":    "SOS triggered - supervisor notified",
-		"job_id":     id,
+		"message":     "SOS triggered - supervisor notified via all configured channels",
+		"job_id":      id,
 		"officer_lat": req.OfficerLat,
 		"officer_lng": req.OfficerLng,
 	})

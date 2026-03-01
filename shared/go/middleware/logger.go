@@ -3,6 +3,8 @@ package middleware
 import (
 	"time"
 
+	"os"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -47,10 +49,46 @@ func RequestLogger(logger *zap.Logger) fiber.Handler {
 	}
 }
 
-// CORS configures Cross-Origin Resource Sharing for the admin portal
+// allowedOrigins lists the known GN-WAAS portal origins.
+// In development (APP_ENV=development), all origins are permitted.
+// In production, only these origins are allowed.
+var allowedOrigins = map[string]bool{
+	"https://admin.gnwaas.gov.gh":     true,
+	"https://authority.gnwaas.gov.gh": true,
+	"https://gwl.gnwaas.gov.gh":       true,
+	"https://gnwaas.gov.gh":           true,
+	"https://www.gnwaas.gov.gh":       true,
+	// Staging origins
+	"https://admin-staging.gnwaas.gov.gh":     true,
+	"https://authority-staging.gnwaas.gov.gh": true,
+}
+
+// CORS configures Cross-Origin Resource Sharing.
+// Production: restricts to known portal origins (allowedOrigins map above).
+// Development: permits all origins for local development convenience.
 func CORS() fiber.Handler {
+	isDev := os.Getenv("APP_ENV") == "development" || os.Getenv("APP_ENV") == ""
+
 	return func(c *fiber.Ctx) error {
-		c.Set("Access-Control-Allow-Origin", "*") // Restrict in production
+		origin := c.Get("Origin")
+
+		if isDev {
+			// Development: allow all origins
+			c.Set("Access-Control-Allow-Origin", "*")
+		} else if origin != "" && allowedOrigins[origin] {
+			// Production: only allow known portal origins
+			c.Set("Access-Control-Allow-Origin", origin)
+			c.Set("Vary", "Origin")
+		} else if origin != "" {
+			// Unknown origin in production — reject preflight, allow simple requests
+			// (browser will block the response for cross-origin requests)
+			if c.Method() == fiber.MethodOptions {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "CORS: origin not allowed",
+				})
+			}
+		}
+
 		c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		c.Set("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Request-ID")
 		c.Set("Access-Control-Expose-Headers", "X-Request-ID")

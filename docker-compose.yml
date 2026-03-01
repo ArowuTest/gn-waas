@@ -325,7 +325,7 @@ services:
   # ============================================================
   admin-portal:
     build:
-      context: ./web/admin-portal
+      context: ./frontend/admin-portal
       dockerfile: Dockerfile
       args:
         VITE_API_URL: http://localhost:3000
@@ -343,6 +343,51 @@ services:
       gnwaas-network:
         ipv4_address: 172.20.0.30
 
+
+
+  # ============================================================
+  # GWL Portal (React/TS — GWL case management portal)
+  # ============================================================
+  gwl-portal:
+    build:
+      context: ./frontend/gwl-portal
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000
+        VITE_KEYCLOAK_URL: http://localhost:8080
+        VITE_KEYCLOAK_REALM: gnwaas
+        VITE_KEYCLOAK_CLIENT_ID: gnwaas-gwl
+    container_name: gnwaas-gwl-portal
+    restart: unless-stopped
+    ports:
+      - "5174:80"
+    depends_on:
+      - api-gateway
+    networks:
+      gnwaas-network:
+        ipv4_address: 172.20.0.32
+
+  # ============================================================
+  # Authority Portal (React/TS — GN-WAAS authority dashboard)
+  # ============================================================
+  authority-portal:
+    build:
+      context: ./frontend/authority-portal
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000
+        VITE_KEYCLOAK_URL: http://localhost:8080
+        VITE_KEYCLOAK_REALM: gnwaas
+        VITE_KEYCLOAK_CLIENT_ID: gnwaas-authority
+    container_name: gnwaas-authority-portal
+    restart: unless-stopped
+    ports:
+      - "5175:80"
+    depends_on:
+      - api-gateway
+    networks:
+      gnwaas-network:
+        ipv4_address: 172.20.0.33
 
   # ============================================================
   # Meter Ingestor (gRPC + HTTP — real-time meter reading ingestion)

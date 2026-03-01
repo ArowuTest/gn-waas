@@ -26,6 +26,9 @@ type Claims struct {
 	PreferredUsername string              `json:"preferred_username"`
 	RealmAccess       RealmAccess         `json:"realm_access"`
 	ResourceAccess    map[string]Resource `json:"resource_access"`
+	// DistrictID is a custom Keycloak claim populated via a User Attribute mapper.
+	// It restricts district-scoped roles to their assigned district.
+	DistrictID        string              `json:"district_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -280,7 +283,14 @@ func RequireRoles(roles ...string) fiber.Handler {
 }
 
 // RequireDistrictAccess ensures field officers can only access their assigned district.
-// Super admins bypass this check. District-scoped roles are validated at the repo layer too.
+// Super admins and executive roles bypass this check.
+// District-scoped roles must have a district_id claim in their JWT that matches the
+// district_id URL parameter or query string.
+//
+// Keycloak configuration required:
+//   - Add a "district_id" user attribute to each district-scoped user
+//   - Create a Keycloak mapper: User Attribute → Token Claim (name: "district_id")
+//   - This populates claims.DistrictID from the JWT
 func RequireDistrictAccess() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		claims, ok := c.Locals("claims").(*Claims)
@@ -293,18 +303,25 @@ func RequireDistrictAccess() fiber.Handler {
 			return c.Next()
 		}
 
-		// For district-scoped roles, the district_id in the URL must match
-		// the district embedded in the JWT (custom Keycloak attribute: district_id)
-		// This is a defence-in-depth check; the repository layer also enforces it.
+		// Resolve the requested district from URL param or query string
 		requestedDistrict := c.Params("district_id")
 		if requestedDistrict == "" {
 			requestedDistrict = c.Query("district_id")
 		}
 
-		if requestedDistrict != "" {
-			// District enforcement is handled at repository layer (defence in depth).
-			// JWT custom attribute district_id requires Keycloak mapper configuration.
-			_ = requestedDistrict
+		// If no district is specified in the request, allow (endpoint may not be district-scoped)
+		if requestedDistrict == "" {
+			return c.Next()
+		}
+
+		// Enforce: the JWT district_id must match the requested district
+		if claims.DistrictID == "" {
+			// User has no district assigned — deny access to district-scoped resources
+			return response.Forbidden(c, "No district assigned to your account. Contact your administrator.")
+		}
+
+		if claims.DistrictID != requestedDistrict {
+			return response.Forbidden(c, "Access denied: you do not have permission to access this district's data")
 		}
 
 		return c.Next()
