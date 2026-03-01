@@ -1,0 +1,87 @@
+# GN-WAAS GWL Schema Mapping Configuration
+# ============================================================
+# This file maps GWL's e-billing database column names to
+# GN-WAAS internal field names.
+#
+# INSTRUCTIONS FOR INTEGRATION TEAM:
+# When you receive read-only access to GWL's database,
+# update the 'source_column' values to match their actual
+# column names. The 'target_field' values must NOT be changed.
+#
+# Set 'enabled: true' for each table once mapping is confirmed.
+# ============================================================
+
+gwl_database:
+  host: ""          # To be provided by GWL
+  port: 5432
+  name: ""          # To be provided by GWL
+  schema: "public"  # Confirm with GWL DBA
+  ssl_mode: "require"
+
+tables:
+  accounts:
+    source_table: "customers"        # GWL's actual table name (confirm)
+    enabled: false
+    fields:
+      - source_column: "customer_id"         target_field: "gwl_account_number"
+      - source_column: "customer_name"       target_field: "account_holder_name"
+      - source_column: "tin_number"          target_field: "account_holder_tin"
+      - source_column: "account_type"        target_field: "category"
+      - source_column: "account_status"      target_field: "status"
+      - source_column: "district_code"       target_field: "district_code"
+      - source_column: "meter_no"            target_field: "meter_number"
+      - source_column: "meter_serial_no"     target_field: "meter_serial"
+      - source_column: "installation_date"   target_field: "meter_install_date"
+      - source_column: "address"             target_field: "address_line1"
+      - source_column: "latitude"            target_field: "gps_latitude"
+      - source_column: "longitude"           target_field: "gps_longitude"
+      - source_column: "billing_cycle"       target_field: "gwl_billing_cycle"
+      - source_column: "route_code"          target_field: "gwl_route_code"
+      - source_column: "reader_id"           target_field: "gwl_reader_id"
+
+  billing:
+    source_table: "bills"            # GWL's actual table name (confirm)
+    enabled: false
+    fields:
+      - source_column: "bill_id"             target_field: "gwl_bill_id"
+      - source_column: "customer_id"         target_field: "gwl_account_number"
+      - source_column: "period_from"         target_field: "billing_period_start"
+      - source_column: "period_to"           target_field: "billing_period_end"
+      - source_column: "prev_reading"        target_field: "previous_reading"
+      - source_column: "curr_reading"        target_field: "current_reading"
+      - source_column: "consumption"         target_field: "consumption_m3"
+      - source_column: "account_type"        target_field: "gwl_category"
+      - source_column: "bill_amount"         target_field: "gwl_amount_ghs"
+      - source_column: "vat_amount"          target_field: "gwl_vat_ghs"
+      - source_column: "total_amount"        target_field: "gwl_total_ghs"
+      - source_column: "reader_id"           target_field: "gwl_reader_id"
+      - source_column: "read_date"           target_field: "gwl_read_date"
+      - source_column: "read_method"         target_field: "gwl_read_method"
+      - source_column: "payment_status"      target_field: "payment_status"
+      - source_column: "payment_date"        target_field: "payment_date"
+      - source_column: "payment_amount"      target_field: "payment_amount_ghs"
+
+  production:
+    source_table: "production_data"  # GWL's actual table name (confirm)
+    enabled: false
+    fields:
+      - source_column: "district_code"       target_field: "district_code"
+      - source_column: "recorded_date"       target_field: "recorded_at"
+      - source_column: "volume_produced"     target_field: "volume_m3"
+      - source_column: "source_type"         target_field: "source_type"
+
+# Category mapping: GWL codes → GN-WAAS enums
+category_mapping:
+  "RES":    "RESIDENTIAL"
+  "R":      "RESIDENTIAL"
+  "RESI":   "RESIDENTIAL"
+  "GOV":    "PUBLIC_GOVT"
+  "GOVT":   "PUBLIC_GOVT"
+  "PUB":    "PUBLIC_GOVT"
+  "COM":    "COMMERCIAL"
+  "COMM":   "COMMERCIAL"
+  "IND":    "INDUSTRIAL"
+  "INDU":   "INDUSTRIAL"
+  "BOT":    "BOTTLED_WATER"
+  "BOTT":   "BOTTLED_WATER"
+  "BW":     "BOTTLED_WATER"
