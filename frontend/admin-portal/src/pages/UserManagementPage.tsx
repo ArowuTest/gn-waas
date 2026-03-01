@@ -181,7 +181,7 @@ export default function UserManagementPage() {
       const params = new URLSearchParams()
       if (search) params.set('q', search)
       if (roleFilter) params.set('role', roleFilter)
-      const res = await apiClient.get(`/api/v1/admin/users?${params}`)
+      const res = await apiClient.get(`/admin/users?${params}`)
       return res.data.data ?? []
     },
   })
@@ -189,13 +189,13 @@ export default function UserManagementPage() {
   const { data: districts = [] } = useQuery<District[]>({
     queryKey: ['districts'],
     queryFn: async () => {
-      const res = await apiClient.get('/api/v1/districts')
+      const res = await apiClient.get('/districts')
       return res.data.data ?? []
     },
   })
 
   const createUser = useMutation({
-    mutationFn: (data: any) => apiClient.post('/api/v1/admin/users', data),
+    mutationFn: (data: any) => apiClient.post('/admin/users', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       setShowModal(false)
@@ -203,7 +203,7 @@ export default function UserManagementPage() {
   })
 
   const updateUser = useMutation({
-    mutationFn: ({ id, ...data }: any) => apiClient.patch(`/api/v1/admin/users/${id}`, data),
+    mutationFn: ({ id, ...data }: any) => apiClient.patch(`/admin/users/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       setShowModal(false)
@@ -211,12 +211,12 @@ export default function UserManagementPage() {
   })
 
   const deactivateUser = useMutation({
-    mutationFn: (id: string) => apiClient.patch(`/api/v1/admin/users/${id}`, { is_active: false }),
+    mutationFn: (id: string) => apiClient.patch(`/admin/users/${id}`, { is_active: false }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 
   const resetPassword = useMutation({
-    mutationFn: (id: string) => apiClient.post(`/api/v1/admin/users/${id}/reset-password`),
+    mutationFn: (id: string) => apiClient.post(`/admin/users/${id}/reset-password`),
     onSuccess: () => alert('Password reset email sent'),
   })
 

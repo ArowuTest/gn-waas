@@ -48,6 +48,30 @@ const (
 	subjectMeterReadingRcvd  = "gnwaas.meter.reading.received"
 )
 
+// loadConfigFloat reads a float64 value from the system_config table.
+// Falls back to defaultVal if the key is missing or the DB query fails.
+// This is called once at startup — sentinel does not hot-reload thresholds.
+func loadConfigFloat(ctx context.Context, db *pgxpool.Pool, logger *zap.Logger, key string, defaultVal float64) float64 {
+	var val float64
+	err := db.QueryRow(ctx,
+		`SELECT config_value::float8
+		   FROM system_config
+		  WHERE config_key = $1
+		    AND is_active = true
+		  LIMIT 1`,
+		key,
+	).Scan(&val)
+	if err != nil {
+		logger.Warn("system_config key not found — using default",
+			zap.String("key", key),
+			zap.Float64("default", defaultVal),
+			zap.Error(err),
+		)
+		return defaultVal
+	}
+	return val
+}
+
 func main() {
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
@@ -84,10 +108,26 @@ func main() {
 	accountRepo  := postgres.NewWaterAccountRepository(db, logger)
 	districtRepo := postgres.NewDistrictRepository(db, logger)
 
-	// ── Services (thresholds loaded from system_config at runtime) ────────────
-	reconcilerSvc := reconciler.NewReconcilerService(logger, 15.0)
-	phantomSvc    := phantom_checker.NewPhantomCheckerService(logger, 6)
-	nightFlowSvc  := night_flow.NewNightFlowAnalyser(logger, 30.0)
+	// ── Load thresholds from system_config (with safe defaults) ─────────────
+	// These values are seeded in database/seeds/001_system_config.sql and can
+	// be updated at runtime via the admin portal without redeploying.
+	shadowBillVariancePct := loadConfigFloat(ctx, db, logger,
+		"sentinel.shadow_bill_variance_pct", 15.0)
+	nightFlowPctOfDaily := loadConfigFloat(ctx, db, logger,
+		"sentinel.night_flow_pct_of_daily", 30.0)
+	phantomMeterMonths := int(loadConfigFloat(ctx, db, logger,
+		"sentinel.phantom_meter_months", 6.0))
+
+	logger.Info("Sentinel thresholds loaded from system_config",
+		zap.Float64("shadow_bill_variance_pct", shadowBillVariancePct),
+		zap.Float64("night_flow_pct_of_daily", nightFlowPctOfDaily),
+		zap.Int("phantom_meter_months", phantomMeterMonths),
+	)
+
+	// ── Services ──────────────────────────────────────────────────────────────
+	reconcilerSvc := reconciler.NewReconcilerService(logger, shadowBillVariancePct)
+	phantomSvc    := phantom_checker.NewPhantomCheckerService(logger, phantomMeterMonths)
+	nightFlowSvc  := night_flow.NewNightFlowAnalyser(logger, nightFlowPctOfDaily)
 
 	// ── Orchestrator ──────────────────────────────────────────────────────────
 	orch := orchestrator.NewSentinelOrchestrator(
@@ -179,6 +219,34 @@ func main() {
 	} else {
 		logger.Info("NATS_URL not set — sentinel will only scan via HTTP API calls")
 	}
+
+	// ── Scheduled Night-Flow Scan (2–4 AM UTC daily) ────────────────────────
+	// The spec requires automated night-flow analysis during the minimum-demand
+	// window (2–4 AM) when legitimate consumption is near zero.
+	// We trigger at 02:05 UTC to ensure all meter readings for the night window
+	// have been ingested before analysis begins.
+	go func() {
+		logger.Info("Night-flow scheduler started — will scan all districts at 02:05 UTC daily")
+		for {
+			now := time.Now().UTC()
+			// Calculate next 02:05 UTC
+			next := time.Date(now.Year(), now.Month(), now.Day(), 2, 5, 0, 0, time.UTC)
+			if now.After(next) {
+				next = next.Add(24 * time.Hour)
+			}
+			waitDuration := next.Sub(now)
+			logger.Info("Next night-flow scan scheduled",
+				zap.Time("at", next),
+				zap.Duration("in", waitDuration),
+			)
+			time.Sleep(waitDuration)
+
+			logger.Info("Night-flow scan triggered by scheduler",
+				zap.Time("scan_time", time.Now().UTC()),
+			)
+			go runAllDistrictScans(db, orch, "scheduled_night_flow", logger)
+		}
+	}()
 
 	// ── HTTP Server ───────────────────────────────────────────────────────────
 	app := fiber.New(fiber.Config{AppName: "GN-WAAS Sentinel v1.0"})

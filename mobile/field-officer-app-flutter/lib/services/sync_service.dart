@@ -33,7 +33,48 @@ class SyncService {
     for (final item in pending) {
       if (item.retryCount >= 5) continue;
       try {
-        await _api.submitJobEvidence(item.submission);
+        // ── Upload queued photos to MinIO before submitting ────────────────
+        // When the device was offline, photos were stored locally.
+        // Now that we're online, upload them and attach the object keys.
+        final uploadedKeys = <String>[];
+        for (final localPath in item.photoUris) {
+          try {
+            final uploadMeta = await _api.getUploadUrl(
+              jobId:    item.jobId,
+              filename: 'meter_${item.jobId}_sync.jpg',
+            );
+            final uploadUrl = uploadMeta['upload_url'] as String? ?? '';
+            final objectKey = uploadMeta['object_key'] as String? ?? '';
+            if (uploadUrl.isNotEmpty) {
+              final key = await _api.uploadPhotoToMinIO(
+                localPath:  localPath,
+                uploadUrl:  uploadUrl,
+                objectKey:  objectKey,
+              );
+              if (key != null) uploadedKeys.add(key);
+            }
+          } catch (_) {
+            // Non-fatal: submit without this photo
+          }
+        }
+
+        // Attach uploaded keys to submission
+        final submissionWithPhotos = uploadedKeys.isEmpty
+            ? item.submission
+            : JobSubmission(
+                jobId:         item.submission.jobId,
+                ocrReadingM3:  item.submission.ocrReadingM3,
+                ocrConfidence: item.submission.ocrConfidence,
+                ocrStatus:     item.submission.ocrStatus,
+                officerNotes:  item.submission.officerNotes,
+                gpsLat:        item.submission.gpsLat,
+                gpsLng:        item.submission.gpsLng,
+                gpsAccuracyM:  item.submission.gpsAccuracyM,
+                photoUrls:     uploadedKeys,
+                photoHashes:   item.submission.photoHashes,
+              );
+
+        await _api.submitJobEvidence(submissionWithPhotos);
         await _storage.markSubmissionDone(item.id);
         await _storage.updateJobStatusLocally(item.jobId, FieldJobStatus.completed);
         synced++;

@@ -1,6 +1,6 @@
 {
   "realm": "gnwaas",
-  "displayName": "GN-WAAS — Ghana National Water Audit & Assurance System",
+  "displayName": "GN-WAAS \u2014 Ghana National Water Audit & Assurance System",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,
@@ -19,10 +19,48 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
-      "redirectUris": ["http://localhost:5173/*", "https://gnwaas.nita.gov.gh/*"],
-      "webOrigins": ["http://localhost:5173", "https://gnwaas.nita.gov.gh"],
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "https://gnwaas.nita.gov.gh/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "https://gnwaas.nita.gov.gh"
+      ],
       "protocol": "openid-connect",
-      "attributes": { "pkce.code.challenge.method": "S256" }
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "district_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "district_id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "district_id",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "gnwaas_role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "gnwaas_role",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "role",
+            "jsonType.label": "String"
+          }
+        }
+      ]
     },
     {
       "clientId": "gnwaas-api-gateway",
@@ -31,18 +69,251 @@
       "publicClient": false,
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
-      "protocol": "openid-connect"
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "district_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "district_id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "district_id",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "gnwaas_role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "gnwaas_role",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "role",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "gnwaas-authority-portal",
+      "name": "gnwaas-authority-portal",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "rootUrl": "http://localhost:5175",
+      "baseUrl": "http://localhost:5175",
+      "redirectUris": [
+        "http://localhost:5175/*",
+        "https://authority.gnwaas.gov.gh/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5175",
+        "https://authority.gnwaas.gov.gh"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5175/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "district_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "district_id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "district_id",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "gnwaas_role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "gnwaas_role",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "role",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "gnwaas-gwl-portal",
+      "name": "gnwaas-gwl-portal",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "rootUrl": "http://localhost:5174",
+      "baseUrl": "http://localhost:5174",
+      "redirectUris": [
+        "http://localhost:5174/*",
+        "https://gwl.gnwaas.gov.gh/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5174",
+        "https://gwl.gnwaas.gov.gh"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5174/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "district_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "district_id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "district_id",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "gnwaas_role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "gnwaas_role",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "role",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "gnwaas-mobile-app",
+      "name": "GN-WAAS Field Officer Mobile App",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "gnwaas://auth/callback",
+        "http://localhost:*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "district_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "district_id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "district_id",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "gnwaas_role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "gnwaas_role",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "role",
+            "jsonType.label": "String"
+          }
+        }
+      ]
     }
   ],
   "roles": {
     "realm": [
-      { "name": "SYSTEM_ADMIN",     "description": "Full system access" },
-      { "name": "DISTRICT_MANAGER", "description": "District-level management" },
-      { "name": "AUDIT_SUPERVISOR", "description": "Audit workflow management" },
-      { "name": "FIELD_OFFICER",    "description": "Field audit execution" },
-      { "name": "GRA_LIAISON",      "description": "GRA compliance and VAT recovery" },
-      { "name": "FINANCE_ANALYST",  "description": "Financial reporting and NRW analysis" },
-      { "name": "READONLY_VIEWER",  "description": "Read-only access" }
+      {
+        "name": "SYSTEM_ADMIN",
+        "description": "Full system access"
+      },
+      {
+        "name": "DISTRICT_MANAGER",
+        "description": "District-level management"
+      },
+      {
+        "name": "AUDIT_SUPERVISOR",
+        "description": "Audit workflow management"
+      },
+      {
+        "name": "FIELD_OFFICER",
+        "description": "Field audit execution"
+      },
+      {
+        "name": "GRA_LIAISON",
+        "description": "GRA compliance and VAT recovery"
+      },
+      {
+        "name": "FINANCE_ANALYST",
+        "description": "Financial reporting and NRW analysis"
+      },
+      {
+        "name": "READONLY_VIEWER",
+        "description": "Read-only access"
+      },
+      {
+        "name": "SUPER_ADMIN",
+        "description": "GN-WAAS Super Admin role",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      },
+      {
+        "name": "EXECUTIVE",
+        "description": "GN-WAAS Executive role",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      },
+      {
+        "name": "GWL_STAFF",
+        "description": "GN-WAAS Gwl Staff role",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      }
     ]
   },
   "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername(undefined) and passwordHistory(5)",
@@ -52,5 +323,83 @@
   "eventsEnabled": true,
   "eventsExpiration": 2592000,
   "adminEventsEnabled": true,
-  "adminEventsDetailsEnabled": true
+  "adminEventsDetailsEnabled": true,
+  "userProfileConfig": {
+    "attributes": [
+      {
+        "name": "username",
+        "displayName": "${username}",
+        "validations": {
+          "length": {
+            "min": 3,
+            "max": 255
+          }
+        }
+      },
+      {
+        "name": "email",
+        "displayName": "${email}",
+        "validations": {
+          "email": {},
+          "length": {
+            "max": 255
+          }
+        }
+      },
+      {
+        "name": "firstName",
+        "displayName": "${firstName}"
+      },
+      {
+        "name": "lastName",
+        "displayName": "${lastName}"
+      },
+      {
+        "name": "district_id",
+        "displayName": "District ID",
+        "annotations": {
+          "inputType": "text"
+        },
+        "permissions": {
+          "view": [
+            "admin",
+            "user"
+          ],
+          "edit": [
+            "admin"
+          ]
+        }
+      },
+      {
+        "name": "gnwaas_role",
+        "displayName": "GN-WAAS Role",
+        "annotations": {
+          "inputType": "select",
+          "inputOptionsFromValidation": "options"
+        },
+        "validations": {
+          "options": {
+            "options": [
+              "SUPER_ADMIN",
+              "SYSTEM_ADMIN",
+              "AUDIT_SUPERVISOR",
+              "DISTRICT_MANAGER",
+              "FIELD_OFFICER",
+              "EXECUTIVE",
+              "GWL_STAFF"
+            ]
+          }
+        },
+        "permissions": {
+          "view": [
+            "admin",
+            "user"
+          ],
+          "edit": [
+            "admin"
+          ]
+        }
+      }
+    ]
+  }
 }

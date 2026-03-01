@@ -18,8 +18,25 @@ export default function LoginPage() {
     // In development: accept any credentials and store a dev token
     try {
       if (import.meta.env.DEV) {
-        // Dev mode: quick login
-        localStorage.setItem('gwl_token', 'dev-gwl-token');
+        // Dev mode: call /auth/dev-login to get a real (mock) token from the backend
+        // This ensures the token is accepted by DevAuthMiddleware in the API gateway
+        const devRes = await fetch(
+          `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1/auth/dev-login`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: 'GWL_STAFF', email: email || 'dev-gwl@gnwaas.gov.gh' }),
+          }
+        );
+        if (devRes.ok) {
+          const devData = await devRes.json();
+          const token = devData?.data?.access_token ?? '';
+          localStorage.setItem('gwl_token', token);
+          navigate('/');
+          return;
+        }
+        // Fallback if backend not running
+        localStorage.setItem('gwl_token', `dev-gwl-${Date.now()}`);
         navigate('/');
         return;
       }

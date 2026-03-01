@@ -146,14 +146,14 @@ export default function AuditThresholdsPage() {
   const { data: configs = [], isLoading } = useQuery<SystemConfig[]>({
     queryKey: ['system-config', activeCategory],
     queryFn: async () => {
-      const res = await apiClient.get(`/api/v1/config/${activeCategory}`)
+      const res = await apiClient.get(`/config/${activeCategory}`)
       return res.data.data ?? []
     },
   })
 
   const updateConfig = useMutation({
     mutationFn: ({ key, value }: { key: string; value: string }) =>
-      apiClient.patch(`/api/v1/config/${key}`, { value }),
+      apiClient.patch(`/config/${key}`, { value }),
     onMutate: () => setSaveStatus('saving'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['system-config'] })

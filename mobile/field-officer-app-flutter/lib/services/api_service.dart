@@ -2,6 +2,7 @@
 // Handles all HTTP communication with the api-gateway
 
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
@@ -170,6 +171,66 @@ class ApiService {
   }
 
   // ─── Audit / Submission ────────────────────────────────────────────────────
+
+  // ─── Evidence Upload (MinIO presigned URL flow) ──────────────────────────
+  //
+  // Step 1: Call getUploadUrl() to get a presigned PUT URL from the backend.
+  // Step 2: Call uploadPhotoToMinIO() to PUT the photo bytes directly to MinIO.
+  // Step 3: Pass the returned objectKey in JobSubmission.photoUrls.
+  //
+  // This keeps the API gateway lightweight — it never handles raw photo bytes.
+
+  /// Request a presigned PUT URL for uploading a meter photo to MinIO.
+  /// Returns { object_key, upload_url, expires_in, storage_mode }
+  Future<Map<String, dynamic>> getUploadUrl({
+    required String jobId,
+    required String filename,
+    String contentType = 'image/jpeg',
+  }) async {
+    final res = await _dio.post('/evidence/upload-url', data: {
+      'job_id':       jobId,
+      'filename':     filename,
+      'content_type': contentType,
+    });
+    final body = res.data as Map<String, dynamic>;
+    // Response is wrapped: { success: true, data: { object_key, upload_url, ... } }
+    return (body['data'] ?? body) as Map<String, dynamic>;
+  }
+
+  /// Upload a photo file directly to MinIO using the presigned PUT URL.
+  /// Returns the object_key to store in the job submission.
+  /// Falls back gracefully if MinIO is not configured (storage_mode == 'offline').
+  Future<String?> uploadPhotoToMinIO({
+    required String localPath,
+    required String uploadUrl,
+    required String objectKey,
+    String contentType = 'image/jpeg',
+  }) async {
+    if (uploadUrl.isEmpty) {
+      // MinIO not configured — offline mode, skip upload
+      return null;
+    }
+    final file = File(localPath);
+    if (!await file.exists()) return null;
+
+    final bytes = await file.readAsBytes();
+
+    // Use a plain Dio instance (no auth headers) for direct MinIO upload
+    final minioDio = Dio();
+    await minioDio.put(
+      uploadUrl,
+      data: Stream.fromIterable([bytes]),
+      options: Options(
+        headers: {
+          'Content-Type':   contentType,
+          'Content-Length': bytes.length,
+        },
+        sendTimeout:    const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+    return objectKey;
+  }
 
   Future<void> submitJobEvidence(JobSubmission submission) async {
     // POST /field-jobs/:id/submit — dedicated endpoint that writes OCR reading,

@@ -183,7 +183,47 @@ class _MeterCaptureScreenState extends ConsumerState<MeterCaptureScreen> {
       final online = await ref.read(syncServiceProvider).isOnline();
       if (online) {
         final api = ref.read(apiServiceProvider);
-        await api.submitJobEvidence(submission);
+
+        // ── Step 1: Get presigned upload URL from backend ──────────────────
+        String? uploadedObjectKey;
+        try {
+          final uploadMeta = await api.getUploadUrl(
+            jobId:       job.id,
+            filename:    'meter_${job.id}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+            contentType: 'image/jpeg',
+          );
+          final uploadUrl  = uploadMeta['upload_url']  as String? ?? '';
+          final objectKey  = uploadMeta['object_key']  as String? ?? '';
+          final storageMode = uploadMeta['storage_mode'] as String? ?? 'offline';
+
+          // ── Step 2: Upload photo directly to MinIO ─────────────────────
+          if (storageMode != 'offline' && uploadUrl.isNotEmpty) {
+            uploadedObjectKey = await api.uploadPhotoToMinIO(
+              localPath:   _capturedPhoto!.localPath,
+              uploadUrl:   uploadUrl,
+              objectKey:   objectKey,
+              contentType: 'image/jpeg',
+            );
+          }
+        } catch (uploadErr) {
+          // Non-fatal: log and continue — photo will be in offline queue
+          debugPrint('Photo upload to MinIO failed: $uploadErr');
+        }
+
+        // ── Step 3: Submit job evidence with MinIO object key ──────────────
+        final submissionWithPhoto = JobSubmission(
+          jobId:         submission.jobId,
+          ocrReadingM3:  submission.ocrReadingM3,
+          ocrConfidence: submission.ocrConfidence,
+          ocrStatus:     submission.ocrStatus,
+          officerNotes:  submission.officerNotes,
+          gpsLat:        submission.gpsLat,
+          gpsLng:        submission.gpsLng,
+          gpsAccuracyM:  submission.gpsAccuracyM,
+          photoUrls:     uploadedObjectKey != null ? [uploadedObjectKey] : [],
+          photoHashes:   submission.photoHashes,
+        );
+        await api.submitJobEvidence(submissionWithPhoto);
         ref.read(jobsProvider.notifier).updateJobStatus(job.id, FieldJobStatus.completed);
       } else {
         // Queue for later sync

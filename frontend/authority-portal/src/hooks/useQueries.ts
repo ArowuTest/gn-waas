@@ -422,8 +422,8 @@ export function useFieldOfficersList(districtId?: string) {
   return useQuery<User[]>({
     queryKey: QUERY_KEYS.fieldOfficers(districtId),
     queryFn: async () => {
-      const params = districtId ? { district_id: districtId, role: 'FIELD_OFFICER' } : { role: 'FIELD_OFFICER' }
-      const { data } = await apiClient.get<{ data: User[] }>('/users', { params })
+      const params = districtId ? { district_id: districtId } : {}
+      const { data } = await apiClient.get<{ data: User[] }>('/users/field-officers', { params })
       return data.data ?? []
     },
     staleTime: 5 * 60 * 1000,

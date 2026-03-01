@@ -162,18 +162,18 @@ export default function DistrictConfigPage() {
   const { data: districts = [], isLoading } = useQuery<District[]>({
     queryKey: ['admin-districts'],
     queryFn: async () => {
-      const res = await apiClient.get('/api/v1/districts')
+      const res = await apiClient.get('/districts')
       return res.data.data ?? []
     },
   })
 
   const createDistrict = useMutation({
-    mutationFn: (data: any) => apiClient.post('/api/v1/admin/districts', data),
+    mutationFn: (data: any) => apiClient.post('/admin/districts', data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-districts'] }); setShowModal(false) },
   })
 
   const updateDistrict = useMutation({
-    mutationFn: ({ id, ...data }: any) => apiClient.patch(`/api/v1/admin/districts/${id}`, data),
+    mutationFn: ({ id, ...data }: any) => apiClient.patch(`/admin/districts/${id}`, data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-districts'] }); setShowModal(false) },
   })
 

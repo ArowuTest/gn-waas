@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ArowuTest/gn-waas/shared/go/middleware"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/config"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/handler"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/storage"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
@@ -62,6 +64,21 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	reportHandler    := handler.NewReportHandler(gwlCaseRepo, logger)
 	adminUserHandler := handler.NewAdminUserHandler(db, logger)
 	healthHandler   := handler.NewHealthHandler()
+
+	// ── Evidence Storage (MinIO presigned URL service) ────────────────────────
+	evidenceStorage, evidenceErr := storage.NewEvidenceStorageService(
+		cfg.MinIO.Endpoint,
+		cfg.MinIO.AccessKey,
+		cfg.MinIO.SecretKey,
+		cfg.MinIO.Bucket,
+		cfg.MinIO.UseSSL,
+		logger,
+	)
+	if evidenceErr != nil {
+		logger.Warn("Evidence storage init failed — photos will not be persisted to MinIO",
+			zap.Error(evidenceErr))
+	}
+	evidenceHandler := handler.NewEvidenceHandler(evidenceStorage, logger)
 
 	// ── Fiber app ─────────────────────────────────────────────────────────────
 	app := fiber.New(fiber.Config{
@@ -197,15 +214,21 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		if body.Email == "" || body.Password == "" {
 			return c.Status(400).JSON(fiber.Map{"error": "email and password required"})
 		}
-		// Dev mode: return mock token
+		// Dev mode: return mock token in standard APIResponse envelope
 		return c.JSON(fiber.Map{
-			"access_token": "dev-mock-token-" + body.Email,
-			"token_type":   "Bearer",
-			"expires_in":   3600,
-			"user": fiber.Map{
-				"email": body.Email,
-				"role":  "AUDIT_SUPERVISOR",
-				"name":  "Dev User",
+			"success": true,
+			"data": fiber.Map{
+				"access_token":  "dev-mock-token-" + body.Email,
+				"token_type":    "Bearer",
+				"expires_in":    3600,
+				"refresh_token": "dev-refresh-" + body.Email,
+				"user": fiber.Map{
+					"id":          "a0000001-0000-0000-0000-000000000001",
+					"email":       body.Email,
+					"full_name":   "Dev User",
+					"role":        "SUPER_ADMIN",
+					"district_id": "d0000001-0000-0000-0000-000000000001",
+				},
 			},
 		})
 	})
@@ -247,6 +270,48 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 				"full_name":  "Dev Field Officer",
 				"role":       "FIELD_OFFICER",
 				"district_id": "d0000001-0000-0000-0000-000000000001",
+			},
+		})
+	})
+
+	// ── Auth: Dev Login (DEV_MODE only) ─────────────────────────────────────
+	// POST /api/v1/auth/dev-login — quick role-based login for local development
+	// Returns a mock token that DevAuthMiddleware will accept.
+	// BLOCKED in production (DEV_MODE=false).
+	authGroup.Post("/dev-login", func(c *fiber.Ctx) error {
+		if !cfg.Server.DevMode {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "dev-login is disabled in production",
+			})
+		}
+		var body struct {
+			Role  string `json:"role"`
+			Email string `json:"email"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "invalid request body"})
+		}
+		if body.Role == "" {
+			body.Role = "SUPER_ADMIN"
+		}
+		if body.Email == "" {
+			body.Email = "dev-" + strings.ToLower(body.Role) + "@gnwaas.gov.gh"
+		}
+		// Return in the standard APIResponse envelope so frontend can use response.data
+		return c.JSON(fiber.Map{
+			"success": true,
+			"data": fiber.Map{
+				"access_token":  "dev-mock-token-" + body.Email,
+				"token_type":    "Bearer",
+				"expires_in":    3600,
+				"refresh_token": "dev-refresh-" + body.Email,
+				"user": fiber.Map{
+					"id":          "a0000001-0000-0000-0000-000000000001",
+					"email":       body.Email,
+					"full_name":   "Dev " + body.Role,
+					"role":        body.Role,
+					"district_id": "d0000001-0000-0000-0000-000000000001",
+				},
 			},
 		})
 	})
@@ -325,6 +390,17 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("FIELD_OFFICER", "SYSTEM_ADMIN", "AUDIT_SUPERVISOR"),
 	)
 	ocr.Post("/process", fieldJobHandler.ProxyOCRProcess)
+
+	// ── Evidence Upload (presigned MinIO URLs for meter photos) ─────────────
+	// Flutter calls POST /evidence/upload-url to get a presigned PUT URL,
+	// uploads photo directly to MinIO, then submits the object_key with the job.
+	evidence := api.Group("/evidence",
+		middleware.RequireRoles("FIELD_OFFICER", "AUDIT_SUPERVISOR", "SYSTEM_ADMIN"),
+	)
+	evidence.Post("/upload-url", evidenceHandler.GetUploadURL)
+	evidence.Post("/verify-hash", evidenceHandler.VerifyPhotoHash)
+	// Wildcard route for nested object keys: GET /evidence/evidence/jobid/ts_file.jpg/url
+	api.Get("/evidence/*", evidenceHandler.GetDownloadURL)
 
 	reports := api.Group("/reports")
 	reports.Get("/nrw", nrwHandler.GetNRWSummary)

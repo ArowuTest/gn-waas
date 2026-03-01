@@ -20,7 +20,7 @@ export function LoginPage() {
       // In development mode, the API gateway accepts any credentials
       // and returns a dev token. In production, this calls Keycloak.
       const response = await apiClient.post('/auth/login', { email, password })
-      await login(response.data.data.token)
+      await login(response.data.data.access_token)
     } catch (err: any) {
       setError(err.response?.data?.error || 'Invalid credentials. Please try again.')
     } finally {
@@ -33,7 +33,7 @@ export function LoginPage() {
     setIsLoading(true)
     try {
       const response = await apiClient.post('/auth/dev-login', { role })
-      await login(response.data.data.token)
+      await login(response.data.data.access_token)
     } catch {
       setError('Dev login failed')
     } finally {

@@ -1,13 +1,13 @@
-go 1.22
+go 1.24.0
 
 use (
-	./shared/go
-	./database/generated/gnwaas
 	./backend/api-gateway
-	./backend/tariff-engine
-	./backend/sentinel
-	./backend/gra-bridge
-	./backend/ocr-service
 	./backend/cdc-ingestor
+	./backend/gra-bridge
 	./backend/meter-ingestor
+	./backend/ocr-service
+	./backend/sentinel
+	./backend/tariff-engine
+	./database/generated/gnwaas
+	./shared/go
 )
