@@ -35,6 +35,9 @@ export const QUERY_KEYS = {
   dashboardStats: ['audits', 'dashboard'] as const,
   myJobs: ['field-jobs', 'my-jobs'] as const,
   fieldOfficers: (districtId?: string) => ['users', 'field-officers', districtId] as const,
+  allFieldJobs: (status?: string, districtId?: string) => ['field-jobs', 'all', status, districtId] as const,
+  monthlyReport: (period: string, districtId?: string) => ['reports', 'monthly', period, districtId] as const,
+  sentinelSummary: (districtId: string) => ['sentinel', 'summary', districtId] as const,
 } as const
 
 // ============================================================
@@ -374,6 +377,68 @@ export function useAnomalyFlags(districtId?: string) {
       const { data } = await apiClient.get<{ data: AnomalyFlag[] }>('/anomaly-flags', { params })
       return data.data ?? []
     },
+    staleTime: 60 * 1000,
+  })
+}
+
+// ============================================================
+// FIELD JOB MANAGEMENT HOOKS (Authority Portal — admin view)
+// ============================================================
+
+/** Fetch ALL field jobs (admin/supervisor view) */
+export function useAllFieldJobs(status?: string, districtId?: string) {
+  return useQuery<FieldJob[]>({
+    queryKey: QUERY_KEYS.allFieldJobs(status, districtId),
+    queryFn: async () => {
+      const params: Record<string, string> = {}
+      if (status) params.status = status
+      if (districtId) params.district_id = districtId
+      const { data } = await apiClient.get<{ data: FieldJob[] }>('/field-jobs', { params })
+      return data.data ?? []
+    },
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000, // auto-refresh every 30s
+  })
+}
+
+/** Assign a field officer to a job */
+export function useAssignOfficer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ jobId, officerId }: { jobId: string; officerId: string }) => {
+      const { data } = await apiClient.patch(`/field-jobs/${jobId}/assign`, {
+        officer_id: officerId,
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['field-jobs'] })
+    },
+  })
+}
+
+/** Fetch field officers for a district */
+export function useFieldOfficersList(districtId?: string) {
+  return useQuery<User[]>({
+    queryKey: QUERY_KEYS.fieldOfficers(districtId),
+    queryFn: async () => {
+      const params = districtId ? { district_id: districtId, role: 'FIELD_OFFICER' } : { role: 'FIELD_OFFICER' }
+      const { data } = await apiClient.get<{ data: User[] }>('/users', { params })
+      return data.data ?? []
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+/** Fetch sentinel district summary */
+export function useSentinelSummary(districtId: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.sentinelSummary(districtId),
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/sentinel/summary/${districtId}`)
+      return data
+    },
+    enabled: !!districtId,
     staleTime: 60 * 1000,
   })
 }

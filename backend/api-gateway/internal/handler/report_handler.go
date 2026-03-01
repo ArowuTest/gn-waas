@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -96,34 +97,53 @@ func (h *ReportHandler) GetMonthlyReportCSV(c *fiber.Ctx) error {
 	return c.Send(csvBytes)
 }
 
-// generateMonthlyReportPDF creates a branded PDF using gofpdf.
-// The PDF includes: header, period, summary KPIs, case breakdown table,
-// and a digital audit trail footer.
-func generateMonthlyReportPDF(report interface{}, period time.Time, periodStr string) ([]byte, error) {
+// generateMonthlyReportPDF creates a branded PDF using gofpdf with real DB data.
+// The PDF includes: header, period, KPI summary, case breakdown table,
+// financial impact, and a digital audit trail footer.
+func generateMonthlyReportPDF(reportData interface{}, period time.Time, periodStr string) ([]byte, error) {
+	// Extract stats from the map returned by GetMonthlyReport
+	type ReportStats struct {
+		TotalFlagged         int     `json:"total_flagged"`
+		CriticalCases        int     `json:"critical_cases"`
+		Resolved             int     `json:"resolved"`
+		Pending              int     `json:"pending"`
+		Disputed             int     `json:"disputed"`
+		TotalUnderbillingGHS float64 `json:"total_underbilling_ghs"`
+		TotalOverbillingGHS  float64 `json:"total_overbilling_ghs"`
+		RevenueRecoveredGHS  float64 `json:"revenue_recovered_ghs"`
+		CreditsIssuedGHS     float64 `json:"credits_issued_ghs"`
+		FieldJobsAssigned    int     `json:"field_jobs_assigned"`
+		FieldJobsCompleted   int     `json:"field_jobs_completed"`
+	}
+	var rs ReportStats
+	if report, ok := reportData.(map[string]interface{}); ok {
+		if raw, ok := report["statistics"]; ok {
+			if b, err := json.Marshal(raw); err == nil {
+				_ = json.Unmarshal(b, &rs)
+			}
+		}
+	}
+
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(15, 15, 15)
 	pdf.AddPage()
 
 	// ── Header ────────────────────────────────────────────────────────────────
 	pdf.SetFont("Arial", "B", 20)
-	pdf.SetTextColor(30, 94, 32) // GN-WAAS green
+	pdf.SetTextColor(30, 94, 32)
 	pdf.CellFormat(0, 12, "GN-WAAS", "", 1, "C", false, 0, "")
-
 	pdf.SetFont("Arial", "", 12)
 	pdf.SetTextColor(60, 60, 60)
 	pdf.CellFormat(0, 7, "Ghana National Water Audit & Assurance System", "", 1, "C", false, 0, "")
-
 	pdf.SetFont("Arial", "B", 14)
 	pdf.SetTextColor(0, 0, 0)
 	pdf.CellFormat(0, 10, fmt.Sprintf("Monthly Audit Report — %s", period.Format("January 2006")), "", 1, "C", false, 0, "")
-
-	// Divider
 	pdf.SetDrawColor(30, 94, 32)
 	pdf.SetLineWidth(0.5)
 	pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
 	pdf.Ln(5)
 
-	// ── Report Metadata ───────────────────────────────────────────────────────
+	// ── Metadata ──────────────────────────────────────────────────────────────
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(100, 100, 100)
 	pdf.CellFormat(0, 5,
@@ -132,47 +152,110 @@ func generateMonthlyReportPDF(report interface{}, period time.Time, periodStr st
 		"", 1, "C", false, 0, "")
 	pdf.Ln(5)
 
-	// ── Summary Section ───────────────────────────────────────────────────────
+	// ── KPI Summary ───────────────────────────────────────────────────────────
 	pdf.SetFont("Arial", "B", 12)
 	pdf.SetTextColor(0, 0, 0)
-	pdf.CellFormat(0, 8, "Executive Summary", "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 8, "Executive Summary — Key Performance Indicators", "", 1, "L", false, 0, "")
 	pdf.SetLineWidth(0.2)
 	pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
-	pdf.Ln(3)
+	pdf.Ln(4)
 
-	// Summary KPI boxes
-	pdf.SetFont("Arial", "", 10)
-	pdf.SetTextColor(60, 60, 60)
+	kpiRow := func(label, value string) {
+		pdf.SetFont("Arial", "B", 10)
+		pdf.SetTextColor(60, 60, 60)
+		pdf.CellFormat(80, 7, label, "1", 0, "L", false, 0, "")
+		pdf.SetFont("Arial", "", 10)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.CellFormat(100, 7, value, "1", 1, "L", false, 0, "")
+	}
+	kpiRow("Report Period", period.Format("January 2006"))
+	kpiRow("Total Anomaly Flags", fmt.Sprintf("%d", rs.TotalFlagged))
+	kpiRow("Critical Cases", fmt.Sprintf("%d", rs.CriticalCases))
+	kpiRow("Resolved Cases", fmt.Sprintf("%d", rs.Resolved))
+	kpiRow("Pending Cases", fmt.Sprintf("%d", rs.Pending))
+	kpiRow("Disputed Cases", fmt.Sprintf("%d", rs.Disputed))
+	kpiRow("Total Underbilling (GHS)", fmt.Sprintf("GHS %.2f", rs.TotalUnderbillingGHS))
+	kpiRow("Total Overbilling (GHS)", fmt.Sprintf("GHS %.2f", rs.TotalOverbillingGHS))
+	kpiRow("Revenue Recovered (GHS)", fmt.Sprintf("GHS %.2f", rs.RevenueRecoveredGHS))
+	kpiRow("Credits Issued (GHS)", fmt.Sprintf("GHS %.2f", rs.CreditsIssuedGHS))
+	kpiRow("Field Jobs Assigned", fmt.Sprintf("%d", rs.FieldJobsAssigned))
+	kpiRow("Field Jobs Completed", fmt.Sprintf("%d", rs.FieldJobsCompleted))
+	pdf.Ln(6)
 
-	// Use reflection-safe approach — report is interface{}
-	// Render as structured text since the report type varies
-	pdf.MultiCell(0, 6,
-		fmt.Sprintf(
-			"Period: %s\n"+
-				"Report Type: GWL Case Management Monthly Summary\n"+
-				"Authority: Ghana National Water Audit & Assurance System\n"+
-				"Regulatory Framework: PURC 2026 Tariff Schedule | GRA E-VAT Compliance\n"+
-				"Data Sovereignty: Hosted on NITA-certified Ghana infrastructure",
-			period.Format("January 2006"),
-		),
-		"", "L", false)
-	pdf.Ln(5)
-
-	// ── Data Table ────────────────────────────────────────────────────────────
+	// ── Case Breakdown Table ──────────────────────────────────────────────────
 	pdf.SetFont("Arial", "B", 12)
 	pdf.SetTextColor(0, 0, 0)
-	pdf.CellFormat(0, 8, "Report Data", "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 8, "Case Status Breakdown", "", 1, "L", false, 0, "")
 	pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
-	pdf.Ln(3)
+	pdf.Ln(4)
 
+	pdf.SetFillColor(30, 94, 32)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("Arial", "B", 10)
+	pdf.CellFormat(60, 8, "Status", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(40, 8, "Count", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(80, 8, "% of Total", "1", 1, "C", true, 0, "")
+
+	total := rs.TotalFlagged
+	if total == 0 {
+		total = 1
+	}
+	tableRows := []struct {
+		label string
+		count int
+	}{
+		{"Critical", rs.CriticalCases},
+		{"Resolved", rs.Resolved},
+		{"Pending", rs.Pending},
+		{"Disputed", rs.Disputed},
+	}
+	pdf.SetTextColor(0, 0, 0)
+	for i, r := range tableRows {
+		if i%2 == 0 {
+			pdf.SetFillColor(245, 245, 245)
+		} else {
+			pdf.SetFillColor(255, 255, 255)
+		}
+		pdf.SetFont("Arial", "", 10)
+		pct := float64(r.count) / float64(total) * 100
+		pdf.CellFormat(60, 7, r.label, "1", 0, "L", true, 0, "")
+		pdf.CellFormat(40, 7, fmt.Sprintf("%d", r.count), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(80, 7, fmt.Sprintf("%.1f%%", pct), "1", 1, "C", true, 0, "")
+	}
+	pdf.Ln(6)
+
+	// ── Financial Impact ──────────────────────────────────────────────────────
+	pdf.SetFont("Arial", "B", 12)
+	pdf.SetTextColor(0, 0, 0)
+	pdf.CellFormat(0, 8, "Financial Impact Summary (GHS)", "", 1, "L", false, 0, "")
+	pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
+	pdf.Ln(4)
+
+	netImpact := rs.TotalUnderbillingGHS - rs.RevenueRecoveredGHS
+	recoveryRate := 0.0
+	if rs.TotalUnderbillingGHS > 0 {
+		recoveryRate = rs.RevenueRecoveredGHS / rs.TotalUnderbillingGHS * 100
+	}
+	pdf.SetFont("Arial", "", 10)
+	pdf.SetFillColor(255, 243, 205)
+	pdf.CellFormat(100, 7, "Net Unrecovered Revenue (GHS)", "1", 0, "L", true, 0, "")
+	pdf.CellFormat(80, 7, fmt.Sprintf("GHS %.2f", netImpact), "1", 1, "R", true, 0, "")
+	pdf.SetFillColor(220, 255, 220)
+	pdf.CellFormat(100, 7, "Revenue Recovery Rate", "1", 0, "L", true, 0, "")
+	pdf.CellFormat(80, 7, fmt.Sprintf("%.1f%%", recoveryRate), "1", 1, "R", true, 0, "")
+	pdf.Ln(8)
+
+	// ── Regulatory Note ───────────────────────────────────────────────────────
+	pdf.SetFont("Arial", "B", 10)
+	pdf.SetTextColor(30, 94, 32)
+	pdf.CellFormat(0, 7, "Regulatory Compliance", "", 1, "L", false, 0, "")
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(60, 60, 60)
 	pdf.MultiCell(0, 5,
-		"Full case data is available in the GN-WAAS Admin Portal and via the CSV export.\n"+
-			"This PDF provides the official summary for regulatory submission.\n"+
-			"For detailed case-by-case data, use the CSV export endpoint.",
+		"This report is generated in compliance with PURC 2026 Tariff Schedule and GRA E-VAT requirements. "+
+			"All anomaly flags have been processed through the GN-WAAS sentinel engine. "+
+			"Revenue figures are based on shadow billing calculations using the 2026 PURC tiered tariff rates.",
 		"", "L", false)
-	pdf.Ln(8)
 
 	// ── Audit Trail Footer ────────────────────────────────────────────────────
 	pdf.SetY(-30)
@@ -183,8 +266,9 @@ func generateMonthlyReportPDF(report interface{}, period time.Time, periodStr st
 	pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
 	pdf.Ln(2)
 	pdf.CellFormat(0, 4,
-		fmt.Sprintf("GN-WAAS Official Report | Period: %s | Generated: %s UTC",
-			periodStr, time.Now().UTC().Format("2006-01-02 15:04:05")),
+		fmt.Sprintf("GN-WAAS Official Report | Period: %s | Generated: %s UTC | Total Flags: %d | Recovered: GHS %.2f",
+			periodStr, time.Now().UTC().Format("2006-01-02 15:04:05"),
+			rs.TotalFlagged, rs.RevenueRecoveredGHS),
 		"", 1, "C", false, 0, "")
 	pdf.CellFormat(0, 4,
 		"This document is system-generated and forms part of the official GN-WAAS audit trail. "+
@@ -198,26 +282,66 @@ func generateMonthlyReportPDF(report interface{}, period time.Time, periodStr st
 	return buf.Bytes(), nil
 }
 
-// generateMonthlyReportCSV creates a CSV export of the monthly report.
-func generateMonthlyReportCSV(report interface{}, periodStr string) []byte {
-	var buf bytes.Buffer
+// generateMonthlyReportCSV creates a CSV export of the monthly report with real data.
+func generateMonthlyReportCSV(reportData interface{}, periodStr string) []byte {
+	// Extract stats
+	type ReportStats struct {
+		TotalFlagged         int     `json:"total_flagged"`
+		CriticalCases        int     `json:"critical_cases"`
+		Resolved             int     `json:"resolved"`
+		Pending              int     `json:"pending"`
+		Disputed             int     `json:"disputed"`
+		TotalUnderbillingGHS float64 `json:"total_underbilling_ghs"`
+		TotalOverbillingGHS  float64 `json:"total_overbilling_ghs"`
+		RevenueRecoveredGHS  float64 `json:"revenue_recovered_ghs"`
+		CreditsIssuedGHS     float64 `json:"credits_issued_ghs"`
+		ReclassRequested     int     `json:"reclassifications_requested"`
+		ReclassApplied       int     `json:"reclassifications_applied"`
+		FieldJobsAssigned    int     `json:"field_jobs_assigned"`
+		FieldJobsCompleted   int     `json:"field_jobs_completed"`
+	}
+	var rs ReportStats
+	if report, ok := reportData.(map[string]interface{}); ok {
+		if raw, ok := report["statistics"]; ok {
+			if b, err := json.Marshal(raw); err == nil {
+				_ = json.Unmarshal(b, &rs)
+			}
+		}
+	}
 
+	row := func(label, value string) string {
+		return label + "," + value + "\n"
+	}
+
+	var buf bytes.Buffer
 	// BOM for Excel compatibility
 	buf.WriteString("\xEF\xBB\xBF")
-
-	// Header
-	buf.WriteString(fmt.Sprintf("GN-WAAS Monthly Report,%s\n", periodStr))
-	buf.WriteString(fmt.Sprintf("Generated,%s UTC\n", time.Now().UTC().Format("2006-01-02 15:04:05")))
-	buf.WriteString("System,GN-WAAS Report Engine v1.0\n")
+	buf.WriteString(row("GN-WAAS Monthly Audit Report", periodStr))
+	buf.WriteString(row("Generated", time.Now().UTC().Format("2006-01-02 15:04:05")+" UTC"))
+	buf.WriteString(row("System", "GN-WAAS Report Engine v1.0"))
+	buf.WriteString(row("Authority", "Ghana National Water Audit & Assurance System"))
+	buf.WriteString(row("Regulatory Framework", "PURC 2026 Tariff Schedule | GRA E-VAT Compliance"))
 	buf.WriteString("\n")
-
-	// Column headers
-	buf.WriteString("Metric,Value\n")
-	buf.WriteString(fmt.Sprintf("Report Period,%s\n", periodStr))
-	buf.WriteString("Authority,Ghana National Water Audit & Assurance System\n")
-	buf.WriteString("Regulatory Framework,PURC 2026 Tariff Schedule\n")
+	buf.WriteString(row("KPI", "Value"))
+	buf.WriteString(row("Total Anomaly Flags", fmt.Sprintf("%d", rs.TotalFlagged)))
+	buf.WriteString(row("Critical Cases", fmt.Sprintf("%d", rs.CriticalCases)))
+	buf.WriteString(row("Resolved Cases", fmt.Sprintf("%d", rs.Resolved)))
+	buf.WriteString(row("Pending Cases", fmt.Sprintf("%d", rs.Pending)))
+	buf.WriteString(row("Disputed Cases", fmt.Sprintf("%d", rs.Disputed)))
+	buf.WriteString(row("Total Underbilling (GHS)", fmt.Sprintf("%.2f", rs.TotalUnderbillingGHS)))
+	buf.WriteString(row("Total Overbilling (GHS)", fmt.Sprintf("%.2f", rs.TotalOverbillingGHS)))
+	buf.WriteString(row("Revenue Recovered (GHS)", fmt.Sprintf("%.2f", rs.RevenueRecoveredGHS)))
+	buf.WriteString(row("Credits Issued (GHS)", fmt.Sprintf("%.2f", rs.CreditsIssuedGHS)))
+	buf.WriteString(row("Field Jobs Assigned", fmt.Sprintf("%d", rs.FieldJobsAssigned)))
+	buf.WriteString(row("Field Jobs Completed", fmt.Sprintf("%d", rs.FieldJobsCompleted)))
 	buf.WriteString("\n")
-	buf.WriteString("Note,Full case data available via GN-WAAS Admin Portal\n")
-
+	netUnrecovered := rs.TotalUnderbillingGHS - rs.RevenueRecoveredGHS
+	recoveryRate := 0.0
+	if rs.TotalUnderbillingGHS > 0 {
+		recoveryRate = rs.RevenueRecoveredGHS / rs.TotalUnderbillingGHS * 100
+	}
+	buf.WriteString(row("Financial Summary", "Value"))
+	buf.WriteString(row("Net Unrecovered Revenue (GHS)", fmt.Sprintf("%.2f", netUnrecovered)))
+	buf.WriteString(row("Revenue Recovery Rate", fmt.Sprintf("%.1f%%", recoveryRate)))
 	return buf.Bytes()
 }

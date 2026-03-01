@@ -69,6 +69,19 @@ class LocationService {
     return distanceM <= radius;
   }
 
+  /// isWithinFenceWithRadius — explicit named variant used by MeterCaptureScreen.
+  /// Uses an admin-controlled radius from RemoteConfig instead of the compile-time constant.
+  bool isWithinFenceWithRadius(
+    double currentLat,
+    double currentLng,
+    double targetLat,
+    double targetLng,
+    double radiusMetres,
+  ) {
+    return isWithinFence(currentLat, currentLng, targetLat, targetLng,
+        radiusMetres: radiusMetres);
+  }
+
   /// Calculate distance in metres between two coordinates
   double distanceBetween(
     double lat1, double lng1,

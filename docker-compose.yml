@@ -230,7 +230,7 @@ services:
   # ============================================================
   gra-bridge:
     build:
-      context: ./services/gra-bridge
+      context: ./backend/gra-bridge
       dockerfile: Dockerfile
     container_name: gnwaas-gra-bridge
     restart: unless-stopped
@@ -291,7 +291,7 @@ services:
   # ============================================================
   cdc-ingestor:
     build:
-      context: ./services/cdc-ingestor
+      context: ./backend/cdc-ingestor
       dockerfile: Dockerfile
     container_name: gnwaas-cdc-ingestor
     restart: unless-stopped

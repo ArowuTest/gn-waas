@@ -5,7 +5,7 @@
 export type AlertLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 export type AuditStatus = 'PENDING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CLOSED'
 export type GRAStatus = 'PENDING' | 'SUBMITTED' | 'SIGNED' | 'FAILED'
-export type FieldJobStatus = 'ASSIGNED' | 'DISPATCHED' | 'ARRIVED' | 'COMPLETED' | 'CANCELLED'
+export type FieldJobStatus = 'QUEUED' | 'ASSIGNED' | 'DISPATCHED' | 'EN_ROUTE' | 'ARRIVED' | 'ON_SITE' | 'COMPLETED' | 'CANCELLED' | 'SOS'
 export type UserRole =
   | 'SYSTEM_ADMIN'
   | 'DISTRICT_MANAGER'

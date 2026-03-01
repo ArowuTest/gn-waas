@@ -9,6 +9,8 @@ import MeterReadingPage from './pages/MeterReadingPage'
 import ReportIssuePage from './pages/ReportIssuePage'
 import MyJobsPage from './pages/MyJobsPage'
 import NRWSummaryPage from './pages/NRWSummaryPage'
+import JobAssignmentPage from './pages/JobAssignmentPage'
+import ReportingPage from './pages/ReportingPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
