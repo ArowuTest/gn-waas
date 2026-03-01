@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"github.com/ArowuTest/gn-waas/pkg/shared/http/response"
-	"github.com/ArowuTest/gn-waas/services/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/shared/go/http/response"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"go.uber.org/zap"

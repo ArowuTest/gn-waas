@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/pkg/shared/middleware"
-	"github.com/ArowuTest/gn-waas/services/api-gateway/internal/config"
-	"github.com/ArowuTest/gn-waas/services/api-gateway/internal/handler"
-	"github.com/ArowuTest/gn-waas/services/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/shared/go/middleware"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/config"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/handler"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
@@ -65,9 +65,9 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// Global middleware
 	app.Use(middleware.RecoverMiddleware(logger))
-	app.Use(middleware.LoggerMiddleware(logger))
-	app.Use(middleware.CORSMiddleware())
-	app.Use(middleware.SecurityHeadersMiddleware())
+	app.Use(middleware.RequestLogger(logger))
+	app.Use(middleware.CORS())
+	app.Use(middleware.SecurityHeaders())
 
 	// Health check (no auth)
 	app.Get("/health", healthHandler.HealthCheck)
@@ -77,11 +77,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		KeycloakURL:   cfg.Keycloak.URL,
 		Realm:         cfg.Keycloak.Realm,
 		ClientID:      cfg.Keycloak.ClientID,
-		DevMode:       cfg.App.Env == "development",
+		
 	}
 
 	// API v1 routes
-	api := app.Group("/api/v1", middleware.AuthMiddleware(authCfg))
+	api := app.Group("/api/v1", middleware.AuthMiddleware(authCfg, logger))
 
 	// Districts
 	districts := api.Group("/districts")

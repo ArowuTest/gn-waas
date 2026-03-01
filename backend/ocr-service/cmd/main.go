@@ -7,7 +7,7 @@ import (
 	"time"
 	"context"
 
-	"github.com/ArowuTest/gn-waas/services/ocr-service/internal/service"
+	"github.com/ArowuTest/gn-waas/backend/ocr-service/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
 )

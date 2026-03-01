@@ -7,8 +7,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/services/api-gateway/internal/app"
-	"github.com/ArowuTest/gn-waas/services/api-gateway/internal/config"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/app"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/config"
 	"go.uber.org/zap"
 )
 

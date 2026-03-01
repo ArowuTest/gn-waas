@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/domain/entities"
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/repository/interfaces"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/domain/entities"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/repository/interfaces"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

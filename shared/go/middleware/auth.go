@@ -3,7 +3,7 @@ package middleware
 import (
 	"strings"
 
-	"github.com/ArowuTest/gn-waas/pkg/shared/http/response"
+	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"

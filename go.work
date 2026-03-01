@@ -2,7 +2,7 @@ go 1.22
 
 use (
 	./shared/go
-	./database/generated
+	./database/generated/gnwaas
 	./backend/api-gateway
 	./backend/tariff-engine
 	./backend/sentinel

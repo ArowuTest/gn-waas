@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/services/cdc-ingestor/internal/service"
+	"github.com/ArowuTest/gn-waas/backend/cdc-ingestor/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
 )

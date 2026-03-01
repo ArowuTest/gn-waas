@@ -3,9 +3,9 @@ package handler
 import (
 	"time"
 
-	"github.com/ArowuTest/gn-waas/pkg/shared/http/response"
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/repository/interfaces"
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/service/orchestrator"
+	"github.com/ArowuTest/gn-waas/shared/go/http/response"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/repository/interfaces"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/service/orchestrator"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"go.uber.org/zap"

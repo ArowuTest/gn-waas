@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/services/api-gateway/internal/domain"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -183,7 +183,7 @@ func (r *AuditEventRepository) GetDashboardStats(ctx context.Context, districtID
 
 	stats := make(map[string]interface{})
 
-	err := r.db.QueryRow(ctx, fmt.Sprintf(`
+	row := r.db.QueryRow(ctx, fmt.Sprintf(`
 		SELECT
 			COUNT(*) AS total,
 			COUNT(*) FILTER (WHERE status = 'PENDING') AS pending,
@@ -193,11 +193,17 @@ func (r *AuditEventRepository) GetDashboardStats(ctx context.Context, districtID
 			COALESCE(SUM(confirmed_loss_ghs), 0) AS total_confirmed_loss,
 			COALESCE(SUM(success_fee_ghs), 0) AS total_success_fees
 		FROM audit_events WHERE %s`, where), args...,
-	).Scan(
-		&stats["total"], &stats["pending"], &stats["in_progress"],
-		&stats["completed"], &stats["gra_signed"],
-		&stats["total_confirmed_loss_ghs"], &stats["total_success_fees_ghs"],
 	)
+	var total, pending, inProgress, completed, graSigned int64
+	var totalLoss, totalFees float64
+	err := row.Scan(&total, &pending, &inProgress, &completed, &graSigned, &totalLoss, &totalFees)
+	stats["total"] = total
+	stats["pending"] = pending
+	stats["in_progress"] = inProgress
+	stats["completed"] = completed
+	stats["gra_signed"] = graSigned
+	stats["total_confirmed_loss_ghs"] = totalLoss
+	stats["total_success_fees_ghs"] = totalFees
 
 	return stats, err
 }

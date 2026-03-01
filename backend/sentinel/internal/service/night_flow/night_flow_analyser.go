@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/domain/entities"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/domain/entities"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )

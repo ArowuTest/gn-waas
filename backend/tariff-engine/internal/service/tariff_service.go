@@ -6,8 +6,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/services/tariff-engine/internal/domain/entities"
-	"github.com/ArowuTest/gn-waas/services/tariff-engine/internal/repository/interfaces"
+	"github.com/ArowuTest/gn-waas/backend/tariff-engine/internal/domain/entities"
+	"github.com/ArowuTest/gn-waas/backend/tariff-engine/internal/repository/interfaces"
 	"go.uber.org/zap"
 )
 

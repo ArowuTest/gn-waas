@@ -7,8 +7,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/services/tariff-engine/internal/app"
-	"github.com/ArowuTest/gn-waas/services/tariff-engine/internal/config"
+	"github.com/ArowuTest/gn-waas/backend/tariff-engine/internal/app"
+	"github.com/ArowuTest/gn-waas/backend/tariff-engine/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

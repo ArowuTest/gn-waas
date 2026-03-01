@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/domain/entities"
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/repository/interfaces"
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/service/night_flow"
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/service/phantom_checker"
-	"github.com/ArowuTest/gn-waas/services/sentinel/internal/service/reconciler"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/domain/entities"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/repository/interfaces"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/service/night_flow"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/service/phantom_checker"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/service/reconciler"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )

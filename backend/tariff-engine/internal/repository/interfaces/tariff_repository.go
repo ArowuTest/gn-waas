@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/services/tariff-engine/internal/domain/entities"
+	"github.com/ArowuTest/gn-waas/backend/tariff-engine/internal/domain/entities"
 	"github.com/google/uuid"
 )
 
