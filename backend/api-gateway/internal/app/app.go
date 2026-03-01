@@ -54,6 +54,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	configHandler   := handler.NewSystemConfigHandler(configRepo, logger)
 	accountHandler  := handler.NewAccountHandler(accountRepo, logger)
 	nrwHandler      := handler.NewNRWHandler(nrwRepo, logger)
+	flagRepo        := repository.NewAnomalyFlagRepository(db, logger)
+	flagHandler     := handler.NewAnomalyFlagHandler(flagRepo, logger)
 	gwlCaseRepo     := repository.NewGWLCaseRepository(db, logger)
 	gwlHandler       := handler.NewGWLHandler(gwlCaseRepo, logger)
 	adminUserHandler := handler.NewAdminUserHandler(db, logger)
@@ -97,6 +99,40 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	}
 
 	// ── API v1 routes ─────────────────────────────────────────────────────────
+	// ── Auth endpoints (no JWT required) ─────────────────────────────────────
+	authGroup := app.Group("/api/v1/auth")
+	authGroup.Post("/login", func(c *fiber.Ctx) error {
+		// In production: redirect to Keycloak OIDC
+		// In DEV_MODE: return a mock token for testing
+		if !cfg.Server.DevMode {
+			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+				"error": "Use Keycloak OIDC for authentication in production",
+				"keycloak_url": cfg.Keycloak.URL,
+			})
+		}
+		var body struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "invalid request body"})
+		}
+		if body.Email == "" || body.Password == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "email and password required"})
+		}
+		// Dev mode: return mock token
+		return c.JSON(fiber.Map{
+			"access_token": "dev-mock-token-" + body.Email,
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+			"user": fiber.Map{
+				"email": body.Email,
+				"role":  "AUDIT_SUPERVISOR",
+				"name":  "Dev User",
+			},
+		})
+	})
+
 	api := app.Group("/api/v1", authMW)
 
 	// ── Districts ─────────────────────────────────────────────────────────────
@@ -148,6 +184,10 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	)
 
 	// ── NRW Reports ───────────────────────────────────────────────────────────
+	// Anomaly flags
+	anomalyFlags := api.Group("/anomaly-flags")
+	anomalyFlags.Get("/", flagHandler.ListAnomalyFlags)
+
 	reports := api.Group("/reports")
 	reports.Get("/nrw", nrwHandler.GetNRWSummary)
 	reports.Get("/nrw/my-district",

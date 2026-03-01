@@ -323,3 +323,49 @@ func (h *FieldJobHandler) TriggerSOS(c *fiber.Ctx) error {
 }
 
 func intPtr(i int) *int { return &i }
+
+// ─── AnomalyFlagHandler ───────────────────────────────────────────────────────
+
+// AnomalyFlagHandler handles anomaly flag HTTP requests
+type AnomalyFlagHandler struct {
+	flagRepo *repository.AnomalyFlagRepository
+	logger   *zap.Logger
+}
+
+func NewAnomalyFlagHandler(flagRepo *repository.AnomalyFlagRepository, logger *zap.Logger) *AnomalyFlagHandler {
+	return &AnomalyFlagHandler{flagRepo: flagRepo, logger: logger}
+}
+
+// ListAnomalyFlags GET /api/v1/anomaly-flags
+func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
+	ctx := c.Context()
+
+	var districtID *uuid.UUID
+	if d := c.Query("district_id"); d != "" {
+		id, err := uuid.Parse(d)
+		if err != nil {
+			return response.BadRequest(c, "INVALID_DISTRICT_ID", "invalid district_id")
+		}
+		districtID = &id
+	}
+
+	severity := c.Query("severity")
+	status := c.Query("status")
+	limit := c.QueryInt("limit", 50)
+	offset := c.QueryInt("offset", 0)
+
+	flags, total, err := h.flagRepo.ListAnomalyFlags(ctx, districtID, severity, status, limit, offset)
+	if err != nil {
+		h.logger.Error("list anomaly flags", zap.Error(err))
+		return response.InternalError(c, "failed to fetch anomaly flags")
+	}
+
+	return c.JSON(fiber.Map{
+		"data": flags,
+		"meta": fiber.Map{
+			"total":     total,
+			"limit":     limit,
+			"offset":    offset,
+		},
+	})
+}
