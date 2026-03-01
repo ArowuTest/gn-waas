@@ -341,3 +341,76 @@ func (r *SystemConfigRepository) Update(ctx context.Context, key, value string, 
 		WHERE config_key = $3`, value, updatedBy, key)
 	return err
 }
+
+// EnrichedFieldJob extends FieldJob with joined account data for the mobile app
+type EnrichedFieldJob struct {
+	domain.FieldJob
+	AccountHolderName string  `json:"customer_name"`
+	GWLAccountNumber  string  `json:"account_number"`
+	AddressLine1      string  `json:"address"`
+	AnomalyType       *string `json:"anomaly_type,omitempty"`
+	AlertLevel        *string `json:"alert_level,omitempty"`
+	EstimatedLossGHS  *float64 `json:"estimated_variance_ghs,omitempty"`
+}
+
+// GetByOfficerEnriched returns field jobs for an officer with joined account data.
+// This is the endpoint used by the mobile app.
+func (r *FieldJobRepository) GetByOfficerEnriched(ctx context.Context, officerID uuid.UUID) ([]*EnrichedFieldJob, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			fj.id, fj.job_reference, fj.audit_event_id, fj.account_id, fj.district_id,
+			fj.assigned_officer_id, fj.status, fj.is_blind_audit,
+			fj.target_gps_lat, fj.target_gps_lng, fj.gps_fence_radius_m,
+			fj.dispatched_at, fj.arrived_at, fj.completed_at,
+			fj.officer_gps_lat, fj.officer_gps_lng, fj.gps_verified,
+			fj.biometric_verified, fj.priority, fj.requires_security_escort,
+			fj.sos_triggered, fj.sos_triggered_at, fj.notes, fj.created_at, fj.updated_at,
+			-- Joined account data
+			COALESCE(wa.account_holder_name, 'Unknown Customer')  AS customer_name,
+			COALESCE(wa.gwl_account_number, '')                   AS account_number,
+			COALESCE(wa.address_line1, '')                        AS address,
+			-- Joined anomaly data (most recent open flag for this account)
+			af.anomaly_type,
+			af.alert_level,
+			af.estimated_loss_ghs
+		FROM field_jobs fj
+		LEFT JOIN water_accounts wa ON wa.id = fj.account_id
+		LEFT JOIN LATERAL (
+			SELECT anomaly_type, alert_level::text, estimated_loss_ghs
+			FROM anomaly_flags
+			WHERE account_id = fj.account_id AND status = 'OPEN'
+			ORDER BY created_at DESC
+			LIMIT 1
+		) af ON TRUE
+		WHERE fj.assigned_officer_id = $1
+		  AND fj.status NOT IN ('COMPLETED', 'CANCELLED')
+		ORDER BY fj.priority ASC, fj.created_at ASC`,
+		officerID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetByOfficerEnriched failed: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []*EnrichedFieldJob
+	for rows.Next() {
+		j := &EnrichedFieldJob{}
+		err := rows.Scan(
+			&j.ID, &j.JobReference, &j.AuditEventID, &j.AccountID, &j.DistrictID,
+			&j.AssignedOfficerID, &j.Status, &j.IsBlindAudit,
+			&j.TargetGPSLat, &j.TargetGPSLng, &j.GPSFenceRadiusM,
+			&j.DispatchedAt, &j.ArrivedAt, &j.CompletedAt,
+			&j.OfficerGPSLat, &j.OfficerGPSLng, &j.GPSVerified,
+			&j.BiometricVerified, &j.Priority, &j.RequiresSecurityEscort,
+			&j.SOSTriggered, &j.SOSTriggeredAt, &j.Notes, &j.CreatedAt, &j.UpdatedAt,
+			&j.AccountHolderName, &j.GWLAccountNumber, &j.AddressLine1,
+			&j.AnomalyType, &j.AlertLevel, &j.EstimatedLossGHS,
+		)
+		if err != nil {
+			r.logger.Warn("Failed to scan enriched field job", zap.Error(err))
+			continue
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}

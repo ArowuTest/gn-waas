@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -20,11 +19,13 @@ type SchemaMap struct {
 
 // GWLDatabaseConfig holds GWL database connection details
 type GWLDatabaseConfig struct {
-	Host    string `yaml:"host"`
-	Port    int    `yaml:"port"`
-	Name    string `yaml:"name"`
-	Schema  string `yaml:"schema"`
-	SSLMode string `yaml:"ssl_mode"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Name     string `yaml:"name"`
+	Schema   string `yaml:"schema"`
+	SSLMode  string `yaml:"ssl_mode"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
 }
 
 // TableMapping holds the mapping for a single GWL table
@@ -272,61 +273,16 @@ func (r *MappedAccountRecord) SetField(field string, val interface{}) error {
 	return nil
 }
 
-// CDCSyncService handles Change Data Capture from GWL database
-type CDCSyncService struct {
-	mapper *SchemaMapper
-	logger *zap.Logger
+
+// IsGWLConfigured returns true if the GWL database host is configured
+func (m *SchemaMapper) IsGWLConfigured() bool {
+	return m.schemaMap.GWLDatabase.Host != ""
 }
 
-func NewCDCSyncService(mapper *SchemaMapper, logger *zap.Logger) *CDCSyncService {
-	return &CDCSyncService{mapper: mapper, logger: logger}
-}
+// ============================================================
+// TYPE CONVERSION HELPERS
+// ============================================================
 
-// SyncStatus holds the result of a CDC sync operation
-type SyncStatus struct {
-	SyncType      string    `json:"sync_type"`
-	StartedAt     time.Time `json:"started_at"`
-	CompletedAt   time.Time `json:"completed_at"`
-	RecordsSynced int       `json:"records_synced"`
-	RecordsFailed int       `json:"records_failed"`
-	Status        string    `json:"status"`
-	ErrorMessage  string    `json:"error_message,omitempty"`
-}
-
-// RunSync performs a CDC sync for the specified table type
-// In production: connects to GWL read-only replica and polls for changes
-// In development: returns mock status (GWL credentials not yet available)
-func (s *CDCSyncService) RunSync(ctx context.Context, syncType string) (*SyncStatus, error) {
-	status := &SyncStatus{
-		SyncType:  syncType,
-		StartedAt: time.Now(),
-		Status:    "RUNNING",
-	}
-
-	s.logger.Info("CDC sync started", zap.String("type", syncType))
-
-	// Check if GWL database is configured
-	if s.mapper.schemaMap.GWLDatabase.Host == "" {
-		status.Status = "SKIPPED"
-		status.ErrorMessage = "GWL database host not configured. Update config/gwl_schema_map.yaml with GWL connection details."
-		status.CompletedAt = time.Now()
-		s.logger.Warn("CDC sync skipped - GWL database not configured")
-		return status, nil
-	}
-
-	// TODO: Implement actual CDC sync when GWL credentials are available
-	// 1. Connect to GWL read-only replica
-	// 2. Query for records changed since last sync (using CDC event ID or timestamp)
-	// 3. Map records using SchemaMapper
-	// 4. Upsert into GN-WAAS database
-	// 5. Update cdc_sync_log
-
-	status.Status = "COMPLETED"
-	status.CompletedAt = time.Now()
-	return status, nil
-}
-
-// Type conversion helpers
 func toString(val interface{}) string {
 	if val == nil {
 		return ""

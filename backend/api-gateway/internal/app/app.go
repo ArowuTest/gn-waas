@@ -27,7 +27,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Database
+	// ── Database ──────────────────────────────────────────────────────────────
 	db, err := pgxpool.New(ctx, cfg.Database.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create db pool: %w", err)
@@ -37,22 +37,26 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	}
 	logger.Info("Database connected", zap.String("host", cfg.Database.Host))
 
-	// Repositories
-	auditRepo := repository.NewAuditEventRepository(db, logger)
+	// ── Repositories ─────────────────────────────────────────────────────────
+	auditRepo    := repository.NewAuditEventRepository(db, logger)
 	fieldJobRepo := repository.NewFieldJobRepository(db, logger)
-	userRepo := repository.NewUserRepository(db, logger)
+	userRepo     := repository.NewUserRepository(db, logger)
 	districtRepo := repository.NewDistrictRepository(db, logger)
-	configRepo := repository.NewSystemConfigRepository(db, logger)
+	configRepo   := repository.NewSystemConfigRepository(db, logger)
+	accountRepo  := repository.NewAccountRepository(db, logger)
+	nrwRepo      := repository.NewNRWReportRepository(db, logger)
 
-	// Handlers
-	auditHandler := handler.NewAuditHandler(auditRepo, fieldJobRepo, userRepo, logger)
+	// ── Handlers ─────────────────────────────────────────────────────────────
+	auditHandler    := handler.NewAuditHandler(auditRepo, fieldJobRepo, userRepo, logger)
 	fieldJobHandler := handler.NewFieldJobHandler(fieldJobRepo, auditRepo, logger)
 	districtHandler := handler.NewDistrictHandler(districtRepo, logger)
-	userHandler := handler.NewUserHandler(userRepo, logger)
-	configHandler := handler.NewSystemConfigHandler(configRepo, logger)
-	healthHandler := handler.NewHealthHandler()
+	userHandler     := handler.NewUserHandler(userRepo, logger)
+	configHandler   := handler.NewSystemConfigHandler(configRepo, logger)
+	accountHandler  := handler.NewAccountHandler(accountRepo, logger)
+	nrwHandler      := handler.NewNRWHandler(nrwRepo, logger)
+	healthHandler   := handler.NewHealthHandler()
 
-	// Fiber app
+	// ── Fiber app ─────────────────────────────────────────────────────────────
 	app := fiber.New(fiber.Config{
 		AppName:      "GN-WAAS API Gateway v1.0",
 		ReadTimeout:  time.Duration(cfg.Server.ReadTimeoutSec) * time.Second,
@@ -63,32 +67,41 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		},
 	})
 
-	// Global middleware
+	// ── Global middleware ─────────────────────────────────────────────────────
 	app.Use(middleware.RecoverMiddleware(logger))
 	app.Use(middleware.RequestLogger(logger))
 	app.Use(middleware.CORS())
 	app.Use(middleware.SecurityHeaders())
 
-	// Health check (no auth)
+	// ── Health check (no auth) ────────────────────────────────────────────────
 	app.Get("/health", healthHandler.HealthCheck)
 
-	// Auth middleware config
+	// ── Auth middleware config ────────────────────────────────────────────────
 	authCfg := middleware.AuthConfig{
-		KeycloakURL:   cfg.Keycloak.URL,
-		Realm:         cfg.Keycloak.Realm,
-		ClientID:      cfg.Keycloak.ClientID,
-		
+		KeycloakURL: cfg.Keycloak.URL,
+		Realm:       cfg.Keycloak.Realm,
+		ClientID:    cfg.Keycloak.ClientID,
 	}
 
-	// API v1 routes
-	api := app.Group("/api/v1", middleware.AuthMiddleware(authCfg, logger))
+	// In development mode, use DevAuthMiddleware to bypass JWT validation.
+	// In production, AuthMiddleware fetches JWKS from Keycloak and validates RS256 tokens.
+	var authMW fiber.Handler
+	if cfg.Server.DevMode {
+		logger.Warn("DEVELOPMENT MODE: JWT validation bypassed — DO NOT USE IN PRODUCTION")
+		authMW = middleware.DevAuthMiddleware(logger)
+	} else {
+		authMW = middleware.AuthMiddleware(authCfg, logger)
+	}
 
-	// Districts
+	// ── API v1 routes ─────────────────────────────────────────────────────────
+	api := app.Group("/api/v1", authMW)
+
+	// ── Districts ─────────────────────────────────────────────────────────────
 	districts := api.Group("/districts")
 	districts.Get("/", districtHandler.ListDistricts)
 	districts.Get("/:id", districtHandler.GetDistrict)
 
-	// Users
+	// ── Users ─────────────────────────────────────────────────────────────────
 	users := api.Group("/users")
 	users.Get("/me", userHandler.GetMe)
 	users.Get("/field-officers",
@@ -96,7 +109,13 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		userHandler.GetFieldOfficers,
 	)
 
-	// Audit Events
+	// ── Water Accounts ────────────────────────────────────────────────────────
+	accounts := api.Group("/accounts")
+	accounts.Get("/search", accountHandler.SearchAccounts)
+	accounts.Get("/", accountHandler.GetAccountsByDistrict)
+	accounts.Get("/:id", accountHandler.GetAccount)
+
+	// ── Audit Events ──────────────────────────────────────────────────────────
 	audits := api.Group("/audits")
 	audits.Get("/dashboard", auditHandler.GetDashboardStats)
 	audits.Post("/",
@@ -110,7 +129,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		auditHandler.AssignAuditEvent,
 	)
 
-	// Field Jobs
+	// ── Field Jobs ────────────────────────────────────────────────────────────
 	fieldJobs := api.Group("/field-jobs")
 	fieldJobs.Get("/my-jobs",
 		middleware.RequireRoles("FIELD_OFFICER"),
@@ -125,7 +144,16 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		fieldJobHandler.TriggerSOS,
 	)
 
-	// System Config (admin only)
+	// ── NRW Reports ───────────────────────────────────────────────────────────
+	reports := api.Group("/reports")
+	reports.Get("/nrw", nrwHandler.GetNRWSummary)
+	reports.Get("/nrw/my-district",
+		middleware.RequireRoles("FIELD_OFFICER", "DISTRICT_MANAGER", "AUDIT_SUPERVISOR"),
+		nrwHandler.GetMyDistrictSummary,
+	)
+	reports.Get("/nrw/:district_id/trend", nrwHandler.GetDistrictNRWTrend)
+
+	// ── System Config (admin only) ────────────────────────────────────────────
 	sysConfig := api.Group("/config",
 		middleware.RequireRoles("SYSTEM_ADMIN"),
 	)

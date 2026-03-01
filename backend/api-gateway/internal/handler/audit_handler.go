@@ -255,8 +255,8 @@ func (h *FieldJobHandler) GetMyJobs(c *fiber.Ctx) error {
 		return response.Unauthorized(c, "Invalid user ID")
 	}
 
-	status := c.Query("status")
-	jobs, err := h.fieldJobRepo.GetByOfficer(c.Context(), officerID, status)
+	// Use enriched query that joins account data — required by mobile app
+	jobs, err := h.fieldJobRepo.GetByOfficerEnriched(c.Context(), officerID)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch jobs")
 	}

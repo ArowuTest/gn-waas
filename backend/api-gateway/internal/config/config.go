@@ -24,10 +24,11 @@ type AppConfig struct {
 }
 
 type ServerConfig struct {
-	Port            int `mapstructure:"port"`
-	ReadTimeoutSec  int `mapstructure:"read_timeout_sec"`
-	WriteTimeoutSec int `mapstructure:"write_timeout_sec"`
-	GracefulStopSec int `mapstructure:"graceful_stop_sec"`
+	Port            int  `mapstructure:"port"`
+	ReadTimeoutSec  int  `mapstructure:"read_timeout_sec"`
+	WriteTimeoutSec int  `mapstructure:"write_timeout_sec"`
+	GracefulStopSec int  `mapstructure:"graceful_stop_sec"`
+	DevMode         bool `mapstructure:"dev_mode"`
 }
 
 type DatabaseConfig struct {
@@ -91,6 +92,7 @@ func Load() (*Config, error) {
 	v.SetDefault("server.read_timeout_sec", 30)
 	v.SetDefault("server.write_timeout_sec", 30)
 	v.SetDefault("server.graceful_stop_sec", 10)
+	v.SetDefault("server.dev_mode", false)
 	v.SetDefault("database.ssl_mode", "disable")
 	v.SetDefault("database.max_conns", 20)
 	v.SetDefault("database.min_conns", 2)
@@ -115,6 +117,7 @@ func Load() (*Config, error) {
 		"keycloak.url":           "KEYCLOAK_URL",
 		"keycloak.realm":         "KEYCLOAK_REALM",
 		"keycloak.client_id":     "KEYCLOAK_CLIENT_ID",
+		"server.dev_mode":         "DEV_MODE",
 		"services.sentinel_url":  "SENTINEL_SERVICE_URL",
 		"services.tariff_url":    "TARIFF_SERVICE_URL",
 		"services.gra_bridge_url": "GRA_SERVICE_URL",
