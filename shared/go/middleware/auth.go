@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -329,8 +330,13 @@ func RequireDistrictAccess() fiber.Handler {
 }
 
 // DevAuthMiddleware is used in development/testing to bypass JWT validation.
-// Controlled by APP_ENV environment variable — panics if used in production.
+// SAFETY: panics immediately if APP_ENV=production to prevent accidental bypass.
 func DevAuthMiddleware(logger *zap.Logger) fiber.Handler {
+	// Hard production guard — this middleware must NEVER run in production.
+	if appEnv := os.Getenv("APP_ENV"); appEnv == "production" {
+		panic("FATAL: DevAuthMiddleware activated in production (APP_ENV=production). " +
+			"Set DEV_MODE=false and use Keycloak JWT validation.")
+	}
 	return func(c *fiber.Ctx) error {
 		logger.Warn("DEV AUTH MIDDLEWARE ACTIVE — NOT FOR PRODUCTION USE",
 			zap.String("path", c.Path()),

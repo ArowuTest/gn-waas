@@ -25,9 +25,15 @@ done
 echo "✓ Migrations complete"
 
 # Run seeds in order
+# In production (APP_ENV=production), skip demo timeseries data (006_demo_timeseries.sql)
 echo "Running seeds..."
 for f in /docker-entrypoint-initdb.d/seeds/*.sql; do
-    echo "  → Seeding: $(basename $f)"
+    basename_f=$(basename "$f")
+    if [ "${APP_ENV:-development}" = "production" ] && echo "$basename_f" | grep -q "demo"; then
+        echo "  ⏭  Skipping demo seed in production: $basename_f"
+        continue
+    fi
+    echo "  → Seeding: $basename_f"
     psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f "$f"
 done
 

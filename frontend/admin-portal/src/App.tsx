@@ -9,6 +9,11 @@ import { AuditsPage } from './pages/AuditsPage'
 import { NRWAnalysisPage } from './pages/NRWAnalysisPage'
 import { FieldJobsPage } from './pages/FieldJobsPage'
 import { MobileAppPage } from './pages/MobileAppPage'
+import UserManagementPage from './pages/UserManagementPage'
+import DistrictConfigPage from './pages/DistrictConfigPage'
+import AuditThresholdsPage from './pages/AuditThresholdsPage'
+import { GRACompliancePage } from './pages/GRACompliancePage'
+import { ReportsPage } from './pages/ReportsPage'
 import type { ReactNode } from 'react'
 
 const queryClient = new QueryClient({
@@ -58,11 +63,10 @@ function AppRoutes() {
         <Route path="anomalies" element={<AnomaliesPage />} />
         <Route path="audits" element={<AuditsPage />} />
         <Route path="nrw" element={<NRWAnalysisPage />} />
-        {/* Placeholder routes for future pages */}
         <Route path="field-jobs" element={<FieldJobsPage />} />
         <Route path="mobile-app" element={<MobileAppPage />} />
-        <Route path="gra" element={<PlaceholderPage title="GRA Compliance" />} />
-        <Route path="reports" element={<PlaceholderPage title="Reports" />} />
+        <Route path="gra" element={<GRACompliancePage />} />
+        <Route path="reports" element={<ReportsPage />} />
         <Route path="users" element={<UserManagementPage />} />
         <Route path="districts" element={<DistrictConfigPage />} />
         <Route path="settings" element={<AuditThresholdsPage />} />
@@ -72,17 +76,6 @@ function AppRoutes() {
   )
 }
 
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-center h-64">
-      <div className="text-center">
-        <div className="text-4xl mb-3">🚧</div>
-        <h2 className="text-gray-700">{title}</h2>
-        <p className="text-gray-400 text-sm mt-1">This page is under construction</p>
-      </div>
-    </div>
-  )
-}
 
 export default function App() {
   return (

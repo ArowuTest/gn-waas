@@ -35,8 +35,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/home/postgres/pgdata/data
-      - ./db/migrations:/docker-entrypoint-initdb.d/migrations:ro
-      - ./db/seeds:/docker-entrypoint-initdb.d/seeds:ro
+      - ./database/migrations:/docker-entrypoint-initdb.d/migrations:ro
+      - ./database/seeds:/docker-entrypoint-initdb.d/seeds:ro
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
     networks:
       gnwaas-network:
@@ -136,7 +136,7 @@ services:
     container_name: gnwaas-api-gateway
     restart: unless-stopped
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
       APP_PORT: 3000
       DB_HOST: postgres
       DB_PORT: 5432
@@ -186,7 +186,7 @@ services:
     container_name: gnwaas-sentinel
     restart: unless-stopped
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
       APP_PORT: 3002
       DB_HOST: postgres
       DB_PORT: 5432
@@ -221,7 +221,7 @@ services:
     container_name: gnwaas-tariff-engine
     restart: unless-stopped
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
       APP_PORT: 3003
       DB_HOST: postgres
       DB_PORT: 5432
@@ -253,7 +253,7 @@ services:
     container_name: gnwaas-gra-bridge
     restart: unless-stopped
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
       APP_PORT: 3004
       DB_HOST: postgres
       DB_PORT: 5432
@@ -263,7 +263,7 @@ services:
       GRA_API_BASE_URL: https://vsdc.gra.gov.gh/api/v8.1
       GRA_API_KEY: ""
       GRA_BUSINESS_TIN: ""
-      GRA_SANDBOX_MODE: "true"
+      GRA_SANDBOX_MODE: "${GRA_SANDBOX_MODE:-true}"
     ports:
       - "3004:3004"
     healthcheck:
@@ -289,7 +289,7 @@ services:
     container_name: gnwaas-ocr-service
     restart: unless-stopped
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
       APP_PORT: 3005
       DB_HOST: postgres
       DB_PORT: 5432
@@ -320,7 +320,7 @@ services:
     container_name: gnwaas-cdc-ingestor
     restart: unless-stopped
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
       APP_PORT: 3006
       DB_HOST: postgres
       DB_PORT: 5432
