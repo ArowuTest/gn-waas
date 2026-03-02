@@ -176,7 +176,6 @@ func (r *GWLCaseRepository) q(ctx context.Context) Querier {
 	return r.db
 }
 
-func (r *GWLCaseRepository) DB() *pgxpool.Pool { return r.db }
 
 // ── GetCaseSummary returns KPI strip data for the dashboard ──────────────────
 func (r *GWLCaseRepository) GetCaseSummary(ctx context.Context, districtID *uuid.UUID) (*GWLCaseSummary, error) {

@@ -154,18 +154,14 @@ func (h *NRWHandler) GetMyDistrictSummary(c *fiber.Ctx) error {
 		return response.Unauthorized(c, "Not authenticated")
 	}
 
-	// We need to look up the user's district from the DB
-	// This is done via a join — pass userID to the repo
+	// Use the repository method so the query runs inside the RLS-activated
+	// transaction from rls.Middleware — no raw DB() bypass.
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		return response.Unauthorized(c, "Invalid user ID")
 	}
 
-	// Get district_id from users table
-	var districtID uuid.UUID
-	err = h.nrwRepo.DB().QueryRow(c.Context(),
-		"SELECT district_id FROM users WHERE id = $1 AND district_id IS NOT NULL", userUUID,
-	).Scan(&districtID)
+	districtID, err := h.nrwRepo.GetUserDistrictID(c.Context(), userUUID)
 	if err != nil {
 		return response.BadRequest(c, "NO_DISTRICT", "User has no assigned district")
 	}

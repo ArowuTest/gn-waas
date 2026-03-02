@@ -2,11 +2,9 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/gofiber/fiber/v2"
@@ -28,14 +26,9 @@ func NewDistrictHandler(districtRepo *repository.DistrictRepository, logger *zap
 // Non-fatal: if the write fails, the action is still completed but the
 // failure is logged for investigation.
 func (h *DistrictHandler) logAdminAction(ctx context.Context, actorID, entityType, entityID, action string, oldVal, newVal interface{}) {
-	oldJSON, _ := json.Marshal(oldVal)
-	newJSON, _ := json.Marshal(newVal)
-	_, err := h.districtRepo.DB().Exec(ctx, `
-		INSERT INTO audit_trail (entity_type, entity_id, action, changed_by, old_values, new_values)
-		VALUES ($1, $2, $3, $4::uuid, $5, $6)`,
-		entityType, entityID, action, actorID, string(oldJSON), string(newJSON),
-	)
-	if err != nil {
+	// Use the repository method so the INSERT runs inside the RLS-activated
+	// transaction from rls.Middleware — no raw DB() bypass.
+	if err := h.districtRepo.LogAdminAction(ctx, entityType, entityID, action, actorID, oldVal, newVal); err != nil {
 		h.logger.Warn("Failed to write audit trail",
 			zap.String("entity_type", entityType),
 			zap.String("entity_id", entityID),
@@ -236,18 +229,20 @@ func (h *DistrictHandler) CreateDistrict(c *fiber.Ctx) error {
 		return response.BadRequest(c, "MISSING_FIELDS", "district_code and district_name are required")
 	}
 
-	var id uuid.UUID
-	err := h.districtRepo.DB().QueryRow(c.Context(), `
-		INSERT INTO districts
-			(district_code, district_name, region, population_estimate,
-			 total_connections, supply_status, zone_type, is_pilot_district, is_active)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		RETURNING id`,
-		req.DistrictCode, req.DistrictName, req.Region,
-		req.PopulationEstimate, req.TotalConnections,
-		req.SupplyStatus, req.ZoneType,
-		req.IsPilotDistrict, req.IsActive,
-	).Scan(&id)
+	// Use the repository method so the INSERT runs inside the RLS-activated
+	// transaction from rls.Middleware — no raw DB() bypass.
+	newDistrict := &domain.District{
+		DistrictCode:       req.DistrictCode,
+		DistrictName:       req.DistrictName,
+		Region:             req.Region,
+		PopulationEstimate: req.PopulationEstimate,
+		TotalConnections:   req.TotalConnections,
+		SupplyStatus:       req.SupplyStatus,
+		ZoneType:           req.ZoneType,
+		IsPilotDistrict:    req.IsPilotDistrict,
+		IsActive:           req.IsActive,
+	}
+	id, err := h.districtRepo.Create(c.Context(), newDistrict)
 	if err != nil {
 		h.logger.Error("CreateDistrict failed", zap.Error(err))
 		return response.InternalError(c, "Failed to create district")
@@ -283,29 +278,25 @@ func (h *DistrictHandler) UpdateDistrict(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
 	}
 
-	setClauses := []string{"updated_at = NOW()"}
-	args := []interface{}{}
-	idx := 1
+	// Build the fields map for the repository method.
+	// Using repo.UpdateFields() ensures the UPDATE runs inside the RLS-activated
+	// transaction from rls.Middleware — no raw DB() bypass.
+	fields := map[string]interface{}{}
+	if req.DistrictName != nil    { fields["district_name"]       = *req.DistrictName }
+	if req.Region != nil          { fields["region"]              = *req.Region }
+	if req.PopulationEstimate != nil { fields["population_estimate"] = *req.PopulationEstimate }
+	if req.TotalConnections != nil { fields["total_connections"]   = *req.TotalConnections }
+	if req.SupplyStatus != nil    { fields["supply_status"]        = *req.SupplyStatus }
+	if req.ZoneType != nil        { fields["zone_type"]            = *req.ZoneType }
+	if req.IsPilotDistrict != nil { fields["is_pilot_district"]    = *req.IsPilotDistrict }
+	if req.IsActive != nil        { fields["is_active"]            = *req.IsActive }
 
-	if req.DistrictName != nil    { setClauses = append(setClauses, fmt.Sprintf("district_name=$%d", idx)); args = append(args, *req.DistrictName); idx++ }
-	if req.Region != nil          { setClauses = append(setClauses, fmt.Sprintf("region=$%d", idx)); args = append(args, *req.Region); idx++ }
-	if req.PopulationEstimate != nil { setClauses = append(setClauses, fmt.Sprintf("population_estimate=$%d", idx)); args = append(args, *req.PopulationEstimate); idx++ }
-	if req.TotalConnections != nil { setClauses = append(setClauses, fmt.Sprintf("total_connections=$%d", idx)); args = append(args, *req.TotalConnections); idx++ }
-	if req.SupplyStatus != nil    { setClauses = append(setClauses, fmt.Sprintf("supply_status=$%d", idx)); args = append(args, *req.SupplyStatus); idx++ }
-	if req.ZoneType != nil        { setClauses = append(setClauses, fmt.Sprintf("zone_type=$%d", idx)); args = append(args, *req.ZoneType); idx++ }
-	if req.IsPilotDistrict != nil { setClauses = append(setClauses, fmt.Sprintf("is_pilot_district=$%d", idx)); args = append(args, *req.IsPilotDistrict); idx++ }
-	if req.IsActive != nil        { setClauses = append(setClauses, fmt.Sprintf("is_active=$%d", idx)); args = append(args, *req.IsActive); idx++ }
-
-	args = append(args, districtID)
-	query := fmt.Sprintf("UPDATE districts SET %s WHERE id=$%d",
-		strings.Join(setClauses, ", "), idx)
-
-	result, err := h.districtRepo.DB().Exec(c.Context(), query, args...)
+	rowsAffected, err := h.districtRepo.UpdateFields(c.Context(), districtID, fields)
 	if err != nil {
 		h.logger.Error("UpdateDistrict failed", zap.Error(err))
 		return response.InternalError(c, "Failed to update district")
 	}
-	if result.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		return response.NotFound(c, "district")
 	}
 

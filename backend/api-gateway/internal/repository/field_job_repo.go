@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"fmt"
 	"time"
 
@@ -586,8 +587,69 @@ func (r *FieldJobRepository) GetByOfficerEnriched(ctx context.Context, officerID
 	return jobs, rows.Err()
 }
 
-// DB returns the underlying database pool for direct queries
-func (r *DistrictRepository) DB() *pgxpool.Pool { return r.db }
+// Create inserts a new district and returns its generated UUID.
+// Uses r.q(ctx) so the INSERT runs inside the RLS-activated transaction.
+func (r *DistrictRepository) Create(ctx context.Context, d *domain.District) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := r.q(ctx).QueryRow(ctx, `
+		INSERT INTO districts
+			(district_code, district_name, region, population_estimate,
+			 total_connections, supply_status, zone_type, is_pilot_district, is_active)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		RETURNING id`,
+		d.DistrictCode, d.DistrictName, d.Region,
+		d.PopulationEstimate, d.TotalConnections,
+		d.SupplyStatus, d.ZoneType,
+		d.IsPilotDistrict, d.IsActive,
+	).Scan(&id)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("DistrictRepository.Create: %w", err)
+	}
+	return id, nil
+}
+
+// UpdateFields applies a partial update to a district row.
+// Only non-nil fields in the map are updated.
+// Uses r.q(ctx) so the UPDATE runs inside the RLS-activated transaction.
+func (r *DistrictRepository) UpdateFields(ctx context.Context, id uuid.UUID, fields map[string]interface{}) (int64, error) {
+	if len(fields) == 0 {
+		return 0, nil
+	}
+	setClauses := []string{"updated_at = NOW()"}
+	args := []interface{}{}
+	idx := 1
+	for col, val := range fields {
+		setClauses = append(setClauses, fmt.Sprintf("%s=$%d", col, idx))
+		args = append(args, val)
+		idx++
+	}
+	args = append(args, id)
+	query := fmt.Sprintf("UPDATE districts SET %s WHERE id=$%d",
+		strings.Join(setClauses, ", "), idx)
+
+	tag, err := r.q(ctx).Exec(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("DistrictRepository.UpdateFields: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// LogAdminAction writes an immutable audit trail entry for an admin mutation.
+// Uses r.q(ctx) so the INSERT runs inside the RLS-activated transaction.
+// Non-fatal: errors are returned but callers may choose to log-and-continue.
+func (r *DistrictRepository) LogAdminAction(ctx context.Context, entityType, entityID, action, changedBy string, oldVal, newVal interface{}) error {
+	oldJSON, _ := json.Marshal(oldVal)
+	newJSON, _ := json.Marshal(newVal)
+	_, err := r.q(ctx).Exec(ctx, `
+		INSERT INTO audit_trail (entity_type, entity_id, action, changed_by, old_values, new_values)
+		VALUES ($1, $2, $3, $4::uuid, $5, $6)`,
+		entityType, entityID, action, changedBy, string(oldJSON), string(newJSON),
+	)
+	if err != nil {
+		return fmt.Errorf("DistrictRepository.LogAdminAction: %w", err)
+	}
+	return nil
+}
 
 // ─── RLS-Activated Variants ───────────────────────────────────────────────────
 
@@ -713,5 +775,3 @@ func (r *FieldJobRepository) GetByOfficerEnrichedTx(ctx context.Context, q Queri
 	return jobs, rows.Err()
 }
 
-// DB returns the underlying database pool for RLS transaction creation.
-func (r *FieldJobRepository) DB() *pgxpool.Pool { return r.db }

@@ -220,5 +220,3 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 	return flags, total, nil
 }
 
-// DB returns the underlying database pool for RLS transaction creation.
-func (r *AnomalyFlagRepository) DB() *pgxpool.Pool { return r.db }

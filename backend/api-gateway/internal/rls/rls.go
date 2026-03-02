@@ -37,6 +37,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -276,28 +278,96 @@ func WithReadOnlyTx(ctx context.Context, pool *pgxpool.Pool, rlsCtx Context, fn 
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-// setLocals executes the three SET LOCAL statements that activate RLS policies.
-// These are transaction-scoped: they expire when the transaction ends.
-func setLocals(ctx context.Context, tx pgx.Tx, rlsCtx Context) error {
-	districtID := rlsCtx.DistrictID
-	if districtID == "" {
-		districtID = "00000000-0000-0000-0000-000000000000"
-	}
-	userRole := rlsCtx.UserRole
-	if userRole == "" {
-		userRole = "ANONYMOUS"
-	}
-	userID := rlsCtx.UserID
-	if userID == "" {
-		userID = "00000000-0000-0000-0000-000000000000"
-	}
+// validUUIDPattern matches a canonical UUID (8-4-4-4-12 hex digits).
+// Used to validate district_id and user_id before embedding in SQL.
+const validUUIDPattern = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 
-	_, err := tx.Exec(ctx, fmt.Sprintf(
-		`SET LOCAL rls.district_id = '%s'; SET LOCAL rls.user_role = '%s'; SET LOCAL rls.user_id = '%s'`,
-		districtID, userRole, userID,
-	))
-	if err != nil {
-		return fmt.Errorf("rls.setLocals: failed to set RLS session variables: %w", err)
+// knownRoles is the exhaustive set of roles defined in the SQL enum user_role.
+// Any value not in this set is rejected and replaced with "ANONYMOUS".
+var knownRoles = map[string]struct{}{
+	"SYSTEM_ADMIN":       {},
+	"NATIONAL_REGULATOR": {},
+	"FIELD_OFFICER":      {},
+	"FIELD_SUPERVISOR":   {},
+	"GWL_MANAGER":        {},
+	"GWL_ANALYST":        {},
+	"GWL_EXECUTIVE":      {},
+	"ANONYMOUS":          {},
+}
+
+// setLocals activates PostgreSQL Row-Level Security for the current transaction
+// by setting three session-local configuration parameters that the RLS policies
+// read via current_setting().
+//
+// Security design:
+//   - PostgreSQL's SET LOCAL does not support parameterized queries ($1 syntax).
+//     Using fmt.Sprintf to build the SQL string would be a SQL injection risk.
+//   - Instead, we use SELECT set_config($1, $2, true) which IS fully parameterized.
+//     The third argument (true) makes the setting transaction-local, equivalent
+//     to SET LOCAL.
+//   - All three inputs are validated before use:
+//     • district_id and user_id must match the canonical UUID format.
+//     • user_role must be a member of the known roles allowlist.
+//     Any value that fails validation is replaced with a safe default.
+//
+// This eliminates the SQL injection risk while preserving the RLS semantics.
+func setLocals(ctx context.Context, tx pgx.Tx, rlsCtx Context) error {
+	districtID := sanitizeUUID(rlsCtx.DistrictID, "00000000-0000-0000-0000-000000000000")
+	userRole   := sanitizeRole(rlsCtx.UserRole)
+	userID     := sanitizeUUID(rlsCtx.UserID, "00000000-0000-0000-0000-000000000000")
+
+	// set_config(setting_name, new_value, is_local)
+	// is_local=true → equivalent to SET LOCAL (transaction-scoped)
+	// Each call is a separate parameterized query — no string interpolation.
+	for _, kv := range []struct{ key, val string }{
+		{"rls.district_id", districtID},
+		{"rls.user_role", userRole},
+		{"rls.user_id", userID},
+	} {
+		if _, err := tx.Exec(ctx, "SELECT set_config($1, $2, true)", kv.key, kv.val); err != nil {
+			return fmt.Errorf("rls.setLocals: set_config(%s): %w", kv.key, err)
+		}
 	}
 	return nil
+}
+
+// sanitizeUUID validates that s is a canonical lowercase UUID.
+// Returns fallback if s is empty or does not match the pattern.
+// This prevents any SQL injection via the district_id or user_id fields.
+func sanitizeUUID(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	// Normalise to lowercase for consistent matching
+	s = strings.ToLower(s)
+	if matched, _ := regexp.MatchString(validUUIDPattern, s); !matched {
+		return fallback
+	}
+	return s
+}
+
+// sanitizeRole validates that s is a known user role.
+// Returns "ANONYMOUS" if s is empty or not in the allowlist.
+// This prevents any SQL injection via the user_role field.
+func sanitizeRole(s string) string {
+	if _, ok := knownRoles[s]; ok {
+		return s
+	}
+	return "ANONYMOUS"
+}
+
+// ─── Exported test helpers ────────────────────────────────────────────────────
+// These exported wrappers allow unit tests to verify the input sanitization
+// logic without requiring a real database connection.
+
+// SanitizeUUID is the exported version of sanitizeUUID for testing.
+// In production code, use setLocals directly — it calls sanitizeUUID internally.
+func SanitizeUUID(s, fallback string) string {
+	return sanitizeUUID(s, fallback)
+}
+
+// SanitizeRole is the exported version of sanitizeRole for testing.
+// In production code, use setLocals directly — it calls sanitizeRole internally.
+func SanitizeRole(s string) string {
+	return sanitizeRole(s)
 }

@@ -231,8 +231,18 @@ func (r *NRWReportRepository) GetMyDistrictSummary(ctx context.Context, district
 	return district, summaries[0], nil
 }
 
-// DB returns the underlying database pool (used by handlers that need direct queries)
-func (r *NRWReportRepository) DB() *pgxpool.Pool {
-	return r.db
+// GetUserDistrictID returns the district_id assigned to a user.
+// Returns an error if the user has no district assigned.
+// Uses r.q(ctx) so the query runs inside the RLS-activated transaction.
+func (r *NRWReportRepository) GetUserDistrictID(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	var districtID uuid.UUID
+	err := r.q(ctx).QueryRow(ctx,
+		"SELECT district_id FROM users WHERE id = $1 AND district_id IS NOT NULL",
+		userID,
+	).Scan(&districtID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("NRWReportRepository.GetUserDistrictID: %w", err)
+	}
+	return districtID, nil
 }
 

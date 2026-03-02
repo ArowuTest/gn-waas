@@ -407,3 +407,106 @@ func (t *concreteTx) Query(ctx context.Context, sql string, args ...any) (pgx.Ro
 }
 func (t *concreteTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row { return nil }
 func (t *concreteTx) Conn() *pgx.Conn                                               { return nil }
+
+// ─── setLocals / sanitize tests ───────────────────────────────────────────────
+// These tests verify the SQL-injection-safe input validation in setLocals.
+// We test the exported sanitize helpers indirectly via FromFiber + Middleware,
+// and directly via the exported SanitizeUUID / SanitizeRole helpers.
+
+func TestSanitizeUUID_ValidLowercase(t *testing.T) {
+	input := "d0000001-0000-0000-0000-000000000001"
+	got := rls.SanitizeUUID(input, "fallback")
+	if got != input {
+		t.Errorf("SanitizeUUID(%q) = %q, want %q", input, got, input)
+	}
+}
+
+func TestSanitizeUUID_ValidUppercase_Normalised(t *testing.T) {
+	input := "D0000001-0000-0000-0000-000000000001"
+	expected := "d0000001-0000-0000-0000-000000000001"
+	got := rls.SanitizeUUID(input, "fallback")
+	if got != expected {
+		t.Errorf("SanitizeUUID(%q) = %q, want %q (lowercase)", input, got, expected)
+	}
+}
+
+func TestSanitizeUUID_Empty_ReturnsFallback(t *testing.T) {
+	got := rls.SanitizeUUID("", "00000000-0000-0000-0000-000000000000")
+	if got != "00000000-0000-0000-0000-000000000000" {
+		t.Errorf("SanitizeUUID(\"\") = %q, want fallback UUID", got)
+	}
+}
+
+func TestSanitizeUUID_InvalidFormat_ReturnsFallback(t *testing.T) {
+	cases := []string{
+		"not-a-uuid",
+		"'; DROP TABLE users; --",
+		"00000000-0000-0000-0000-00000000000",  // too short
+		"00000000-0000-0000-0000-0000000000000", // too long
+		"gggggggg-0000-0000-0000-000000000000",  // invalid hex
+		"",
+	}
+	fallback := "00000000-0000-0000-0000-000000000000"
+	for _, c := range cases {
+		got := rls.SanitizeUUID(c, fallback)
+		if got != fallback {
+			t.Errorf("SanitizeUUID(%q) = %q, want fallback %q", c, got, fallback)
+		}
+	}
+}
+
+func TestSanitizeUUID_SQLInjectionAttempt_ReturnsFallback(t *testing.T) {
+	// Simulate an attacker who has somehow injected a malicious district_id
+	// into the JWT claims. The sanitizer must reject it.
+	malicious := "'; SET LOCAL rls.user_role = 'SYSTEM_ADMIN'; --"
+	got := rls.SanitizeUUID(malicious, "00000000-0000-0000-0000-000000000000")
+	if got == malicious {
+		t.Error("SanitizeUUID: SQL injection attempt should be rejected")
+	}
+}
+
+func TestSanitizeRole_KnownRoles(t *testing.T) {
+	knownRoles := []string{
+		"SYSTEM_ADMIN", "NATIONAL_REGULATOR", "FIELD_OFFICER",
+		"FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_ANALYST", "GWL_EXECUTIVE",
+	}
+	for _, role := range knownRoles {
+		got := rls.SanitizeRole(role)
+		if got != role {
+			t.Errorf("SanitizeRole(%q) = %q, want %q", role, got, role)
+		}
+	}
+}
+
+func TestSanitizeRole_UnknownRole_ReturnsAnonymous(t *testing.T) {
+	cases := []string{
+		"SUPER_USER",
+		"'; DROP TABLE users; --",
+		"SYSTEM_ADMIN' OR '1'='1",
+		"",
+		"admin",
+		"root",
+	}
+	for _, c := range cases {
+		got := rls.SanitizeRole(c)
+		if got != "ANONYMOUS" {
+			t.Errorf("SanitizeRole(%q) = %q, want ANONYMOUS", c, got)
+		}
+	}
+}
+
+func TestSanitizeRole_SQLInjectionAttempt_ReturnsAnonymous(t *testing.T) {
+	malicious := "FIELD_OFFICER'; SET LOCAL rls.user_role = 'SYSTEM_ADMIN'; --"
+	got := rls.SanitizeRole(malicious)
+	if got != "ANONYMOUS" {
+		t.Errorf("SanitizeRole: SQL injection attempt should return ANONYMOUS, got %q", got)
+	}
+}
+
+func TestSanitizeRole_Anonymous_IsAllowed(t *testing.T) {
+	// ANONYMOUS is in the allowlist (used as the safe default)
+	got := rls.SanitizeRole("ANONYMOUS")
+	if got != "ANONYMOUS" {
+		t.Errorf("SanitizeRole(ANONYMOUS) = %q, want ANONYMOUS", got)
+	}
+}

@@ -220,8 +220,47 @@ func (r *AuditEventRepository) GetDashboardStats(ctx context.Context, districtID
 	return stats, err
 }
 
-// DB returns the underlying database pool for direct queries.
-func (r *AuditEventRepository) DB() *pgxpool.Pool { return r.db }
+// IllegalConnectionReport holds the data for a new illegal connection report.
+// Mirrors the request body in audit_handler.go ReportIllegalConnection.
+type IllegalConnectionReport struct {
+	OfficerID                string
+	JobID                    string
+	ConnectionType           string
+	Severity                 string
+	Description              string
+	EstimatedDailyLossLitres float64
+	Address                  string
+	AccountNumber            string
+	Latitude                 float64
+	Longitude                float64
+	GPSAccuracy              float64
+	PhotoCount               int
+	PhotoHashes              []string
+}
+
+// CreateIllegalConnection inserts a new illegal connection report and returns its UUID.
+// Uses r.q(ctx) so the INSERT runs inside the RLS-activated transaction.
+func (r *AuditEventRepository) CreateIllegalConnection(ctx context.Context, rep *IllegalConnectionReport) (uuid.UUID, error) {
+	var reportID uuid.UUID
+	err := r.q(ctx).QueryRow(ctx, `
+		INSERT INTO illegal_connections (
+			officer_id, job_id, connection_type, severity, description,
+			estimated_daily_loss_litres, address, account_number,
+			latitude, longitude, gps_accuracy, photo_count, photo_hashes, reported_at
+		) VALUES (
+			$1::uuid, $2::uuid, $3, $4, $5,
+			$6, $7, $8,
+			$9, $10, $11, $12, $13, NOW()
+		) RETURNING id`,
+		rep.OfficerID, rep.JobID, rep.ConnectionType, rep.Severity, rep.Description,
+		rep.EstimatedDailyLossLitres, rep.Address, rep.AccountNumber,
+		rep.Latitude, rep.Longitude, rep.GPSAccuracy, rep.PhotoCount, rep.PhotoHashes,
+	).Scan(&reportID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("AuditEventRepository.CreateIllegalConnection: %w", err)
+	}
+	return reportID, nil
+}
 
 // ─── RLS-Activated Variants ───────────────────────────────────────────────────
 // These methods accept a pgx.Tx that has already had SET LOCAL rls.* executed
