@@ -1,0 +1,103 @@
+# GN-WAAS — Kubernetes Ingress
+# Routes external HTTPS traffic to the correct backend services.
+# Requires: nginx ingress controller + cert-manager with Let's Encrypt
+#
+# Install prerequisites:
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+#   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.0/cert-manager.yaml
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: devops@gnwaas.gov.gh
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gnwaas-ingress
+  namespace: gnwaas
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Rate limiting at ingress level (backup to app-level rate limiting)
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+    # Security headers (belt-and-suspenders with app-level headers)
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+    # Proxy timeouts
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  tls:
+    - hosts:
+        - api.gnwaas.gov.gh
+        - admin.gnwaas.gov.gh
+        - authority.gnwaas.gov.gh
+        - gwl.gnwaas.gov.gh
+      secretName: gnwaas-tls
+  rules:
+    # API Gateway — all backend API calls
+    - host: api.gnwaas.gov.gh
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway-service
+                port:
+                  number: 3000
+
+    # Admin Portal (static files served by nginx in container)
+    - host: admin.gnwaas.gov.gh
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-portal-service
+                port:
+                  number: 80
+
+    # Authority Portal
+    - host: authority.gnwaas.gov.gh
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: authority-portal-service
+                port:
+                  number: 80
+
+    # GWL Portal
+    - host: gwl.gnwaas.gov.gh
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gwl-portal-service
+                port:
+                  number: 80

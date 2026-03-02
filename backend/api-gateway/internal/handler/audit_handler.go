@@ -116,6 +116,9 @@ func (h *AuditHandler) ListAuditEvents(c *fiber.Ctx) error {
 	status := c.Query("status")
 	limit := c.QueryInt("limit", 20)
 	offset := c.QueryInt("offset", 0)
+	if limit > 100 { limit = 100 }
+	if limit < 1  { limit = 1  }
+	if offset < 0 { offset = 0 }
 
 	if districtIDStr == "" {
 		return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id query parameter is required")
@@ -124,6 +127,16 @@ func (h *AuditHandler) ListAuditEvents(c *fiber.Ctx) error {
 	districtID, err := uuid.Parse(districtIDStr)
 	if err != nil {
 		return response.BadRequest(c, "INVALID_DISTRICT_ID", "Invalid district ID")
+	}
+
+	// G12: Validate status against known enum values
+	validAuditStatuses := map[string]bool{
+		"": true, "PENDING": true, "IN_PROGRESS": true, "AWAITING_GRA": true,
+		"GRA_CONFIRMED": true, "GRA_FAILED": true, "COMPLETED": true,
+		"DISPUTED": true, "ESCALATED": true, "CLOSED": true, "PENDING_COMPLIANCE": true,
+	}
+	if !validAuditStatuses[status] {
+		return response.BadRequest(c, "INVALID_STATUS", "Invalid status value")
 	}
 
 	events, total, err := h.auditRepo.GetByDistrict(c.Context(), districtID, status, limit, offset)
@@ -379,6 +392,23 @@ func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
 	status := c.Query("status")
 	limit := c.QueryInt("limit", 50)
 	offset := c.QueryInt("offset", 0)
+	if limit > 100 { limit = 100 }
+	if limit < 1  { limit = 1  }
+	if offset < 0 { offset = 0 }
+
+	// G12: Validate severity and status against known enum values
+	validSeverities := map[string]bool{
+		"": true, "CRITICAL": true, "HIGH": true, "MEDIUM": true, "LOW": true,
+	}
+	validFlagStatuses := map[string]bool{
+		"": true, "OPEN": true, "ACKNOWLEDGED": true, "RESOLVED": true, "FALSE_POSITIVE": true,
+	}
+	if !validSeverities[severity] {
+		return response.BadRequest(c, "INVALID_SEVERITY", "Invalid severity value")
+	}
+	if !validFlagStatuses[status] {
+		return response.BadRequest(c, "INVALID_STATUS", "Invalid status value")
+	}
 
 	flags, total, err := h.flagRepo.ListAnomalyFlags(ctx, districtID, severity, status, limit, offset)
 	if err != nil {
@@ -553,13 +583,37 @@ func (h *FieldJobHandler) ListAllJobs(c *fiber.Ctx) error {
 	status     := c.Query("status")
 	alertLevel := c.Query("alert_level")
 	districtID := c.Query("district_id")
+	limit       := c.QueryInt("limit", 50)
+	offset      := c.QueryInt("offset", 0)
+	if limit > 100 { limit = 100 }
+	if limit < 1  { limit = 1  }
+	if offset < 0 { offset = 0 }
+
+	// G12: Validate status against known field_job_status enum values
+	validJobStatuses := map[string]bool{
+		"": true, "QUEUED": true, "ASSIGNED": true, "IN_PROGRESS": true,
+		"ON_SITE": true, "COMPLETED": true, "ESCALATED": true, "SOS": true, "CANCELLED": true,
+	}
+	if !validJobStatuses[status] {
+		return response.BadRequest(c, "INVALID_STATUS", "Invalid status value")
+	}
 
 	jobs, err := h.fieldJobRepo.ListAll(c.Context(), status, alertLevel, districtID)
 	if err != nil {
 		h.logger.Error("Failed to list field jobs", zap.Error(err))
 		return response.InternalError(c, "Failed to list field jobs")
 	}
-	return response.OK(c, jobs)
+	// Apply in-memory pagination (ListAll returns all matching)
+	total := len(jobs)
+	start := offset
+	if start > total { start = total }
+	end := start + limit
+	if end > total { end = total }
+	return response.OKWithMeta(c, jobs[start:end], &response.Meta{
+		Total:    intPtr(total),
+		Page:     intPtr(offset/limit + 1),
+		PageSize: &limit,
+	})
 }
 
 // ─── CreateFieldJob ───────────────────────────────────────────────────────────

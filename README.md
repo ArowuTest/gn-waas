@@ -10,10 +10,18 @@
 | Component | Status |
 |---|---|
 | Go Services (7) | ✅ All build clean |
-| Unit + Integration Tests (32) | ✅ 32/32 pass |
-| Frontend Builds (4) | ✅ All build clean |
-| Database Migrations (6) | ✅ Sequential, idempotent |
+| Go Tests — api-gateway handler | ✅ 61/61 pass |
+| Go Tests — api-gateway repository | ✅ 12/12 pass |
+| Go Tests — sentinel reconciler | ✅ 17/17 pass |
+| Go Tests — sentinel phantom checker | ✅ 13/13 pass |
+| Go Tests — sentinel night_flow + water_balance | ✅ pass |
+| Go Tests — tariff-engine | ✅ pass |
+| Go Tests — gra-bridge (sandbox + live mode) | ✅ 14/14 pass |
+| Flutter Tests | ✅ 93/93 pass |
+| Frontend Builds (3 portals) | ✅ All build clean |
+| Database Migrations (10) | ✅ Sequential, idempotent |
 | Docker Compose | ✅ 19 services defined |
+| K8s Manifests | ✅ All 7 services + Ingress + HPA + NetworkPolicy |
 
 ---
 
@@ -264,7 +272,7 @@ VITE_KEYCLOAK_CLIENT_ID=gwl-portal
 ## Running Tests
 
 ```bash
-# All Go tests (32 tests across 4 services)
+# All Go tests (119+ tests across 4 services)
 cd backend/tariff-engine  && go test ./... -v
 cd backend/sentinel       && go test ./... -v
 cd backend/gra-bridge     && go test ./... -v

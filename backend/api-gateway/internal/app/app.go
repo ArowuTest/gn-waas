@@ -32,13 +32,31 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// ── Database ──────────────────────────────────────────────────────────────
-	db, err := pgxpool.New(ctx, cfg.Database.DSN())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create db pool: %w", err)
-	}
-	if err := db.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("database ping failed: %w", err)
+	// ── Database (with startup retry) ────────────────────────────────────────
+	// In Docker/K8s, the DB container may not be ready immediately.
+	// Retry up to 5 times with exponential backoff before giving up.
+	var db *pgxpool.Pool
+	var err error
+	for attempt := 1; attempt <= 5; attempt++ {
+		db, err = pgxpool.New(ctx, cfg.Database.DSN())
+		if err == nil {
+			if pingErr := db.Ping(ctx); pingErr == nil {
+				break
+			} else {
+				db.Close()
+				err = pingErr
+			}
+		}
+		if attempt == 5 {
+			return nil, fmt.Errorf("database not ready after 5 attempts: %w", err)
+		}
+		backoff := time.Duration(1<<uint(attempt-1)) * time.Second // 1s, 2s, 4s, 8s
+		logger.Warn("Database not ready, retrying",
+			zap.Int("attempt", attempt),
+			zap.Duration("backoff", backoff),
+			zap.Error(err),
+		)
+		time.Sleep(backoff)
 	}
 	logger.Info("Database connected", zap.String("host", cfg.Database.Host))
 
@@ -82,7 +100,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	gwlHandler       := handler.NewGWLHandler(gwlCaseRepo, logger)
 	reportHandler    := handler.NewReportHandler(gwlCaseRepo, logger)
 	adminUserHandler := handler.NewAdminUserHandler(db, logger)
-	healthHandler   := handler.NewHealthHandler()
+	healthHandler   := handler.NewHealthHandler(db)
 
 	evidenceHandler := handler.NewEvidenceHandler(evidenceStorage, logger)
 
@@ -126,6 +144,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── Health check (no auth) ────────────────────────────────────────────────
 	app.Get("/health", healthHandler.HealthCheck)
+	app.Get("/ready", healthHandler.ReadinessCheck)
 
 	// ── Mobile app config (no auth — needed before login) ────────────────────
 	// Returns field.* system_config values that control mobile app behaviour.

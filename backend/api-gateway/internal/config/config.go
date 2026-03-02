@@ -138,3 +138,49 @@ func Load() (*Config, error) {
 
 	return &cfg, nil
 }
+
+// Validate checks that all required configuration fields are present.
+// Returns an error listing all missing fields so operators can fix them
+// in one pass rather than discovering them one at a time.
+func (c *Config) Validate() error {
+	var missing []string
+
+	if c.Database.Host == "" {
+		missing = append(missing, "DB_HOST")
+	}
+	if c.Database.Name == "" {
+		missing = append(missing, "DB_NAME")
+	}
+	if c.Database.User == "" {
+		missing = append(missing, "DB_USER")
+	}
+	if c.Database.Password == "" {
+		missing = append(missing, "DB_PASSWORD")
+	}
+	if c.Keycloak.URL == "" {
+		missing = append(missing, "KEYCLOAK_URL")
+	}
+	if c.Keycloak.Realm == "" {
+		missing = append(missing, "KEYCLOAK_REALM")
+	}
+	if c.Keycloak.ClientID == "" {
+		missing = append(missing, "KEYCLOAK_CLIENT_ID")
+	}
+	// In production, MinIO must be configured for evidence storage
+	if c.App.Env == "production" {
+		if c.MinIO.Endpoint == "" {
+			missing = append(missing, "MINIO_ENDPOINT")
+		}
+		if c.MinIO.AccessKey == "" {
+			missing = append(missing, "MINIO_ACCESS_KEY")
+		}
+		if c.MinIO.SecretKey == "" {
+			missing = append(missing, "MINIO_SECRET_KEY")
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}

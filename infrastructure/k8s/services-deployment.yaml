@@ -1,0 +1,406 @@
+# GN-WAAS — Kubernetes Deployments for all backend microservices
+# Covers: tariff-engine, gra-bridge, ocr-service, cdc-ingestor, meter-ingestor
+# (api-gateway and sentinel are in their own files)
+#
+# All services:
+#   - Use envFrom to pull config from ConfigMap + Secrets
+#   - Have liveness (/health) and readiness (/ready) probes
+#   - Have resource requests/limits sized for production
+#   - Run 2 replicas minimum for HA
+#   - Use RollingUpdate strategy with maxUnavailable=0
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# TARIFF ENGINE
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tariff-engine
+  namespace: gnwaas
+  labels:
+    app: tariff-engine
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tariff-engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: tariff-engine
+    spec:
+      containers:
+        - name: tariff-engine
+          image: ghcr.io/arowtest/gn-waas/tariff-engine:latest
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: gnwaas-config
+            - secretRef:
+                name: gnwaas-secrets
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tariff-engine-service
+  namespace: gnwaas
+spec:
+  selector:
+    app: tariff-engine
+  ports:
+    - port: 3001
+      targetPort: 3001
+  type: ClusterIP
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# GRA BRIDGE
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gra-bridge
+  namespace: gnwaas
+  labels:
+    app: gra-bridge
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gra-bridge
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: gra-bridge
+    spec:
+      containers:
+        - name: gra-bridge
+          image: ghcr.io/arowtest/gn-waas/gra-bridge:latest
+          ports:
+            - containerPort: 3003
+          envFrom:
+            - configMapRef:
+                name: gnwaas-config
+            - secretRef:
+                name: gnwaas-secrets
+          env:
+            - name: GRA_SANDBOX_MODE
+              value: "${GRA_SANDBOX_MODE:-false}"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3003
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gra-bridge-service
+  namespace: gnwaas
+spec:
+  selector:
+    app: gra-bridge
+  ports:
+    - port: 3003
+      targetPort: 3003
+  type: ClusterIP
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# OCR SERVICE
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ocr-service
+  namespace: gnwaas
+  labels:
+    app: ocr-service
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ocr-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: ocr-service
+    spec:
+      containers:
+        - name: ocr-service
+          image: ghcr.io/arowtest/gn-waas/ocr-service:latest
+          ports:
+            - containerPort: 3005
+          envFrom:
+            - configMapRef:
+                name: gnwaas-config
+            - secretRef:
+                name: gnwaas-secrets
+          resources:
+            requests:
+              memory: "256Mi"   # Tesseract OCR is memory-intensive
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ocr-service-service
+  namespace: gnwaas
+spec:
+  selector:
+    app: ocr-service
+  ports:
+    - port: 3005
+      targetPort: 3005
+  type: ClusterIP
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# CDC INGESTOR
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cdc-ingestor
+  namespace: gnwaas
+  labels:
+    app: cdc-ingestor
+    tier: backend
+spec:
+  replicas: 1   # Single replica — CDC must not run in parallel to avoid duplicate events
+  selector:
+    matchLabels:
+      app: cdc-ingestor
+  strategy:
+    type: Recreate   # Recreate (not RollingUpdate) to prevent dual-write
+  template:
+    metadata:
+      labels:
+        app: cdc-ingestor
+    spec:
+      containers:
+        - name: cdc-ingestor
+          image: ghcr.io/arowtest/gn-waas/cdc-ingestor:latest
+          ports:
+            - containerPort: 3004
+          envFrom:
+            - configMapRef:
+                name: gnwaas-config
+            - secretRef:
+                name: gnwaas-secrets
+          env:
+            - name: GWL_DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: gnwaas-secrets
+                  key: GWL_DB_HOST
+                  optional: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3004
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3004
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cdc-ingestor-service
+  namespace: gnwaas
+spec:
+  selector:
+    app: cdc-ingestor
+  ports:
+    - port: 3004
+      targetPort: 3004
+  type: ClusterIP
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# METER INGESTOR (gRPC)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meter-ingestor
+  namespace: gnwaas
+  labels:
+    app: meter-ingestor
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: meter-ingestor
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: meter-ingestor
+    spec:
+      containers:
+        - name: meter-ingestor
+          image: ghcr.io/arowtest/gn-waas/meter-ingestor:latest
+          ports:
+            - containerPort: 50051   # gRPC
+            - containerPort: 3006    # HTTP health
+          envFrom:
+            - configMapRef:
+                name: gnwaas-config
+            - secretRef:
+                name: gnwaas-secrets
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3006
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3006
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meter-ingestor-service
+  namespace: gnwaas
+spec:
+  selector:
+    app: meter-ingestor
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+    - name: http
+      port: 3006
+      targetPort: 3006
+  type: ClusterIP

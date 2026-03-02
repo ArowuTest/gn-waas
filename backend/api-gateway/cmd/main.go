@@ -36,6 +36,9 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to load config", zap.Error(err))
 	}
+	if err := cfg.Validate(); err != nil {
+		logger.Fatal("Invalid configuration", zap.Error(err))
+	}
 
 	// Application
 	application, err := app.New(cfg, logger)

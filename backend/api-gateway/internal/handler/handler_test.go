@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -15,6 +16,11 @@ import (
 )
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// mockDBPinger implements the Ping interface for testing
+type mockDBPinger struct{}
+func (m *mockDBPinger) Ping(_ context.Context) error { return nil }
+
 
 func newTestApp() *fiber.App {
 	app := fiber.New(fiber.Config{
@@ -56,7 +62,7 @@ func readJSON(t *testing.T, resp *http.Response) map[string]interface{} {
 
 func TestHealthHandler_Returns200(t *testing.T) {
 	app := newTestApp()
-	h := handler.NewHealthHandler()
+	h := handler.NewHealthHandler(&mockDBPinger{})
 	app.Get("/health", h.HealthCheck)
 
 	resp := doRequest(t, app, "GET", "/health", nil)
@@ -72,14 +78,14 @@ func TestHealthHandler_Returns200(t *testing.T) {
 	if data["service"] != "api-gateway" {
 		t.Errorf("Expected service=api-gateway, got %v", data["service"])
 	}
-	if data["status"] != "healthy" {
-		t.Errorf("Expected status=healthy, got %v", data["status"])
+	if data["status"] != "alive" {
+		t.Errorf("Expected status=alive, got %v", data["status"])
 	}
 }
 
 func TestHealthHandler_ResponseStructure(t *testing.T) {
 	app := newTestApp()
-	h := handler.NewHealthHandler()
+	h := handler.NewHealthHandler(&mockDBPinger{})
 	app.Get("/health", h.HealthCheck)
 
 	resp := doRequest(t, app, "GET", "/health", nil)
@@ -210,7 +216,7 @@ func TestDistrictHandler_UpdateDistrict_InvalidUUID(t *testing.T) {
 
 func TestHealthHandler_ContentTypeJSON(t *testing.T) {
 	app := newTestApp()
-	h := handler.NewHealthHandler()
+	h := handler.NewHealthHandler(&mockDBPinger{})
 	app.Get("/health", h.HealthCheck)
 
 	resp := doRequest(t, app, "GET", "/health", nil)
@@ -226,7 +232,7 @@ func TestHealthHandler_ContentTypeJSON(t *testing.T) {
 
 func TestHealthHandler_Version(t *testing.T) {
 	app := newTestApp()
-	h := handler.NewHealthHandler()
+	h := handler.NewHealthHandler(&mockDBPinger{})
 	app.Get("/health", h.HealthCheck)
 
 	resp := doRequest(t, app, "GET", "/health", nil)

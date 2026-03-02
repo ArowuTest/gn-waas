@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
-	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -19,6 +22,27 @@ type DistrictHandler struct {
 
 func NewDistrictHandler(districtRepo *repository.DistrictRepository, logger *zap.Logger) *DistrictHandler {
 	return &DistrictHandler{districtRepo: districtRepo, logger: logger}
+}
+
+// logAdminAction writes an entry to the audit_trail table for compliance.
+// Non-fatal: if the write fails, the action is still completed but the
+// failure is logged for investigation.
+func (h *DistrictHandler) logAdminAction(ctx context.Context, actorID, entityType, entityID, action string, oldVal, newVal interface{}) {
+	oldJSON, _ := json.Marshal(oldVal)
+	newJSON, _ := json.Marshal(newVal)
+	_, err := h.districtRepo.DB().Exec(ctx, `
+		INSERT INTO audit_trail (entity_type, entity_id, action, changed_by, old_values, new_values)
+		VALUES ($1, $2, $3, $4::uuid, $5, $6)`,
+		entityType, entityID, action, actorID, string(oldJSON), string(newJSON),
+	)
+	if err != nil {
+		h.logger.Warn("Failed to write audit trail",
+			zap.String("entity_type", entityType),
+			zap.String("entity_id", entityID),
+			zap.String("action", action),
+			zap.Error(err),
+		)
+	}
 }
 
 // ListDistricts godoc
@@ -143,17 +167,45 @@ func (h *SystemConfigHandler) UpdateConfig(c *fiber.Ctx) error {
 	return response.OK(c, fiber.Map{"message": "Config updated", "key": key, "value": req.Value})
 }
 
-// HealthHandler handles health check requests
-type HealthHandler struct{}
+// HealthHandler handles health check and readiness requests
+type HealthHandler struct {
+	db interface{ Ping(context.Context) error }
+}
 
-func NewHealthHandler() *HealthHandler { return &HealthHandler{} }
+func NewHealthHandler(db interface{ Ping(context.Context) error }) *HealthHandler {
+	return &HealthHandler{db: db}
+}
 
-// HealthCheck godoc
+// HealthCheck is the liveness probe — returns 200 if the process is alive.
+// K8s liveness probe: if this fails, the pod is restarted.
 // GET /health
 func (h *HealthHandler) HealthCheck(c *fiber.Ctx) error {
 	return response.OK(c, fiber.Map{
 		"service": "api-gateway",
-		"status":  "healthy",
+		"status":  "alive",
+		"version": "1.0.0",
+	})
+}
+
+// ReadinessCheck is the readiness probe — returns 200 only if the service
+// can handle traffic (DB is reachable). K8s readiness probe: if this fails,
+// the pod is removed from the load balancer until it recovers.
+// GET /ready
+func (h *HealthHandler) ReadinessCheck(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
+	defer cancel()
+
+	if err := h.db.Ping(ctx); err != nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"service": "api-gateway",
+			"status":  "not_ready",
+			"reason":  "database_unreachable",
+		})
+	}
+
+	return response.OK(c, fiber.Map{
+		"service": "api-gateway",
+		"status":  "ready",
 		"version": "1.0.0",
 	})
 }
