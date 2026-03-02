@@ -405,6 +405,14 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("FIELD_OFFICER"),
 		fieldJobHandler.TriggerSOS,
 	)
+	// FIO-004: Illegal connection reporting — field officers submit evidence
+	// of unauthorised water connections with GPS-locked location and SHA-256
+	// hashed photo evidence.  Route must appear BEFORE /:id/* to avoid
+	// the "illegal-connections" segment being parsed as a job UUID.
+	fieldJobs.Post("/illegal-connections",
+		middleware.RequireRoles("FIELD_OFFICER"),
+		fieldJobHandler.ReportIllegalConnection,
+	)
 
 	// ── NRW Reports ───────────────────────────────────────────────────────────
 	// Anomaly flags

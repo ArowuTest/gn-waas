@@ -14,6 +14,7 @@ import UserManagementPage from './pages/UserManagementPage'
 import DistrictConfigPage from './pages/DistrictConfigPage'
 import AuditThresholdsPage from './pages/AuditThresholdsPage'
 import { GRACompliancePage } from './pages/GRACompliancePage'
+import DMAMapPage from './pages/DMAMapPage'
 import { ReportsPage } from './pages/ReportsPage'
 import type { ReactNode } from 'react'
 
@@ -65,6 +66,7 @@ function AppRoutes() {
         <Route path="audits" element={<AuditsPage />} />
         <Route path="nrw" element={<NRWAnalysisPage />} />
         <Route path="field-jobs" element={<FieldJobsPage />} />
+        <Route path="dma-map" element={<DMAMapPage />} />
         <Route path="mobile-app" element={<MobileAppPage />} />
         <Route path="gra" element={<GRACompliancePage />} />
         <Route path="reports" element={<ReportsPage />} />

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import api from '../utils/api'
+import api from '../lib/api-client'
 
 // Leaflet is loaded dynamically to avoid SSR issues with Vite
 // The CSS must be imported for map tiles to render correctly

@@ -1,0 +1,119 @@
+# Prometheus configuration for GN-WAAS
+# Scrapes metrics from all seven Go microservices and infrastructure components.
+# Alert rules are loaded from alert_rules.yml.
+
+global:
+  scrape_interval:     15s   # How often to scrape targets
+  evaluation_interval: 15s   # How often to evaluate alert rules
+  scrape_timeout:      10s
+
+  # Labels added to all time series and alerts produced by this Prometheus instance
+  external_labels:
+    environment: '${APP_ENV:-development}'
+    system: 'gn-waas'
+    region: 'ghana'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load alert rules
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+
+# ── Scrape configurations ─────────────────────────────────────────────────────
+scrape_configs:
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ── Go microservices ─────────────────────────────────────────────────────────
+  # Each service exposes /metrics on its internal port via the Prometheus
+  # middleware registered in app.go (github.com/ansrivas/fiberprometheus/v2).
+
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:3000']
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: api-gateway
+
+  - job_name: 'sentinel'
+    static_configs:
+      - targets: ['sentinel:8081']
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: sentinel
+
+  - job_name: 'tariff-engine'
+    static_configs:
+      - targets: ['tariff-engine:8082']
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: tariff-engine
+
+  - job_name: 'gra-bridge'
+    static_configs:
+      - targets: ['gra-bridge:8083']
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: gra-bridge
+
+  - job_name: 'ocr-service'
+    static_configs:
+      - targets: ['ocr-service:8084']
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: ocr-service
+
+  - job_name: 'cdc-ingestor'
+    static_configs:
+      - targets: ['cdc-ingestor:8085']
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: cdc-ingestor
+
+  - job_name: 'meter-ingestor'
+    static_configs:
+      - targets: ['meter-ingestor:8086']
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: meter-ingestor
+
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: postgres
+
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['nats:8222']
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: nats

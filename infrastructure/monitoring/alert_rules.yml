@@ -1,0 +1,225 @@
+# GN-WAAS Prometheus Alert Rules
+# ─────────────────────────────────────────────────────────────────────────────
+# These rules fire alerts for security-critical and operational events.
+# All alerts route through Alertmanager (alertmanager.yml) to the ops team.
+#
+# Severity levels:
+#   critical  — immediate action required; pages on-call engineer
+#   warning   — investigate within 1 hour
+#   info      — informational; review during business hours
+
+groups:
+
+  # ── RLS Security Alerts ────────────────────────────────────────────────────
+  # The rls.Middleware uses a fail-open strategy: if the RLS transaction cannot
+  # be started (e.g. pool exhaustion), it logs a warning and allows the request
+  # to proceed WITHOUT RLS enforcement.  This is a security degradation event
+  # that MUST be alerted on immediately.
+  - name: rls_security
+    interval: 30s
+    rules:
+
+      # Fires when any RLS transaction failure is logged.
+      # Even a single occurrence in a compliance system is unacceptable.
+      - alert: RLSTransactionFailure
+        expr: |
+          increase(gnwaas_log_lines_total{
+            service="api-gateway",
+            level="warn",
+            message=~".*RLS middleware.*failed to begin RLS transaction.*"
+          }[5m]) > 0
+        for: 0m   # Fire immediately — no grace period for security events
+        labels:
+          severity: critical
+          team: security
+          compliance: rls
+        annotations:
+          summary: "RLS enforcement bypassed on {{ $labels.service }}"
+          description: |
+            The RLS middleware on {{ $labels.service }} failed to begin an
+            RLS-activated transaction.  {{ $value }} request(s) in the last
+            5 minutes were served WITHOUT Row-Level Security enforcement.
+            This means district-level data isolation was NOT enforced for
+            those requests.
+
+            Immediate action required:
+            1. Check PostgreSQL connection pool utilisation.
+            2. Review api-gateway logs for the full error context.
+            3. If pool exhaustion: scale up api-gateway replicas or increase
+               pool size (DB_POOL_MAX_CONNS environment variable).
+            4. Confirm no data was leaked across district boundaries.
+
+            Log query: grep "RLS middleware: failed to begin RLS transaction"
+          runbook: https://wiki.gnwaas.gh/runbooks/rls-degradation
+
+      # Fires when the RLS failure rate exceeds 1% of requests over 10 minutes.
+      # This indicates a systemic problem rather than a transient spike.
+      - alert: RLSHighFailureRate
+        expr: |
+          (
+            rate(gnwaas_log_lines_total{
+              service="api-gateway",
+              level="warn",
+              message=~".*RLS middleware.*failed.*"
+            }[10m])
+            /
+            rate(http_requests_total{service="api-gateway"}[10m])
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: security
+          compliance: rls
+        annotations:
+          summary: "RLS failure rate above 1% on {{ $labels.service }}"
+          description: |
+            More than 1% of API requests on {{ $labels.service }} are failing
+            RLS transaction setup.  Current rate: {{ $value | humanizePercentage }}.
+            This is a systemic security degradation requiring immediate investigation.
+          runbook: https://wiki.gnwaas.gh/runbooks/rls-degradation
+
+  # ── Service Health Alerts ──────────────────────────────────────────────────
+  - name: service_health
+    interval: 30s
+    rules:
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "Service {{ $labels.service }} is down"
+          description: |
+            Prometheus cannot scrape metrics from {{ $labels.service }}
+            ({{ $labels.instance }}).  The service has been unreachable for
+            more than 1 minute.
+          runbook: https://wiki.gnwaas.gh/runbooks/service-down
+
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m])
+          /
+          rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} is returning 5xx errors for more than 5% of
+            requests.  Current rate: {{ $value | humanizePercentage }}.
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "High p95 latency on {{ $labels.service }}"
+          description: |
+            p95 request latency on {{ $labels.service }} exceeds 2 seconds.
+            Current p95: {{ $value | humanizeDuration }}.
+
+  # ── Database Alerts ────────────────────────────────────────────────────────
+  - name: database
+    interval: 30s
+    rules:
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "PostgreSQL is unreachable"
+          description: |
+            The PostgreSQL / TimescaleDB instance is not responding to the
+            postgres-exporter health check.  All GN-WAAS services will be
+            unable to process requests.
+
+      - alert: PostgresHighConnections
+        expr: |
+          pg_stat_database_numbackends{datname="gnwaas"}
+          /
+          pg_settings_max_connections > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "PostgreSQL connection pool above 80%"
+          description: |
+            PostgreSQL is using {{ $value | humanizePercentage }} of its
+            maximum connections.  This may cause RLS transaction failures
+            (see RLSTransactionFailure alert).
+
+      - alert: PostgresReplicationLag
+        expr: pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "PostgreSQL replication lag above 30 seconds"
+          description: |
+            Replication lag is {{ $value | humanizeDuration }}.  Read replicas
+            may serve stale data.
+
+  # ── Sentinel / Fraud Detection Alerts ─────────────────────────────────────
+  - name: sentinel
+    interval: 60s
+    rules:
+
+      - alert: SentinelScanFailed
+        expr: |
+          increase(gnwaas_sentinel_scan_errors_total[30m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Sentinel district scan failing repeatedly"
+          description: |
+            The sentinel service has failed {{ $value }} district scans in the
+            last 30 minutes.  Anomaly detection and fraud alerts may be delayed.
+
+      - alert: NightFlowScanMissed
+        expr: |
+          time() - gnwaas_sentinel_last_night_flow_scan_timestamp > 86400
+        for: 0m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Night-flow scan has not run in 24 hours"
+          description: |
+            The nightly 2–4 AM water balance scan has not completed in the
+            last 24 hours.  Leak and theft detection will be delayed.
+
+  # ── GRA Compliance Alerts ──────────────────────────────────────────────────
+  - name: gra_compliance
+    interval: 60s
+    rules:
+
+      - alert: GRABridgeHighFailureRate
+        expr: |
+          rate(gnwaas_gra_submission_errors_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: compliance
+        annotations:
+          summary: "GRA E-VAT submission failures above threshold"
+          description: |
+            The GRA bridge is failing to submit VAT receipts at a rate of
+            {{ $value | humanize }} errors/second.  Audit events may not be
+            GRA-confirmed, violating compliance requirements.
+          runbook: https://wiki.gnwaas.gh/runbooks/gra-bridge-failures

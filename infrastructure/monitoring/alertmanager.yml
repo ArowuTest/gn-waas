@@ -1,0 +1,137 @@
+# Alertmanager configuration for GN-WAAS
+# Routes alerts to the appropriate teams via email and Slack.
+# Critical RLS security alerts are routed to the security team with
+# a 0-second group_wait to ensure immediate notification.
+
+global:
+  # SMTP configuration for email alerts
+  smtp_smarthost: '${SMTP_HOST:-smtp.gmail.com}:587'
+  smtp_from: '${SMTP_FROM:-gnwaas-alerts@example.com}'
+  smtp_auth_username: '${SMTP_USERNAME}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: true
+
+  # Default resolve timeout
+  resolve_timeout: 5m
+
+# ── Routing tree ──────────────────────────────────────────────────────────────
+route:
+  # Default receiver for unmatched alerts
+  receiver: 'ops-email'
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  routes:
+    # Critical RLS security alerts — immediate notification, no grouping delay
+    - match:
+        compliance: rls
+      receiver: 'security-critical'
+      group_wait: 0s          # Fire immediately — no grace period
+      group_interval: 1m
+      repeat_interval: 30m    # Re-alert every 30 min until resolved
+      continue: true          # Also send to default receiver
+
+    # Critical severity — page on-call
+    - match:
+        severity: critical
+      receiver: 'oncall-pagerduty'
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # GRA compliance alerts — compliance team
+    - match:
+        team: compliance
+      receiver: 'compliance-email'
+      group_wait: 30s
+      repeat_interval: 2h
+
+    # Warning severity — Slack notification
+    - match:
+        severity: warning
+      receiver: 'ops-slack'
+      group_wait: 1m
+      repeat_interval: 4h
+
+# ── Inhibition rules ─────────────────────────────────────────────────────────
+# Suppress lower-severity alerts when a higher-severity alert is already firing
+# for the same service.
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['service']
+
+# ── Receivers ─────────────────────────────────────────────────────────────────
+receivers:
+
+  - name: 'security-critical'
+    email_configs:
+      - to: '${SECURITY_ALERT_EMAIL:-security@example.com}'
+        subject: '[CRITICAL SECURITY] GN-WAAS RLS Degradation — {{ .GroupLabels.alertname }}'
+        body: |
+          CRITICAL SECURITY ALERT — GN-WAAS Row-Level Security Degradation
+
+          Alert: {{ .GroupLabels.alertname }}
+          Severity: {{ .CommonLabels.severity }}
+          Time: {{ .CommonAnnotations.summary }}
+
+          {{ range .Alerts }}
+          Description:
+          {{ .Annotations.description }}
+
+          Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+          Runbook: {{ .Annotations.runbook }}
+          {{ end }}
+
+          This alert indicates that district-level data isolation may have been
+          compromised.  Immediate investigation is required.
+        send_resolved: true
+    slack_configs:
+      - api_url: '${SLACK_SECURITY_WEBHOOK_URL:-https://hooks.slack.com/services/PLACEHOLDER}'
+        channel: '#gnwaas-security-alerts'
+        title: '🚨 CRITICAL: RLS Security Degradation'
+        text: |
+          *{{ .GroupLabels.alertname }}*
+          {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        color: 'danger'
+        send_resolved: true
+
+  - name: 'oncall-pagerduty'
+    email_configs:
+      - to: '${ONCALL_EMAIL:-oncall@example.com}'
+        subject: '[CRITICAL] GN-WAAS Alert — {{ .GroupLabels.alertname }}'
+        send_resolved: true
+    slack_configs:
+      - api_url: '${SLACK_OPS_WEBHOOK_URL:-https://hooks.slack.com/services/PLACEHOLDER}'
+        channel: '#gnwaas-ops-critical'
+        title: '🔴 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        color: 'danger'
+        send_resolved: true
+
+  - name: 'compliance-email'
+    email_configs:
+      - to: '${COMPLIANCE_EMAIL:-compliance@example.com}'
+        subject: '[GRA COMPLIANCE] GN-WAAS Alert — {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+  - name: 'ops-slack'
+    slack_configs:
+      - api_url: '${SLACK_OPS_WEBHOOK_URL:-https://hooks.slack.com/services/PLACEHOLDER}'
+        channel: '#gnwaas-ops'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.description }}{{ end }}
+        color: 'warning'
+        send_resolved: true
+
+  - name: 'ops-email'
+    email_configs:
+      - to: '${OPS_EMAIL:-ops@example.com}'
+        subject: '[GN-WAAS] Alert — {{ .GroupLabels.alertname }}'
+        send_resolved: true

@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, AlertTriangle, ClipboardList, Users,
   MapPin, Settings, LogOut, Droplets, BarChart3,
-  FileText, Shield, ChevronDown, Smartphone
+  FileText, Shield, ChevronDown, Smartphone, Map
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { cn } from '../../lib/utils'
@@ -36,6 +36,12 @@ const navItems: NavItem[] = [
     label: 'Field Jobs',
     to: '/field-jobs',
     icon: <MapPin size={18} />,
+  },
+  {
+    label: 'DMA Map',
+    to: '/dma-map',
+    icon: <Map size={18} />,
+    roles: ['SYSTEM_ADMIN', 'NATIONAL_REGULATOR', 'GWL_MANAGER'],
   },
   {
     label: 'Mobile App',
