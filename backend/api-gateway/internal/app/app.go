@@ -405,6 +405,14 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("FIELD_OFFICER"),
 		fieldJobHandler.TriggerSOS,
 	)
+	// Core field-officer workflow: submit completed meter reading evidence.
+	// Flutter's MeterCaptureScreen calls POST /field-jobs/:id/submit after
+	// capturing photos, computing SHA-256 hashes, and uploading to MinIO.
+	// The handler verifies hashes, updates job status, and writes the audit record.
+	fieldJobs.Post("/:id/submit",
+		middleware.RequireRoles("FIELD_OFFICER"),
+		fieldJobHandler.SubmitJobEvidence,
+	)
 	// FIO-004: Illegal connection reporting — field officers submit evidence
 	// of unauthorised water connections with GPS-locked location and SHA-256
 	// hashed photo evidence.  Route must appear BEFORE /:id/* to avoid
@@ -448,7 +456,17 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	evidence.Post("/upload-url", evidenceHandler.GetUploadURL)
 	evidence.Post("/verify-hash", evidenceHandler.VerifyPhotoHash)
 	// Wildcard route for nested object keys: GET /evidence/evidence/jobid/ts_file.jpg/url
-	api.Get("/evidence/*", evidenceHandler.GetDownloadURL)
+	// M2 fix: restrict download URL generation to roles that legitimately need
+	// to view evidence (supervisors, managers, admins).  Field officers upload
+	// evidence but do not need to generate download links for arbitrary objects.
+	// This enforces least-privilege and prevents cross-district evidence access.
+	api.Get("/evidence/*",
+		middleware.RequireRoles(
+			"SYSTEM_ADMIN", "NATIONAL_REGULATOR",
+			"FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE",
+		),
+		evidenceHandler.GetDownloadURL,
+	)
 
 	reports := api.Group("/reports")
 	reports.Get("/nrw", nrwHandler.GetNRWSummary)
