@@ -54,20 +54,23 @@ CREATE INDEX IF NOT EXISTS idx_illegal_connections_location
 --    Stores scheduled supply windows per district so the
 --    sentinel can detect off-schedule consumption.
 -- ─────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS supply_schedules (
-    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    district_id     UUID        NOT NULL REFERENCES districts(id) ON DELETE CASCADE,
-    day_of_week     SMALLINT    NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Sunday
-    start_hour      SMALLINT    NOT NULL CHECK (start_hour BETWEEN 0 AND 23),
-    end_hour        SMALLINT    NOT NULL CHECK (end_hour BETWEEN 1 AND 24),
-    is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
-    notes           TEXT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (district_id, day_of_week, start_hour)
-);
+-- supply_schedules already created in migration 002 with a different schema.
+-- Add the missing columns needed by the supply_validator service.
+ALTER TABLE supply_schedules
+    ADD COLUMN IF NOT EXISTS day_of_week  SMALLINT CHECK (day_of_week BETWEEN 0 AND 6),
+    ADD COLUMN IF NOT EXISTS start_hour   SMALLINT CHECK (start_hour BETWEEN 0 AND 23),
+    ADD COLUMN IF NOT EXISTS end_hour     SMALLINT CHECK (end_hour BETWEEN 1 AND 24),
+    ADD COLUMN IF NOT EXISTS is_active    BOOLEAN  NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-CREATE INDEX IF NOT EXISTS idx_supply_schedules_district
+-- Add unique constraint only if it doesn't already exist
+DO $$ BEGIN
+  ALTER TABLE supply_schedules ADD CONSTRAINT supply_schedules_district_day_hour_unique
+      UNIQUE (district_id, day_of_week, start_hour);
+EXCEPTION WHEN duplicate_table THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_supply_schedules_district_day
     ON supply_schedules (district_id, day_of_week);
 
 -- ─────────────────────────────────────────────────────────────

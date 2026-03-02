@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS audit_trail (
     new_values      JSONB,
     ip_address      INET,
     user_agent      TEXT,
-    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    changed_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
 -- Indexes for fast lookups
@@ -31,7 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_trail_entity
 CREATE INDEX IF NOT EXISTS idx_audit_trail_actor
     ON audit_trail (changed_by);
 CREATE INDEX IF NOT EXISTS idx_audit_trail_created
-    ON audit_trail (created_at DESC);
+    ON audit_trail (changed_at DESC);
 
 -- ─────────────────────────────────────────────────────────────
 -- 2. Immutability trigger function

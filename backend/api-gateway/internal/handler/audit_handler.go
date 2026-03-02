@@ -457,8 +457,9 @@ func (h *AnomalyFlagHandler) GetDistrictSummary(c *fiber.Ctx) error {
 	}
 	summary := map[string]int{"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
 	for _, f := range flags {
-		if f.AlertLevel != nil {
-			summary[*f.AlertLevel]++
+		// APP-3 fix: AlertLevel is now a string (not pointer)
+		if f.AlertLevel != "" {
+			summary[f.AlertLevel]++
 		}
 	}
 	return response.OK(c, fiber.Map{

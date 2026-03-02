@@ -11,24 +11,29 @@ import (
 	"go.uber.org/zap"
 )
 
-// AnomalyFlag represents a sentinel-detected billing anomaly
+// AnomalyFlag represents a sentinel-detected billing anomaly.
+// Field names match the anomaly_flags table schema (migration 004).
 type AnomalyFlag struct {
 	ID                  uuid.UUID  `json:"id"`
 	DistrictID          uuid.UUID  `json:"district_id"`
 	AccountID           *uuid.UUID `json:"account_id,omitempty"`
-	FlagType            string     `json:"flag_type"`
-	Severity            string     `json:"severity"`
-	Status              string     `json:"status"`
-	GWLStatus           *string    `json:"gwl_status,omitempty"`
-	EstimatedLossGHS    float64    `json:"estimated_loss_ghs"`
-	ConfirmedLossGHS    *float64   `json:"confirmed_loss_ghs,omitempty"`
-	RecoveredGHS        *float64   `json:"recovered_ghs,omitempty"`
-	AlertLevel          *string    `json:"alert_level,omitempty"`
-	AnomalyType         *string    `json:"anomaly_type,omitempty"`
+	// APP-3 fix: DB column is anomaly_type, not flag_type
+	AnomalyType         string     `json:"anomaly_type"`
+	// APP-3 fix: DB column is alert_level, not severity
+	AlertLevel          string     `json:"alert_level"`
+	FraudType           *string    `json:"fraud_type,omitempty"`
+	Title               string     `json:"title"`
 	Description         string     `json:"description"`
-	DetectedAt          time.Time  `json:"detected_at"`
+	EstimatedLossGHS    *float64   `json:"estimated_loss_ghs,omitempty"`
+	Status              string     `json:"status"`
+	AssignedTo          *uuid.UUID `json:"assigned_to,omitempty"`
 	ResolvedAt          *time.Time `json:"resolved_at,omitempty"`
+	ResolutionNotes     *string    `json:"resolution_notes,omitempty"`
+	FalsePositive       *bool      `json:"false_positive,omitempty"`
+	ConfirmedFraud      *bool      `json:"confirmed_fraud,omitempty"`
+	RecoveredAmountGHS  *float64   `json:"recovered_amount_ghs,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 // AnomalyFlagRepository handles anomaly flag queries
@@ -52,6 +57,27 @@ func (r *AnomalyFlagRepository) q(ctx context.Context) Querier {
 	return r.db
 }
 
+// selectCols is the canonical SELECT column list matching the AnomalyFlag struct.
+// APP-3 fix: uses anomaly_type and alert_level (actual DB column names).
+const anomalyFlagSelectCols = `
+	id, district_id, account_id, anomaly_type, alert_level, fraud_type,
+	title, description, estimated_loss_ghs, status, assigned_to,
+	resolved_at, resolution_notes, false_positive, confirmed_fraud,
+	recovered_amount_ghs, created_at, updated_at`
+
+func scanAnomalyFlag(row interface {
+	Scan(dest ...any) error
+}) (AnomalyFlag, error) {
+	var f AnomalyFlag
+	err := row.Scan(
+		&f.ID, &f.DistrictID, &f.AccountID, &f.AnomalyType, &f.AlertLevel, &f.FraudType,
+		&f.Title, &f.Description, &f.EstimatedLossGHS, &f.Status, &f.AssignedTo,
+		&f.ResolvedAt, &f.ResolutionNotes, &f.FalsePositive, &f.ConfirmedFraud,
+		&f.RecoveredAmountGHS, &f.CreatedAt, &f.UpdatedAt,
+	)
+	return f, err
+}
+
 // ListAnomalyFlags returns anomaly flags, optionally filtered by district
 func (r *AnomalyFlagRepository) ListAnomalyFlags(
 	ctx context.Context,
@@ -73,8 +99,9 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 		args = append(args, *districtID)
 		argIdx++
 	}
+	// APP-3 fix: filter on alert_level (was severity)
 	if severity != "" {
-		where += " AND severity = $" + itoa(argIdx)
+		where += " AND alert_level = $" + itoa(argIdx)
 		args = append(args, severity)
 		argIdx++
 	}
@@ -91,13 +118,10 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 	}
 
 	args = append(args, limit, offset)
-	dataSQL := `
-		SELECT id, district_id, account_id, flag_type, severity, status,
-		       gwl_status, estimated_loss_ghs, confirmed_loss_ghs, recovered_ghs,
-		       description, detected_at, resolved_at, created_at
+	dataSQL := `SELECT ` + anomalyFlagSelectCols + `
 		FROM anomaly_flags
 		` + where + `
-		ORDER BY detected_at DESC
+		ORDER BY created_at DESC
 		LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
 
 	rows, err := r.q(ctx).Query(ctx, dataSQL, args...)
@@ -108,12 +132,8 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 
 	var flags []AnomalyFlag
 	for rows.Next() {
-		var f AnomalyFlag
-		if err := rows.Scan(
-			&f.ID, &f.DistrictID, &f.AccountID, &f.FlagType, &f.Severity, &f.Status,
-			&f.GWLStatus, &f.EstimatedLossGHS, &f.ConfirmedLossGHS, &f.RecoveredGHS,
-			&f.Description, &f.DetectedAt, &f.ResolvedAt, &f.CreatedAt,
-		); err != nil {
+		f, err := scanAnomalyFlag(rows)
+		if err != nil {
 			r.logger.Error("scan anomaly flag", zap.Error(err))
 			continue
 		}
@@ -124,17 +144,9 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 
 // GetByID returns a single anomaly flag by ID
 func (r *AnomalyFlagRepository) GetByID(ctx context.Context, id uuid.UUID) (*AnomalyFlag, error) {
-	var f AnomalyFlag
-	err := r.q(ctx).QueryRow(ctx, `
-		SELECT id, district_id, account_id, flag_type, severity, status,
-		       gwl_status, estimated_loss_ghs, confirmed_loss_ghs, recovered_ghs,
-		       description, detected_at, resolved_at, created_at
-		FROM anomaly_flags WHERE id = $1`, id,
-	).Scan(
-		&f.ID, &f.DistrictID, &f.AccountID, &f.FlagType, &f.Severity, &f.Status,
-		&f.GWLStatus, &f.EstimatedLossGHS, &f.ConfirmedLossGHS, &f.RecoveredGHS,
-		&f.Description, &f.DetectedAt, &f.ResolvedAt, &f.CreatedAt,
-	)
+	row := r.q(ctx).QueryRow(ctx,
+		`SELECT `+anomalyFlagSelectCols+` FROM anomaly_flags WHERE id = $1`, id)
+	f, err := scanAnomalyFlag(row)
 	if err != nil {
 		return nil, err
 	}
@@ -171,8 +183,9 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 		args = append(args, *districtID)
 		argIdx++
 	}
+	// APP-3 fix: filter on alert_level (was severity)
 	if severity != "" {
-		where += " AND severity = $" + itoa(argIdx)
+		where += " AND alert_level = $" + itoa(argIdx)
 		args = append(args, severity)
 		argIdx++
 	}
@@ -189,13 +202,10 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 	}
 
 	args = append(args, limit, offset)
-	dataSQL := `
-		SELECT id, district_id, account_id, flag_type, severity, status,
-		       gwl_status, estimated_loss_ghs, confirmed_loss_ghs, recovered_ghs,
-		       description, detected_at, resolved_at, created_at
+	dataSQL := `SELECT ` + anomalyFlagSelectCols + `
 		FROM anomaly_flags
 		` + where + `
-		ORDER BY detected_at DESC
+		ORDER BY created_at DESC
 		LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
 
 	rows, err := q.Query(ctx, dataSQL, args...)
@@ -206,12 +216,8 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 
 	var flags []AnomalyFlag
 	for rows.Next() {
-		var f AnomalyFlag
-		if err := rows.Scan(
-			&f.ID, &f.DistrictID, &f.AccountID, &f.FlagType, &f.Severity, &f.Status,
-			&f.GWLStatus, &f.EstimatedLossGHS, &f.ConfirmedLossGHS, &f.RecoveredGHS,
-			&f.Description, &f.DetectedAt, &f.ResolvedAt, &f.CreatedAt,
-		); err != nil {
+		f, err := scanAnomalyFlag(rows)
+		if err != nil {
 			r.logger.Error("scan anomaly flag (tx)", zap.Error(err))
 			continue
 		}
@@ -219,4 +225,3 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 	}
 	return flags, total, nil
 }
-

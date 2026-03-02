@@ -9,17 +9,13 @@
 BEGIN;
 
 -- ── 1. Production Records ──────────────────────────────────────────────────
-INSERT INTO production_records (id, district_id, record_date, volume_produced_m3, volume_treated_m3, pumping_hours, energy_kwh, source_type, data_quality_score, created_at)
+INSERT INTO production_records (id, district_id, recorded_at, volume_m3, source_type, created_at)
 SELECT
   gen_random_uuid(),
   d.id,
   gs.month_start,
   d.avg_daily_prod * days_in_month * (1 + variation),
-  d.avg_daily_prod * days_in_month * (1 + variation) * 0.98,
-  d.avg_daily_prod * days_in_month * 0.85 / 120.0,
-  d.avg_daily_prod * days_in_month * 0.42,
   'SURFACE_WATER',
-  0.85 + random() * 0.12,
   NOW()
 FROM (
   VALUES
@@ -209,19 +205,19 @@ SELECT
   gs.month_start,
   gs.month_start + INTERVAL '1 month' - INTERVAL '1 day',
   -- System input = production for the month
-  COALESCE(pr.volume_produced_m3, dp.avg_daily_prod * 30),
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30),
   -- Authorised consumption = SIV * (1 - NRW%)
-  COALESCE(pr.volume_produced_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0),
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0),
   -- Billed authorised = 95% of authorised
-  COALESCE(pr.volume_produced_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.95,
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.95,
   -- Unbilled authorised = 5% of authorised (fire fighting, flushing)
-  COALESCE(pr.volume_produced_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.05,
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.05,
   -- Apparent losses = 30% of NRW (meter errors, theft)
-  COALESCE(pr.volume_produced_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.30,
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.30,
   -- Real losses = 70% of NRW (physical leakage)
-  COALESCE(pr.volume_produced_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.70,
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.70,
   -- NRW volume
-  COALESCE(pr.volume_produced_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0),
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0),
   -- NRW percentage
   dp.nrw_pct + (random()-0.5)*3,
   -- ILI (Infrastructure Leakage Index)
@@ -237,9 +233,9 @@ SELECT
        ELSE 'A' END,
   0.75 + random()*0.20,
   -- Revenue water
-  COALESCE(pr.volume_produced_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.95,
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.95,
   -- Non-revenue water
-  COALESCE(pr.volume_produced_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0),
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0),
   NOW(), NOW()
 FROM (
   VALUES
@@ -280,7 +276,7 @@ CROSS JOIN (
   FROM generate_series('2025-02-02'::date, '2026-02-02'::date, '1 month'::interval) gs
 ) AS gs
 LEFT JOIN production_records pr
-  ON pr.district_id = d.id AND date_trunc('month', pr.record_date) = gs.month_start
+  ON pr.district_id = d.id AND date_trunc('month', pr.recorded_at) = gs.month_start
 ON CONFLICT DO NOTHING;
 
 -- ── 4. Pre-seeded Anomaly Flags ────────────────────────────────────────────

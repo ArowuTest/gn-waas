@@ -8,7 +8,11 @@
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "postgis";        -- GIS for network boundary checks
-CREATE EXTENSION IF NOT EXISTS "timescaledb";    -- Time-series for water flow data
+DO $$ BEGIN
+  CREATE EXTENSION IF NOT EXISTS "timescaledb";
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'timescaledb extension not available, skipping (standard PostgreSQL mode)';
+END $$;
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";        -- Fuzzy text search for accounts
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";       -- Cryptographic functions for audit hashing
 
@@ -178,7 +182,11 @@ CREATE TYPE water_balance_component AS ENUM (
 CREATE DOMAIN data_confidence_grade AS SMALLINT
     CHECK (VALUE >= 0 AND VALUE <= 10);
 
-COMMENT ON EXTENSION timescaledb IS 'TimescaleDB for time-series water flow data';
+DO $$ BEGIN
+  COMMENT ON EXTENSION timescaledb IS 'TimescaleDB for time-series water flow data';
+EXCEPTION WHEN OTHERS THEN
+  NULL; -- extension not installed, skip comment
+END $$;
 COMMENT ON TYPE account_category IS 'PURC 2026 tariff billing categories';
 COMMENT ON TYPE anomaly_type IS 'IWA/AWWA aligned anomaly classification';
 COMMENT ON TYPE water_balance_component IS 'IWA/AWWA Water Balance components';

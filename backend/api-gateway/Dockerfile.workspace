@@ -1,0 +1,30 @@
+# DOCKER-1 fix: Build context is repo root (.) so shared/go replace directive works.
+# This Dockerfile is used by docker-compose.yml when building from the monorepo root.
+FROM golang:1.22-alpine AS builder
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /workspace
+
+# Copy shared module first (required by replace directive in go.mod)
+COPY shared/go/ shared/go/
+
+# Copy service module files and download dependencies
+COPY backend/api-gateway/go.mod backend/api-gateway/go.sum ./backend/api-gateway/
+WORKDIR /workspace/backend/api-gateway
+RUN go mod download
+
+# Copy service source code
+WORKDIR /workspace
+COPY backend/api-gateway/ backend/api-gateway/
+
+# Build the binary
+WORKDIR /workspace/backend/api-gateway
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/api-gateway ./cmd/main.go
+
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /app/api-gateway /api-gateway
+ENV TZ=Africa/Accra
+EXPOSE 3000
+ENTRYPOINT ["/api-gateway"]

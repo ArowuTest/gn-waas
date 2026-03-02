@@ -263,6 +263,20 @@ func AuthMiddleware(cfg AuthConfig, logger *zap.Logger) fiber.Handler {
 		c.Locals("user_roles", claims.RealmAccess.Roles)
 		c.Locals("claims", claims)
 
+		// APP-1 defense-in-depth: also set RLS locals directly so SetRLSContext
+		// has a fallback even if middleware ordering changes.
+		districtID := claims.DistrictID
+		if districtID == "" {
+			districtID = "00000000-0000-0000-0000-000000000000"
+		}
+		primaryRole := ""
+		if len(claims.RealmAccess.Roles) > 0 {
+			primaryRole = claims.RealmAccess.Roles[0]
+		}
+		c.Locals("rls_district_id", districtID)
+		c.Locals("rls_user_role", primaryRole)
+		c.Locals("rls_user_id", claims.Sub)
+
 		return c.Next()
 	}
 }
@@ -343,18 +357,29 @@ func DevAuthMiddleware(logger *zap.Logger) fiber.Handler {
 			zap.String("ip", c.IP()),
 		)
 
+		// APP-2: Allow role override via X-Dev-Role header for testing specific roles.
+		// Falls back to SUPER_ADMIN if header is absent.
+		devRole := c.Get("X-Dev-Role", "SUPER_ADMIN")
+		devEmail := "dev-" + strings.ToLower(devRole) + "@gnwaas.gov.gh"
+		devName := "Dev User (" + devRole + ")"
+
 		c.Locals("user_id", "a0000001-0000-0000-0000-000000000001")
-		c.Locals("user_email", "superadmin@gnwaas.gov.gh")
-		c.Locals("user_name", "GN-WAAS Super Admin")
-		c.Locals("user_roles", []string{"SUPER_ADMIN"})
+		c.Locals("user_email", devEmail)
+		c.Locals("user_name", devName)
+		c.Locals("user_roles", []string{devRole})
 		c.Locals("claims", &Claims{
 			Sub:   "a0000001-0000-0000-0000-000000000001",
-			Email: "superadmin@gnwaas.gov.gh",
-			Name:  "GN-WAAS Super Admin",
+			Email: devEmail,
+			Name:  devName,
 			RealmAccess: RealmAccess{
-				Roles: []string{"SUPER_ADMIN"},
+				Roles: []string{devRole},
 			},
 		})
+
+		// Set RLS locals for the dev role
+		c.Locals("rls_district_id", "00000000-0000-0000-0000-000000000000")
+		c.Locals("rls_user_role", devRole)
+		c.Locals("rls_user_id", "a0000001-0000-0000-0000-000000000001")
 
 		return c.Next()
 	}
@@ -373,7 +398,8 @@ func DevAuthMiddleware(logger *zap.Logger) fiber.Handler {
 // Usage: app.Use(middleware.SetRLSContext())
 func SetRLSContext() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		claims, ok := c.Locals("user_claims").(*Claims)
+		// APP-1 fix: auth middleware stores claims under "claims" key, not "user_claims"
+		claims, ok := c.Locals("claims").(*Claims)
 		if !ok || claims == nil {
 			return c.Next()
 		}
@@ -391,7 +417,7 @@ func SetRLSContext() fiber.Handler {
 
 		c.Locals("rls_district_id", districtID)
 		c.Locals("rls_user_role", primaryRole)
-		c.Locals("rls_user_id", claims.Subject)
+		c.Locals("rls_user_id", claims.Sub)
 
 		return c.Next()
 	}

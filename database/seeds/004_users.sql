@@ -8,6 +8,10 @@
 -- These records are GN-WAAS profile data only.
 -- Keycloak user IDs (keycloak_id) will be populated on first login.
 
+-- Temporarily bypass RLS so the seed can run as gnwaas_app or any user.
+-- In production, run this seed as gnwaas_admin (superuser) to avoid this.
+SET LOCAL app.bypass_rls = 'true';
+
 INSERT INTO users (id, email, full_name, phone_number, role, status, organisation, employee_id) VALUES
 
 -- ============================================================

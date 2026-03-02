@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS credit_requests (
     district_id             UUID NOT NULL REFERENCES districts(id),
 
     -- The overbilling details
-    gwl_bill_id             UUID REFERENCES gwl_bills(id),
+    gwl_bill_id             UUID REFERENCES gwl_billing_records(id),
     billing_period_start    DATE NOT NULL,
     billing_period_end      DATE NOT NULL,
     gwl_amount_ghs          NUMERIC(12,2) NOT NULL,    -- what GWL charged

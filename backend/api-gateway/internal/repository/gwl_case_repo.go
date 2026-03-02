@@ -20,8 +20,8 @@ type GWLCase struct {
 	ID               uuid.UUID  `json:"id"`
 	AccountID        *uuid.UUID `json:"account_id"`
 	DistrictID       uuid.UUID  `json:"district_id"`
-	FlagType         string     `json:"flag_type"`
-	Severity         string     `json:"severity"`
+	FlagType         string     `json:"anomaly_type"`  // DB column: anomaly_type
+	Severity         string     `json:"alert_level"`  // DB column: alert_level
 	Title            string     `json:"title"`
 	Description      string     `json:"description"`
 	Evidence         []byte     `json:"evidence"`
@@ -61,7 +61,7 @@ type GWLCase struct {
 // GWLCaseFilter defines filter parameters for the case queue
 type GWLCaseFilter struct {
 	DistrictID   *uuid.UUID
-	FlagType     string
+	FlagType     string  // maps to anomaly_type column
 	Severity     string
 	GWLStatus    string
 	AssignedToID *uuid.UUID
@@ -188,15 +188,15 @@ func (r *GWLCaseRepository) GetCaseSummary(ctx context.Context, districtID *uuid
 
 	query := fmt.Sprintf(`
 		SELECT
-			COUNT(*) FILTER (WHERE af.gwl_status NOT IN ('CORRECTED','CLOSED'))                    AS total_open,
-			COUNT(*) FILTER (WHERE af.severity = 'CRITICAL' AND af.gwl_status NOT IN ('CORRECTED','CLOSED')) AS critical_open,
-			COUNT(*) FILTER (WHERE af.gwl_status = 'PENDING_REVIEW')                               AS pending_review,
-			COUNT(*) FILTER (WHERE af.gwl_status = 'FIELD_ASSIGNED')                               AS field_assigned,
+			COUNT(*) FILTER (WHERE gc.gwl_status NOT IN ('CORRECTED','CLOSED'))                    AS total_open,
+			COUNT(*) FILTER (WHERE af.alert_level = 'CRITICAL' AND gc.gwl_status NOT IN ('CORRECTED','CLOSED')) AS critical_open,
+			COUNT(*) FILTER (WHERE gc.gwl_status = 'PENDING_REVIEW')                               AS pending_review,
+			COUNT(*) FILTER (WHERE gc.gwl_status = 'FIELD_ASSIGNED')                               AS field_assigned,
 			COUNT(*) FILTER (WHERE af.gwl_resolved_at >= date_trunc('month', NOW()))                AS resolved_this_month,
-			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.gwl_status NOT IN ('CORRECTED','CLOSED')), 0) AS total_loss,
-			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.flag_type IN ('BILLING_VARIANCE','PHANTOM_METER','NRW_SPIKE') AND af.gwl_status NOT IN ('CORRECTED','CLOSED')), 0) AS underbilling,
-			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.flag_type = 'OVERBILLING' AND af.gwl_status NOT IN ('CORRECTED','CLOSED')), 0) AS overbilling,
-			COUNT(*) FILTER (WHERE af.flag_type = 'CATEGORY_MISMATCH' AND af.gwl_status NOT IN ('CORRECTED','CLOSED')) AS misclassified
+			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE gc.gwl_status NOT IN ('CORRECTED','CLOSED')), 0) AS total_loss,
+			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.anomaly_type IN ('BILLING_VARIANCE','PHANTOM_METER','NRW_SPIKE') AND gc.gwl_status NOT IN ('CORRECTED','CLOSED')), 0) AS underbilling,
+			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.anomaly_type = 'OVERBILLING' AND gc.gwl_status NOT IN ('CORRECTED','CLOSED')), 0) AS overbilling,
+			COUNT(*) FILTER (WHERE af.anomaly_type = 'CATEGORY_MISMATCH' AND gc.gwl_status NOT IN ('CORRECTED','CLOSED')) AS misclassified
 		FROM anomaly_flags af
 		WHERE %s
 	`, districtFilter)
@@ -222,17 +222,17 @@ func (r *GWLCaseRepository) ListCases(ctx context.Context, f GWLCaseFilter) ([]*
 		argIdx++
 	}
 	if f.FlagType != "" {
-		conditions = append(conditions, fmt.Sprintf("af.flag_type = $%d", argIdx))
+		conditions = append(conditions, fmt.Sprintf("af.anomaly_type = $%d", argIdx))
 		args = append(args, f.FlagType)
 		argIdx++
 	}
 	if f.Severity != "" {
-		conditions = append(conditions, fmt.Sprintf("af.severity = $%d", argIdx))
+		conditions = append(conditions, fmt.Sprintf("af.alert_level = $%d", argIdx))
 		args = append(args, f.Severity)
 		argIdx++
 	}
 	if f.GWLStatus != "" {
-		conditions = append(conditions, fmt.Sprintf("af.gwl_status = $%d", argIdx))
+		conditions = append(conditions, fmt.Sprintf("gc.gwl_status = $%d", argIdx))
 		args = append(args, f.GWLStatus)
 		argIdx++
 	}
@@ -296,9 +296,9 @@ func (r *GWLCaseRepository) ListCases(ctx context.Context, f GWLCaseFilter) ([]*
 	dataQuery := fmt.Sprintf(`
 		SELECT
 			af.id, af.account_id, af.district_id,
-			af.flag_type, af.severity, af.title, af.description,
+			af.anomaly_type, af.alert_level, af.title, af.description,
 			af.evidence, af.estimated_loss_ghs, af.created_at,
-			af.gwl_status, af.gwl_assigned_to_id, af.gwl_assigned_at,
+			gc.gwl_status, af.gwl_assigned_to_id, af.gwl_assigned_at,
 			af.gwl_resolved_at, af.gwl_resolution, af.gwl_notes,
 			EXTRACT(DAY FROM NOW() - af.created_at)::int AS days_open,
 			wa.gwl_account_number, wa.account_holder_name, wa.category,
@@ -355,9 +355,9 @@ func (r *GWLCaseRepository) GetCaseByID(ctx context.Context, id uuid.UUID) (*GWL
 	err := r.q(ctx).QueryRow(ctx, `
 		SELECT
 			af.id, af.account_id, af.district_id,
-			af.flag_type, af.severity, af.title, af.description,
+			af.anomaly_type, af.alert_level, af.title, af.description,
 			af.evidence, af.estimated_loss_ghs, af.created_at,
-			af.gwl_status, af.gwl_assigned_to_id, af.gwl_assigned_at,
+			gc.gwl_status, af.gwl_assigned_to_id, af.gwl_assigned_at,
 			af.gwl_resolved_at, af.gwl_resolution, af.gwl_notes,
 			EXTRACT(DAY FROM NOW() - af.created_at)::int AS days_open,
 			wa.gwl_account_number, wa.account_holder_name, wa.category,
@@ -798,13 +798,13 @@ func (r *GWLCaseRepository) GetMonthlyReport(ctx context.Context, period time.Ti
 	err := r.q(ctx).QueryRow(ctx, fmt.Sprintf(`
 		SELECT
 			COUNT(*)                                                                    AS total_flagged,
-			COUNT(*) FILTER (WHERE af.severity = 'CRITICAL')                           AS critical,
-			COUNT(*) FILTER (WHERE af.gwl_status IN ('CORRECTED','CLOSED'))            AS resolved,
-			COUNT(*) FILTER (WHERE af.gwl_status NOT IN ('CORRECTED','CLOSED','DISPUTED')) AS pending,
-			COUNT(*) FILTER (WHERE af.gwl_status = 'DISPUTED')                         AS disputed,
-			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.flag_type != 'OVERBILLING'), 0) AS underbilling,
-			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.flag_type = 'OVERBILLING'), 0)  AS overbilling,
-			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.gwl_status = 'CORRECTED'), 0)   AS recovered,
+			COUNT(*) FILTER (WHERE af.alert_level = 'CRITICAL')                           AS critical,
+			COUNT(*) FILTER (WHERE gc.gwl_status IN ('CORRECTED','CLOSED'))            AS resolved,
+			COUNT(*) FILTER (WHERE gc.gwl_status NOT IN ('CORRECTED','CLOSED','DISPUTED')) AS pending,
+			COUNT(*) FILTER (WHERE gc.gwl_status = 'DISPUTED')                         AS disputed,
+			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.anomaly_type != 'OVERBILLING'), 0) AS underbilling,
+			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.anomaly_type = 'OVERBILLING'), 0)  AS overbilling,
+			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE gc.gwl_status = 'CORRECTED'), 0)   AS recovered,
 			0::numeric AS credits_issued,
 			0::int AS reclass_requested,
 			0::int AS reclass_applied,

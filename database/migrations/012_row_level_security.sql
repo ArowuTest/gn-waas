@@ -118,29 +118,51 @@ CREATE POLICY rls_field_jobs_district ON field_jobs
         OR district_id = current_district_id()
     );
 
--- nrw_reports
-ALTER TABLE nrw_reports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE nrw_reports FORCE ROW LEVEL SECURITY;
+-- nrw_reports (table may not exist in all deployments)
+DO $$ BEGIN
+  ALTER TABLE nrw_reports ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE nrw_reports FORCE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN
+  RAISE NOTICE 'nrw_reports table does not exist, skipping RLS';
+END $$;
 
-DROP POLICY IF EXISTS rls_nrw_reports_district ON nrw_reports;
-CREATE POLICY rls_nrw_reports_district ON nrw_reports
-    FOR ALL TO gnwaas_app
-    USING (
-        current_user_is_admin()
-        OR district_id = current_district_id()
-    );
+DO $$ BEGIN
+  DROP POLICY IF EXISTS rls_nrw_reports_district ON nrw_reports;
+EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
--- gwl_cases
-ALTER TABLE gwl_cases ENABLE ROW LEVEL SECURITY;
-ALTER TABLE gwl_cases FORCE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  CREATE POLICY rls_nrw_reports_district ON nrw_reports
+      FOR ALL TO gnwaas_app
+      USING (
+          current_user_is_admin()
+          OR district_id = current_district_id()
+      );
+EXCEPTION WHEN undefined_table THEN
+  RAISE NOTICE 'nrw_reports table does not exist, skipping policy';
+END $$;
 
-DROP POLICY IF EXISTS rls_gwl_cases_district ON gwl_cases;
-CREATE POLICY rls_gwl_cases_district ON gwl_cases
-    FOR ALL TO gnwaas_app
-    USING (
-        current_user_is_admin()
-        OR district_id = current_district_id()
-    );
+-- gwl_cases (table may not exist in all deployments)
+DO $$ BEGIN
+  ALTER TABLE gwl_cases ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE gwl_cases FORCE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN
+  RAISE NOTICE 'gwl_cases table does not exist, skipping RLS';
+END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS rls_gwl_cases_district ON gwl_cases;
+EXCEPTION WHEN undefined_table THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY rls_gwl_cases_district ON gwl_cases
+      FOR ALL TO gnwaas_app
+      USING (
+          current_user_is_admin()
+          OR district_id = current_district_id()
+      );
+EXCEPTION WHEN undefined_table THEN
+  RAISE NOTICE 'gwl_cases table does not exist, skipping policy';
+END $$;
 
 -- users: officers can only see users in their own district
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;

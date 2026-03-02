@@ -1,0 +1,30 @@
+# DOCKER-1 fix: Build context is repo root (.) so shared/go replace directive works.
+# This Dockerfile is used by docker-compose.yml when building from the monorepo root.
+FROM golang:1.22-alpine AS builder
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /workspace
+
+# Copy shared module first (required by replace directive in go.mod)
+COPY shared/go/ shared/go/
+
+# Copy service module files and download dependencies
+COPY backend/tariff-engine/go.mod backend/tariff-engine/go.sum ./backend/tariff-engine/
+WORKDIR /workspace/backend/tariff-engine
+RUN go mod download
+
+# Copy service source code
+WORKDIR /workspace
+COPY backend/tariff-engine/ backend/tariff-engine/
+
+# Build the binary
+WORKDIR /workspace/backend/tariff-engine
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/tariff-engine ./cmd/main.go
+
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /app/tariff-engine /tariff-engine
+ENV TZ=Africa/Accra
+EXPOSE 3003
+ENTRYPOINT ["/tariff-engine"]

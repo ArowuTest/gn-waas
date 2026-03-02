@@ -396,12 +396,12 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// Admin/supervisor: list all field jobs with optional status/alert_level/district_id filters.
 	// Used by admin portal FieldJobsPage to display the full job queue.
 	fieldJobs.Get("/",
-		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
 		fieldJobHandler.ListAllJobs,
 	)
 	// Admin/supervisor: create a new field job dispatch.
 	fieldJobs.Post("/",
-		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
 		fieldJobHandler.CreateFieldJob,
 	)
 	fieldJobs.Get("/my-jobs",
@@ -411,11 +411,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// Admin/supervisor: assign a field officer to a job.
 	// Used by admin portal FieldJobsPage assign-officer modal.
 	fieldJobs.Patch("/:id/assign",
-		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
 		fieldJobHandler.AssignOfficer,
 	)
 	fieldJobs.Patch("/:id/status",
-		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR"),
+		middleware.RequireRoles("SUPER_ADMIN", "FIELD_OFFICER", "FIELD_SUPERVISOR"),
 		fieldJobHandler.UpdateJobStatus,
 	)
 	fieldJobs.Post("/:id/sos",
@@ -441,13 +441,15 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── NRW Reports ───────────────────────────────────────────────────────────
 	// Anomaly flags
-	anomalyFlags := api.Group("/anomaly-flags")
+	anomalyFlags := api.Group("/anomaly-flags",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
+	)
 	anomalyFlags.Get("/", flagHandler.ListAnomalyFlags)
 
 	// ── Sentinel routes (admin portal compatibility) ───────────────────────────
 	// The admin portal hooks use /sentinel/* paths — proxy to anomaly-flags handler
 	sentinel := api.Group("/sentinel",
-		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
 	)
 	sentinel.Get("/anomalies", flagHandler.ListAnomalyFlags)
 	sentinel.Get("/anomalies/:id", flagHandler.GetAnomalyFlag)
@@ -486,7 +488,9 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	)
 
 	reports := api.Group("/reports")
-	reports.Get("/nrw", nrwHandler.GetNRWSummary)
+	reports.Get("/nrw",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_SUPERVISOR"),
+		nrwHandler.GetNRWSummary)
 	reports.Get("/nrw/my-district",
 		middleware.RequireRoles("FIELD_OFFICER", "GWL_MANAGER", "FIELD_SUPERVISOR"),
 		nrwHandler.GetMyDistrictSummary,
