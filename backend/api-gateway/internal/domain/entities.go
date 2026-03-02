@@ -57,7 +57,7 @@ type FieldJob struct {
 	AuditEventID          *uuid.UUID `db:"audit_event_id" json:"audit_event_id,omitempty"`
 	AccountID             uuid.UUID  `db:"account_id" json:"account_id"`
 	DistrictID            uuid.UUID  `db:"district_id" json:"district_id"`
-	AssignedOfficerID     uuid.UUID  `db:"assigned_officer_id" json:"assigned_officer_id"`
+	AssignedOfficerID     *uuid.UUID `db:"assigned_officer_id" json:"assigned_officer_id,omitempty"`
 	Status                string     `db:"status" json:"status"`
 	IsBlindAudit          bool       `db:"is_blind_audit" json:"is_blind_audit"`
 	TargetGPSLat          float64    `db:"target_gps_lat" json:"target_gps_lat"`

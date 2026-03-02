@@ -184,7 +184,7 @@ func (h *AuditHandler) AssignAuditEvent(c *fiber.Ctx) error {
 		AuditEventID:    &id,
 		AccountID:       event.AccountID,
 		DistrictID:      event.DistrictID,
-		AssignedOfficerID: officerID,
+		AssignedOfficerID: &officerID,
 		Status:          "IN_PROGRESS",
 		IsBlindAudit:    true, // Always blind audit - officer doesn't see expected reading
 		GPSFenceRadiusM: 50.0, // 50m GPS fence
@@ -604,7 +604,7 @@ func (h *FieldJobHandler) CreateFieldJob(c *fiber.Ctx) error {
 	}
 	if req.AssignedOfficerID != nil {
 		if id, err := uuid.Parse(*req.AssignedOfficerID); err == nil {
-			job.AssignedOfficerID = id
+			job.AssignedOfficerID = &id
 			job.Status = "DISPATCHED"
 		}
 	}

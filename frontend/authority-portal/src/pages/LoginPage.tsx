@@ -91,7 +91,7 @@ export default function LoginPage() {
     setError('')
     try {
       const res = await apiClient.post('/auth/login', { email, password })
-      await login(res.data.data.token)
+      await login(res.data.data.access_token)
       navigate('/district')
     } catch {
       setError('Invalid credentials. Please check your email and password.')

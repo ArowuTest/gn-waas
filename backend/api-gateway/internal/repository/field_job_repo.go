@@ -127,7 +127,7 @@ func (r *FieldJobRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 	var arrivedAt, completedAt *time.Time
 
 	switch status {
-	case "ARRIVED":
+	case "ON_SITE":
 		arrivedAt = &now
 	case "COMPLETED":
 		completedAt = &now

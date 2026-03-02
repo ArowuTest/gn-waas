@@ -5,7 +5,7 @@ import type { FieldJob } from '../types'
 const statusColor: Record<string, string> = {
   DISPATCHED: 'bg-blue-100 text-blue-700',
   ASSIGNED: 'bg-gray-100 text-gray-600',
-  ARRIVED: 'bg-yellow-100 text-yellow-700',
+  ON_SITE: 'bg-yellow-100 text-yellow-700',
   COMPLETED: 'bg-green-100 text-green-700',
   CANCELLED: 'bg-red-100 text-red-700',
 }
@@ -35,15 +35,15 @@ function JobCard({ job }: { job: FieldJob }) {
         (pos) => {
           updateStatus.mutate({
             jobId: job.id,
-            status: 'ARRIVED',
+            status: 'ON_SITE',
             gpsLat: pos.coords.latitude,
             gpsLng: pos.coords.longitude,
           })
         },
-        () => updateStatus.mutate({ jobId: job.id, status: 'ARRIVED' })
+        () => updateStatus.mutate({ jobId: job.id, status: 'ON_SITE' })
       )
     } else {
-      updateStatus.mutate({ jobId: job.id, status: 'ARRIVED' })
+      updateStatus.mutate({ jobId: job.id, status: 'ON_SITE' })
     }
   }
 

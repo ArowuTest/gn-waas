@@ -48,6 +48,8 @@ export default function App() {
               <Route path="report-issue" element={<ReportIssuePage />} />
               <Route path="my-jobs" element={<MyJobsPage />} />
               <Route path="nrw" element={<NRWSummaryPage />} />
+              <Route path="job-assignment" element={<JobAssignmentPage />} />
+              <Route path="reporting" element={<ReportingPage />} />
             </Route>
           </Routes>
         </BrowserRouter>
