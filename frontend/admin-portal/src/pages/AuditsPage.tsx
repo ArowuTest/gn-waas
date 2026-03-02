@@ -23,6 +23,7 @@ export function AuditsPage() {
   const total = auditsData?.meta?.total || 0
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -181,5 +182,6 @@ export function AuditsPage() {
         </div>
       </div>
     )}
+    </>
   )
 }

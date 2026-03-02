@@ -144,29 +144,36 @@ func (h *NRWHandler) GetDistrictNRWTrend(c *fiber.Ctx) error {
 
 // GetMyDistrictSummary godoc
 // GET /api/v1/reports/nrw/my-district
-// Used by GWL staff portal — returns summary for the authenticated user's district
+// Used by GWL staff portal — returns summary for the authenticated user's district.
+// For SUPER_ADMIN / SYSTEM_ADMIN users who have no district assignment, the first
+// available district is returned so the portal renders useful data.
 func (h *NRWHandler) GetMyDistrictSummary(c *fiber.Ctx) error {
-	// Get district from JWT claims (set by AuthMiddleware)
-	// The user's district_id is stored in the users table and fetched via /users/me
-	// For district-scoped roles, we look up the user's district from the DB
 	userID, ok := c.Locals("user_id").(string)
 	if !ok {
 		return response.Unauthorized(c, "Not authenticated")
 	}
 
-	// Use the repository method so the query runs inside the RLS-activated
-	// transaction from rls.Middleware — no raw DB() bypass.
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		return response.Unauthorized(c, "Invalid user ID")
 	}
 
-	districtID, err := h.nrwRepo.GetUserDistrictID(c.Context(), userUUID)
+	districtID, err := h.nrwRepo.GetUserDistrictID(c.UserContext(), userUUID)
 	if err != nil {
-		return response.BadRequest(c, "NO_DISTRICT", "User has no assigned district")
+		// SUPER_ADMIN / SYSTEM_ADMIN may have no district assigned.
+		// Fall back to the first available district so the portal is usable.
+		role, _ := c.Locals("rls_user_role").(string)
+		if role == "SUPER_ADMIN" || role == "SYSTEM_ADMIN" {
+			districtID, err = h.nrwRepo.GetFirstDistrictID(c.UserContext())
+			if err != nil {
+				return response.BadRequest(c, "NO_DISTRICT", "No districts configured in the system")
+			}
+		} else {
+			return response.BadRequest(c, "NO_DISTRICT", "Your account is not assigned to a district. Contact your administrator.")
+		}
 	}
 
-	district, summary, err := h.nrwRepo.GetMyDistrictSummary(c.Context(), districtID)
+	district, summary, err := h.nrwRepo.GetMyDistrictSummary(c.UserContext(), districtID)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch district summary")
 	}

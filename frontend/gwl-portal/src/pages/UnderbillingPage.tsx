@@ -56,7 +56,7 @@ export default function UnderbillingPage() {
       { header: 'Account Holder', accessor: (r) => r.account_holder || '' },
       { header: 'Category', accessor: (r) => r.account_category || '' },
       { header: 'District', accessor: (r) => r.district_name },
-      { header: 'Severity', accessor: (r) => r.severity },
+      { header: 'Severity', accessor: (r) => r.alert_level },
       { header: 'Monthly Loss (GHS)', accessor: (r) => r.estimated_loss_ghs },
       { header: 'Annual Loss (GHS)', accessor: (r) => r.estimated_loss_ghs * 12 },
       { header: 'Status', accessor: (r) => GWL_STATUS_LABELS[r.gwl_status as GWLStatus] || r.gwl_status },
@@ -183,7 +183,7 @@ export default function UnderbillingPage() {
                 {
                   header: 'Severity',
                   accessor: (r) => (
-                    <Badge className={SEVERITY_COLORS[r.severity as Severity]}>{r.severity}</Badge>
+                    <Badge className={SEVERITY_COLORS[r.alert_level as Severity]}>{r.alert_level}</Badge>
                   ),
                 },
                 {

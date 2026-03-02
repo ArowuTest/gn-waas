@@ -246,3 +246,16 @@ func (r *NRWReportRepository) GetUserDistrictID(ctx context.Context, userID uuid
 	return districtID, nil
 }
 
+// GetFirstDistrictID returns the ID of the first active district.
+// Used as a fallback for SUPER_ADMIN users who have no district assignment.
+func (r *NRWReportRepository) GetFirstDistrictID(ctx context.Context) (uuid.UUID, error) {
+	var districtID uuid.UUID
+	err := r.q(ctx).QueryRow(ctx,
+		"SELECT id FROM districts WHERE is_active = true ORDER BY district_code LIMIT 1",
+	).Scan(&districtID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("NRWReportRepository.GetFirstDistrictID: %w", err)
+	}
+	return districtID, nil
+}
+

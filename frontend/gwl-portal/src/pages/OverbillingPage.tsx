@@ -143,7 +143,7 @@ export default function OverbillingPage() {
                 {
                   header: 'Severity',
                   accessor: (r) => (
-                    <Badge className={SEVERITY_COLORS[r.severity as Severity]}>{r.severity}</Badge>
+                    <Badge className={SEVERITY_COLORS[r.alert_level as Severity]}>{r.alert_level}</Badge>
                   ),
                 },
                 {

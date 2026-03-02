@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Search, Filter, RefreshCw, Eye } from 'lucide-react'
+import { RefreshCw, Eye, X, AlertTriangle } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { AlertLevelBadge, StatusBadge } from '../components/ui/Badge'
 import { useAnomalies, useDistricts } from '../hooks/useQueries'
@@ -8,7 +7,7 @@ import { formatCurrency, formatRelativeTime } from '../lib/utils'
 import apiClient from '../lib/api-client'
 
 export function AnomaliesPage() {
-  const navigate = useNavigate()
+  const [selectedAnomaly, setSelectedAnomaly] = useState<typeof anomalies[0] | null>(null)
   const [filters, setFilters] = useState({
     district_id: '',
     level: '',
@@ -39,6 +38,7 @@ export function AnomaliesPage() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -147,7 +147,7 @@ export function AnomaliesPage() {
                 <tr
                   key={flag.id}
                   className="cursor-pointer"
-                  onClick={() => navigate(`/anomalies/${flag.id}`)}
+                  onClick={() => setSelectedAnomaly(flag)}
                 >
                   <td>
                     <div className="max-w-xs">
@@ -167,7 +167,7 @@ export function AnomaliesPage() {
                   <td><StatusBadge status={flag.status} /></td>
                   <td className="text-gray-400 text-xs">{formatRelativeTime(flag.created_at)}</td>
                   <td>
-                    <button className="btn-ghost btn-sm">
+                    <button className="btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setSelectedAnomaly(flag); }}>
                       <Eye size={14} />
                     </button>
                   </td>
@@ -232,5 +232,57 @@ export function AnomaliesPage() {
         )}
       </Card>
     </div>
+
+    {/* Anomaly Detail Modal */}
+    {selectedAnomaly && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between p-6 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-red-50 rounded-xl flex items-center justify-center">
+                <AlertTriangle size={18} className="text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Anomaly Detail</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{selectedAnomaly.anomaly_type.replace(/_/g, ' ')}</p>
+              </div>
+            </div>
+            <button onClick={() => setSelectedAnomaly(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{selectedAnomaly.title}</p>
+              <p className="text-sm text-gray-500 mt-1">{selectedAnomaly.description}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-500 mb-1">Alert Level</p>
+                <AlertLevelBadge level={selectedAnomaly.alert_level} />
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-500 mb-1">Status</p>
+                <StatusBadge status={selectedAnomaly.status} />
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-500 mb-1">Estimated Loss</p>
+                <p className="font-mono font-bold text-red-600 text-sm">
+                  {selectedAnomaly.estimated_loss_ghs ? formatCurrency(selectedAnomaly.estimated_loss_ghs) : '—'}
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-500 mb-1">Detected</p>
+                <p className="text-sm font-medium text-gray-700">{formatRelativeTime(selectedAnomaly.created_at)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="px-6 pb-6 flex justify-end">
+            <button onClick={() => setSelectedAnomaly(null)} className="btn-secondary btn-sm">Close</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

@@ -61,8 +61,8 @@ export default function FieldAssignmentsPage() {
       { header: 'Account No', accessor: (r) => r.account_number || '' },
       { header: 'Account Holder', accessor: (r) => r.account_holder || '' },
       { header: 'District', accessor: (r) => r.district_name },
-      { header: 'Flag Type', accessor: (r) => r.flag_type },
-      { header: 'Severity', accessor: (r) => r.severity },
+      { header: 'Flag Type', accessor: (r) => r.anomaly_type },
+      { header: 'Severity', accessor: (r) => r.alert_level },
       { header: 'Assigned Officer', accessor: (r) => r.assigned_officer_name || '' },
       { header: 'Field Job Status', accessor: (r) => r.field_job_status || '' },
       { header: 'Days Open', accessor: (r) => r.days_open },
@@ -183,7 +183,7 @@ export default function FieldAssignmentsPage() {
               {
                 header: 'Severity',
                 accessor: (r) => (
-                  <Badge className={SEVERITY_COLORS[r.severity as Severity]}>{r.severity}</Badge>
+                  <Badge className={SEVERITY_COLORS[r.alert_level as Severity]}>{r.alert_level}</Badge>
                 ),
               },
               {

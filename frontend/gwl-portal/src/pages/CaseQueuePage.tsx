@@ -94,8 +94,8 @@ export default function CaseQueuePage() {
       { header: 'Category', accessor: (r) => r.account_category || '' },
       { header: 'District', accessor: (r) => r.district_name },
       { header: 'Region', accessor: (r) => r.region },
-      { header: 'Flag Type', accessor: (r) => FLAG_TYPE_LABELS[r.flag_type as FlagType] || r.flag_type },
-      { header: 'Severity', accessor: (r) => r.severity },
+      { header: 'Flag Type', accessor: (r) => FLAG_TYPE_LABELS[r.anomaly_type as FlagType] || r.anomaly_type },
+      { header: 'Severity', accessor: (r) => r.alert_level },
       { header: 'Estimated Loss (GHS)', accessor: (r) => r.estimated_loss_ghs },
       { header: 'GWL Status', accessor: (r) => GWL_STATUS_LABELS[r.gwl_status as GWLStatus] || r.gwl_status },
       { header: 'Assigned Officer', accessor: (r) => r.assigned_officer_name || '' },
@@ -231,15 +231,15 @@ export default function CaseQueuePage() {
                 {
                   header: 'Flag',
                   accessor: (r) => (
-                    <Badge className={FLAG_TYPE_COLORS[r.flag_type as FlagType]}>
-                      {FLAG_TYPE_LABELS[r.flag_type as FlagType] || r.flag_type}
+                    <Badge className={FLAG_TYPE_COLORS[r.anomaly_type as FlagType]}>
+                      {FLAG_TYPE_LABELS[r.anomaly_type as FlagType] || r.anomaly_type}
                     </Badge>
                   ),
                 },
                 {
                   header: 'Severity',
                   accessor: (r) => (
-                    <Badge className={SEVERITY_COLORS[r.severity as Severity]}>{r.severity}</Badge>
+                    <Badge className={SEVERITY_COLORS[r.alert_level as Severity]}>{r.alert_level}</Badge>
                   ),
                 },
                 {

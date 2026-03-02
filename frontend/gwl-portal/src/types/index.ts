@@ -24,8 +24,12 @@ export interface GWLCase {
   id: string;
   account_id: string | null;
   district_id: string;
-  flag_type: FlagType;
-  severity: Severity;
+  // Backend now returns anomaly_type and alert_level (renamed from flag_type/severity)
+  anomaly_type: FlagType;
+  alert_level: Severity;
+  // Legacy aliases for backward compatibility
+  flag_type?: FlagType;
+  severity?: Severity;
   title: string;
   description: string;
   evidence: Record<string, unknown>;

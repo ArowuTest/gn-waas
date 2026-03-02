@@ -143,9 +143,9 @@ export default function CaseDetailPage() {
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-xl font-bold text-gray-900">{gwlCase.title}</h1>
-              <Badge className={SEVERITY_COLORS[gwlCase.severity as Severity]}>{gwlCase.severity}</Badge>
-              <Badge className={FLAG_TYPE_COLORS[gwlCase.flag_type as FlagType]}>
-                {FLAG_TYPE_LABELS[gwlCase.flag_type as FlagType] || gwlCase.flag_type}
+              <Badge className={SEVERITY_COLORS[gwlCase.alert_level as Severity]}>{gwlCase.alert_level}</Badge>
+              <Badge className={FLAG_TYPE_COLORS[gwlCase.anomaly_type as FlagType]}>
+                {FLAG_TYPE_LABELS[gwlCase.anomaly_type as FlagType] || gwlCase.anomaly_type}
               </Badge>
               <Badge className={GWL_STATUS_COLORS[gwlCase.gwl_status as GWLStatus]}>
                 {GWL_STATUS_LABELS[gwlCase.gwl_status as GWLStatus] || gwlCase.gwl_status}
@@ -289,7 +289,7 @@ export default function CaseDetailPage() {
                     Assign Field Officer
                   </Button>
 
-                  {gwlCase.flag_type === 'CATEGORY_MISMATCH' && (
+                  {gwlCase.anomaly_type === 'CATEGORY_MISMATCH' && (
                     <Button
                       className="w-full justify-center"
                       variant="secondary"
@@ -300,7 +300,7 @@ export default function CaseDetailPage() {
                     </Button>
                   )}
 
-                  {gwlCase.flag_type === 'OVERBILLING' && (
+                  {gwlCase.anomaly_type === 'OVERBILLING' && (
                     <Button
                       className="w-full justify-center"
                       variant="secondary"

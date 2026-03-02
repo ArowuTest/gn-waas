@@ -24,7 +24,17 @@ done
 
 echo "✓ Migrations complete"
 
-# Run seeds in order
+# Ensure gnwaas_admin role exists for seeding (bypass RLS)
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+    DO \$\$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gnwaas_admin') THEN
+            CREATE ROLE gnwaas_admin LOGIN PASSWORD 'gnwaas_admin_dev_2026' BYPASSRLS SUPERUSER;
+        END IF;
+    END \$\$;
+EOSQL
+
+# Run seeds in order as gnwaas_admin (BYPASSRLS) so RLS does not block inserts
 # In production (APP_ENV=production), skip demo timeseries data (006_demo_timeseries.sql)
 echo "Running seeds..."
 for f in /docker-entrypoint-initdb.d/seeds/*.sql; do
@@ -34,7 +44,7 @@ for f in /docker-entrypoint-initdb.d/seeds/*.sql; do
         continue
     fi
     echo "  → Seeding: $basename_f"
-    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f "$f"
+    PGPASSWORD=gnwaas_admin_dev_2026 psql -v ON_ERROR_STOP=1 --username "gnwaas_admin" --dbname "$POSTGRES_DB" -h localhost -f "$f"
 done
 
 echo "✓ Seeds complete"

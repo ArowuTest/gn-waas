@@ -1,141 +1,232 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Droplets, Eye, EyeOff, Shield, BarChart3, Map } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { Droplets, Eye, EyeOff } from 'lucide-react'
-import apiClient from '../lib/api-client'
+
+const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true'
+
+const DEV_ACCOUNTS = [
+  { label: 'System Admin',  email: 'admin@gnwaas.gov.gh',      role: 'SYSTEM_ADMIN' },
+  { label: 'GRA Officer',   email: 'gra@gnwaas.gov.gh',        role: 'GRA_OFFICER' },
+  { label: 'MOF Auditor',   email: 'auditor@gnwaas.gov.gh',    role: 'MOF_AUDITOR' },
+  { label: 'GWL Manager',   email: 'manager@gwl.gov.gh',       role: 'GWL_MANAGER' },
+]
 
 export function LoginPage() {
   const { login } = useAuth()
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!email || !password) { setError('Please enter your email and password.'); return }
+    setLoading(true)
     setError('')
-    setIsLoading(true)
-
     try {
-      // In development mode, the API gateway accepts any credentials
-      // and returns a dev token. In production, this calls Keycloak.
-      const response = await apiClient.post('/auth/login', { email, password })
-      await login(response.data.data.access_token)
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid credentials. Please try again.')
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'Login failed')
+      await login(data.data.access_token)
+      navigate('/dashboard')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid credentials. Please try again.')
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  // Dev mode quick login
-  const devLogin = async (role: string) => {
-    setIsLoading(true)
+  const handleDevLogin = async (devEmail: string, role: string) => {
+    if (!DEV_MODE) return
+    setLoading(true)
+    setError('')
     try {
-      const response = await apiClient.post('/auth/dev-login', { role })
-      await login(response.data.data.access_token)
+      const res = await fetch('/api/v1/auth/dev-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Dev-Role': role },
+        body: JSON.stringify({ email: devEmail, role }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'Dev login failed')
+      await login(data.data?.access_token || data.access_token)
+      navigate('/dashboard')
     } catch {
-      setError('Dev login failed')
+      // Fallback: try regular login with dev credentials
+      setEmail(devEmail)
+      setPassword('password123')
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4">
-            <Droplets size={32} className="text-brand-600" />
-          </div>
-          <h1 className="text-white text-2xl font-bold">GN-WAAS</h1>
-          <p className="text-brand-200 text-sm mt-1">Ghana National Water Audit & Assurance System</p>
+    <div className="min-h-screen flex">
+      {/* Left panel — branding */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gray-900 flex-col justify-between p-12 relative overflow-hidden">
+        {/* Background pattern */}
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute top-0 left-0 w-96 h-96 bg-brand-500 rounded-full -translate-x-1/2 -translate-y-1/2" />
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-gold-500 rounded-full translate-x-1/2 translate-y-1/2" />
         </div>
 
-        {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-gray-900 text-xl font-bold mb-6">Sign in to your account</h2>
-
-          {error && (
-            <div className="mb-4 p-3 bg-danger-light border border-danger rounded-lg text-danger text-sm">
-              {error}
+        <div className="relative">
+          <div className="flex items-center gap-3 mb-12">
+            <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center shadow-lg">
+              <Droplets size={20} className="text-white" />
             </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Email address</label>
-              <input
-                type="email"
-                className="input"
-                placeholder="officer@gwl.gov.gh"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-              />
+              <p className="text-white font-bold text-lg leading-tight">GN-WAAS</p>
+              <p className="text-gray-400 text-xs">Ghana National Water Audit & Assurance System</p>
+            </div>
+          </div>
+
+          <h1 className="text-4xl font-black text-white leading-tight mb-4">
+            Water Audit<br />
+            <span className="text-brand-400">Administration</span>
+          </h1>
+          <p className="text-gray-400 text-base leading-relaxed max-w-sm">
+            Sovereign oversight of Ghana's water distribution network.
+            Real-time anomaly detection, GRA compliance, and revenue recovery.
+          </p>
+        </div>
+
+        {/* Feature highlights */}
+        <div className="relative space-y-4">
+          {[
+            { icon: <BarChart3 size={18} />, title: 'NRW Analysis', desc: 'IWA/AWWA water balance framework' },
+            { icon: <Shield size={18} />, title: 'GRA Compliance', desc: 'Automated VAT audit trail & QR signing' },
+            { icon: <Map size={18} />, title: 'DMA Mapping', desc: 'District metered area visualisation' },
+          ].map(f => (
+            <div key={f.title} className="flex items-start gap-3">
+              <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-brand-400 flex-shrink-0">
+                {f.icon}
+              </div>
+              <div>
+                <p className="text-white text-sm font-semibold">{f.title}</p>
+                <p className="text-gray-500 text-xs">{f.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="relative">
+          <p className="text-gray-600 text-xs">
+            © 2026 Ghana Water Limited · Ministry of Finance · GRA
+          </p>
+        </div>
+      </div>
+
+      {/* Right panel — login form */}
+      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50">
+        <div className="w-full max-w-md">
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center">
+              <Droplets size={20} className="text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-gray-900">GN-WAAS Admin</p>
+              <p className="text-xs text-gray-500">Water Audit System</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-8">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900">Sign in</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Access restricted to authorised personnel only
+              </p>
             </div>
 
-            <div>
-              <label className="label">Password</label>
-              <div className="relative">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="label">Email address</label>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  className="input pr-10"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  type="email"
+                  className="input"
+                  placeholder="officer@gnwaas.gov.gh"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  autoComplete="email"
                   required
                 />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              className="btn-primary w-full btn-lg"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </form>
-
-          {/* Dev mode quick access */}
-          {import.meta.env.DEV && (
-            <div className="mt-6 pt-6 border-t border-gray-100">
-              <p className="text-xs text-gray-400 text-center mb-3">
-                Development Mode — Quick Access
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { role: 'SYSTEM_ADMIN', label: 'System Admin' },
-                  { role: 'FIELD_SUPERVISOR', label: 'Field Supervisor' },
-                  { role: 'FIELD_OFFICER', label: 'Field Officer' },
-                  { role: 'MOF_AUDITOR', label: 'MOF Auditor' },
-                ].map(({ role, label }) => (
+              <div>
+                <label className="label">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    className="input pr-10"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                  />
                   <button
-                    key={role}
-                    onClick={() => devLogin(role)}
-                    className="btn-secondary btn-sm text-xs"
-                    disabled={isLoading}
+                    type="button"
+                    onClick={() => setShowPw(!showPw)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   >
-                    {label}
+                    {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
-                ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
 
-        <p className="text-center text-brand-200 text-xs mt-6">
-          Secured by Keycloak · NITA Ghana Infrastructure · v1.0.0
-        </p>
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-full py-2.5"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Signing in…
+                  </span>
+                ) : 'Sign in'}
+              </button>
+            </form>
+
+            {DEV_MODE && (
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                  Development Quick Login
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {DEV_ACCOUNTS.map(acc => (
+                    <button
+                      key={acc.role}
+                      onClick={() => handleDevLogin(acc.email, acc.role)}
+                      disabled={loading}
+                      className="text-left px-3 py-2 rounded-xl border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors group"
+                    >
+                      <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-700">{acc.label}</p>
+                      <p className="text-[10px] text-gray-400 truncate">{acc.email}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <p className="text-center text-xs text-gray-400 mt-6">
+            GN-WAAS v8 · Secured by Keycloak OIDC
+          </p>
+        </div>
       </div>
     </div>
   )

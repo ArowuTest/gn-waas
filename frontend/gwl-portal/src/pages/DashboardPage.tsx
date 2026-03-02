@@ -41,8 +41,8 @@ export default function DashboardPage() {
       { header: 'Account No', accessor: (r) => r.account_number || '' },
       { header: 'Account Holder', accessor: (r) => r.account_holder || '' },
       { header: 'District', accessor: (r) => r.district_name },
-      { header: 'Flag Type', accessor: (r) => FLAG_TYPE_LABELS[r.flag_type] || r.flag_type },
-      { header: 'Severity', accessor: (r) => r.severity },
+      { header: 'Flag Type', accessor: (r) => FLAG_TYPE_LABELS[r.anomaly_type] || r.anomaly_type },
+      { header: 'Severity', accessor: (r) => r.alert_level },
       { header: 'Estimated Loss (GHS)', accessor: (r) => r.estimated_loss_ghs },
       { header: 'Status', accessor: (r) => GWL_STATUS_LABELS[r.gwl_status] || r.gwl_status },
       { header: 'Days Open', accessor: (r) => r.days_open },
@@ -194,15 +194,15 @@ export default function DashboardPage() {
               {
                 header: 'Flag Type',
                 accessor: (r) => (
-                  <Badge className={FLAG_TYPE_COLORS[r.flag_type]}>
-                    {FLAG_TYPE_LABELS[r.flag_type] || r.flag_type}
+                  <Badge className={FLAG_TYPE_COLORS[r.anomaly_type]}>
+                    {FLAG_TYPE_LABELS[r.anomaly_type] || r.anomaly_type}
                   </Badge>
                 ),
               },
               {
                 header: 'Severity',
                 accessor: (r) => (
-                  <Badge className={SEVERITY_COLORS[r.severity]}>{r.severity}</Badge>
+                  <Badge className={SEVERITY_COLORS[r.alert_level]}>{r.alert_level}</Badge>
                 ),
               },
               {
