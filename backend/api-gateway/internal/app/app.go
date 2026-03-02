@@ -393,9 +393,26 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── Field Jobs ────────────────────────────────────────────────────────────
 	fieldJobs := api.Group("/field-jobs")
+	// Admin/supervisor: list all field jobs with optional status/alert_level/district_id filters.
+	// Used by admin portal FieldJobsPage to display the full job queue.
+	fieldJobs.Get("/",
+		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
+		fieldJobHandler.ListAllJobs,
+	)
+	// Admin/supervisor: create a new field job dispatch.
+	fieldJobs.Post("/",
+		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
+		fieldJobHandler.CreateFieldJob,
+	)
 	fieldJobs.Get("/my-jobs",
 		middleware.RequireRoles("FIELD_OFFICER"),
 		fieldJobHandler.GetMyJobs,
+	)
+	// Admin/supervisor: assign a field officer to a job.
+	// Used by admin portal FieldJobsPage assign-officer modal.
+	fieldJobs.Patch("/:id/assign",
+		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
+		fieldJobHandler.AssignOfficer,
 	)
 	fieldJobs.Patch("/:id/status",
 		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR"),

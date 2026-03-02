@@ -48,7 +48,7 @@ export default function DMAMapPage() {
   const { data: districts = [], isLoading } = useQuery<District[]>({
     queryKey: ['districts-map'],
     queryFn: async () => {
-      const res = await api.get('/api/v1/admin/districts')
+      const res = await api.get('/districts')
       return res.data?.data ?? []
     },
   })

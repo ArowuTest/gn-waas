@@ -3,7 +3,7 @@
  *
  * Displays GRA VSDC invoice signing status, QR-code receipts, and
  * compliance metrics for all districts. Data is fetched live from
- * the api-gateway /audit-events and /gwl/cases endpoints.
+ * the api-gateway /audits and /gwl/cases endpoints.
  *
  * No hardcoded data. All values come from the backend.
  */
@@ -45,10 +45,10 @@ interface GRAComplianceSummary {
 // ─── API Hooks ────────────────────────────────────────────────────────────────
 
 function useGRACompliance(period: string, districtId: string, status: string) {
-  return useQuery<{ data: GRAComplianceRecord[] }>({
+  return useQuery<{ data: { data: GRAComplianceRecord[]; meta?: { total?: number } } }>({
     queryKey: ['gra-compliance', period, districtId, status],
     queryFn: () =>
-      apiClient.get('/audit-events', {
+      apiClient.get('/audits', {
         params: {
           period,
           district_id: districtId || undefined,
@@ -120,7 +120,7 @@ export function GRACompliancePage() {
   const { data: recordsData, isLoading, refetch } = useGRACompliance(period, districtId, statusFilter)
   const { data: summaryData } = useGRAComplianceSummary(period)
 
-  const records: GRAComplianceRecord[] = (recordsData as any)?.data ?? []
+  const records: GRAComplianceRecord[] = (recordsData as any)?.data?.data ?? []
   const summary: Partial<GRAComplianceSummary> = (summaryData as any)?.data ?? {}
 
   const filtered = records.filter(r =>

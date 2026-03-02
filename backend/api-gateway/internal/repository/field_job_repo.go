@@ -472,6 +472,9 @@ func (r *FieldJobRepository) ListAll(ctx context.Context, status, alertLevel, di
 		); err != nil {
 			return nil, fmt.Errorf("ListAll scan failed: %w", err)
 		}
+		// Populate GPS aliases for Flutter/admin portal compatibility
+		j.GpsLat = j.TargetGPSLat
+		j.GpsLng = j.TargetGPSLng
 		jobs = append(jobs, j)
 	}
 	return jobs, rows.Err()
@@ -517,12 +520,17 @@ func (r *SystemConfigRepository) GetString(ctx context.Context, key string, defa
 // EnrichedFieldJob extends FieldJob with joined account data for the mobile app
 type EnrichedFieldJob struct {
 	domain.FieldJob
-	AccountHolderName string  `json:"customer_name"`
-	GWLAccountNumber  string  `json:"account_number"`
-	AddressLine1      string  `json:"address"`
-	AnomalyType       *string `json:"anomaly_type,omitempty"`
-	AlertLevel        *string `json:"alert_level,omitempty"`
+	AccountHolderName string   `json:"customer_name"`
+	GWLAccountNumber  string   `json:"account_number"`
+	AddressLine1      string   `json:"address"`
+	AnomalyType       *string  `json:"anomaly_type,omitempty"`
+	AlertLevel        *string  `json:"alert_level,omitempty"`
 	EstimatedLossGHS  *float64 `json:"estimated_variance_ghs,omitempty"`
+	// GPS aliases: Flutter and admin portal read gps_lat/gps_lng;
+	// domain.FieldJob stores them as target_gps_lat/target_gps_lng.
+	// These fields are populated after scanning so both names work.
+	GpsLat float64 `json:"gps_lat"`
+	GpsLng float64 `json:"gps_lng"`
 }
 
 // GetByOfficerEnriched returns field jobs for an officer with joined account data.
@@ -582,6 +590,10 @@ func (r *FieldJobRepository) GetByOfficerEnriched(ctx context.Context, officerID
 			r.logger.Warn("Failed to scan enriched field job", zap.Error(err))
 			continue
 		}
+		// Populate GPS aliases so Flutter (gps_lat/gps_lng) and admin portal
+		// both receive the target coordinates under the expected JSON keys.
+		j.GpsLat = j.TargetGPSLat
+		j.GpsLng = j.TargetGPSLng
 		jobs = append(jobs, j)
 	}
 	return jobs, rows.Err()

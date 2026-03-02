@@ -260,6 +260,6 @@ class ApiService {
     dynamic report,
     List<dynamic> photos,
   ) async {
-    await _dio.post('/api/v1/field-jobs/illegal-connections', data: report.toJson());
+    await _dio.post('/field-jobs/illegal-connections', data: report.toJson());
   }
 }
