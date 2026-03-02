@@ -177,13 +177,32 @@ export function AnomaliesPage() {
           </table>
         )}
 
-        {/* Pagination */}
-        {total > filters.limit && (
+        {/* Pagination — always shown when there are results */}
+        {total > 0 && (
           <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-            <p className="text-sm text-gray-500">
-              Showing {filters.offset + 1}–{Math.min(filters.offset + filters.limit, total)} of {total}
-            </p>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-gray-500">
+                Showing {Math.min(filters.offset + 1, total)}–{Math.min(filters.offset + filters.limit, total)} of {total}
+              </p>
+              <select
+                className="input input-sm w-24 text-xs"
+                value={filters.limit}
+                onChange={e => setFilters(f => ({ ...f, limit: Number(e.target.value), offset: 0 }))}
+              >
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                className="btn-secondary btn-sm"
+                disabled={filters.offset === 0}
+                onClick={() => setFilters(f => ({ ...f, offset: 0 }))}
+              >
+                «
+              </button>
               <button
                 className="btn-secondary btn-sm"
                 disabled={filters.offset === 0}
@@ -191,12 +210,22 @@ export function AnomaliesPage() {
               >
                 Previous
               </button>
+              <span className="text-sm text-gray-500 px-2">
+                Page {Math.floor(filters.offset / filters.limit) + 1} of {Math.ceil(total / filters.limit)}
+              </span>
               <button
                 className="btn-secondary btn-sm"
                 disabled={filters.offset + filters.limit >= total}
                 onClick={() => setFilters(f => ({ ...f, offset: f.offset + f.limit }))}
               >
                 Next
+              </button>
+              <button
+                className="btn-secondary btn-sm"
+                disabled={filters.offset + filters.limit >= total}
+                onClick={() => setFilters(f => ({ ...f, offset: (Math.ceil(total / f.limit) - 1) * f.limit }))}
+              >
+                »
               </button>
             </div>
           </div>

@@ -1,0 +1,279 @@
+# GN-WAAS — Kubernetes Deployments for Frontend Portals
+# Covers: admin-portal, authority-portal, gwl-portal
+# Each portal is a static React/Vite SPA served by nginx.
+# Combined with services-deployment.yaml this gives all 10 services K8s coverage.
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# ADMIN PORTAL
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-portal
+  namespace: gnwaas
+  labels:
+    app: admin-portal
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: admin-portal
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: admin-portal
+    spec:
+      containers:
+        - name: admin-portal
+          image: ghcr.io/arowtest/gn-waas/admin-portal:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: VITE_API_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gnwaas-config
+                  key: API_BASE_URL
+            - name: VITE_KEYCLOAK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gnwaas-config
+                  key: KEYCLOAK_URL
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101   # nginx user
+            readOnlyRootFilesystem: false  # nginx needs /tmp and /var/cache
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-portal-service
+  namespace: gnwaas
+spec:
+  selector:
+    app: admin-portal
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTHORITY PORTAL
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authority-portal
+  namespace: gnwaas
+  labels:
+    app: authority-portal
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: authority-portal
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: authority-portal
+    spec:
+      containers:
+        - name: authority-portal
+          image: ghcr.io/arowtest/gn-waas/authority-portal:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: VITE_API_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gnwaas-config
+                  key: API_BASE_URL
+            - name: VITE_KEYCLOAK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gnwaas-config
+                  key: KEYCLOAK_URL
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authority-portal-service
+  namespace: gnwaas
+spec:
+  selector:
+    app: authority-portal
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# GWL PORTAL
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gwl-portal
+  namespace: gnwaas
+  labels:
+    app: gwl-portal
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gwl-portal
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: gwl-portal
+    spec:
+      containers:
+        - name: gwl-portal
+          image: ghcr.io/arowtest/gn-waas/gwl-portal:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: VITE_API_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gnwaas-config
+                  key: API_BASE_URL
+            - name: VITE_KEYCLOAK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: gnwaas-config
+                  key: KEYCLOAK_URL
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gwl-portal-service
+  namespace: gnwaas
+spec:
+  selector:
+    app: gwl-portal
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# NAMESPACE + CONFIGMAP (shared config for all services)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gnwaas
+  labels:
+    name: gnwaas
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gnwaas-config
+  namespace: gnwaas
+data:
+  APP_ENV: "production"
+  API_BASE_URL: "https://api.gnwaas.gov.gh"
+  KEYCLOAK_URL: "https://auth.gnwaas.gov.gh"
+  KEYCLOAK_REALM: "gnwaas"
+  KEYCLOAK_CLIENT_ID: "api-gateway"
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "gnwaas"
+  MINIO_ENDPOINT: "minio-service:9000"
+  MINIO_BUCKET: "gnwaas-evidence"
+  NATS_URL: "nats://nats-service:4222"
+  SENTINEL_URL: "http://sentinel-service:3002"
+  TARIFF_ENGINE_URL: "http://tariff-engine-service:3001"
+  GRA_BRIDGE_URL: "http://gra-bridge-service:3003"
+  OCR_SERVICE_URL: "http://ocr-service-service:3005"

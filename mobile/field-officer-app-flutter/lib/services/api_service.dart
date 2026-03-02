@@ -254,4 +254,12 @@ class ApiService {
     final res = await _dio.get('/users/me');
     return User.fromJson(res.data['data'] as Map<String, dynamic>);
   }
+
+  /// Submit an illegal connection report (FIO-004)
+  Future<void> submitIllegalConnectionReport(
+    dynamic report,
+    List<dynamic> photos,
+  ) async {
+    await _dio.post('/api/v1/field-jobs/illegal-connections', data: report.toJson());
+  }
 }

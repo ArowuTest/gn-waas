@@ -207,3 +207,6 @@ func (r *AuditEventRepository) GetDashboardStats(ctx context.Context, districtID
 
 	return stats, err
 }
+
+// DB returns the underlying database pool for direct queries.
+func (r *AuditEventRepository) DB() *pgxpool.Pool { return r.db }

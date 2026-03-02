@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../reports/illegal_connection_screen.dart';
 
 class JobDetailScreen extends ConsumerStatefulWidget {
   final String jobId;

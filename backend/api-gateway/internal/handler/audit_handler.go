@@ -739,3 +739,96 @@ func getEnvOrDefault(key, def string) string {
 	}
 	return def
 }
+
+// ─── ReportIllegalConnection ──────────────────────────────────────────────────
+// POST /api/v1/field-jobs/illegal-connections
+// Field officers report illegal water connections, bypasses, and tampering.
+// This addresses FIO-004 — a key source of non-revenue water.
+func (h *FieldJobHandler) ReportIllegalConnection(c *fiber.Ctx) error {
+	officerID, ok := c.Locals("user_id").(string)
+	if !ok || officerID == "" {
+		return response.Unauthorized(c, "Authentication required")
+	}
+
+	var req struct {
+		ConnectionType             string   `json:"connection_type"`
+		Severity                   string   `json:"severity"`
+		Description                string   `json:"description"`
+		EstimatedDailyLossLitres   float64  `json:"estimated_daily_loss_litres"`
+		Address                    string   `json:"address"`
+		AccountNumber              *string  `json:"account_number"`
+		Latitude                   float64  `json:"latitude"`
+		Longitude                  float64  `json:"longitude"`
+		GPSAccuracy                float64  `json:"gps_accuracy"`
+		PhotoCount                 int      `json:"photo_count"`
+		JobID                      *string  `json:"job_id"`
+		ReportedAt                 string   `json:"reported_at"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+
+	// Validate required fields
+	if req.ConnectionType == "" {
+		return response.BadRequest(c, "MISSING_CONNECTION_TYPE", "connection_type is required")
+	}
+	if req.Description == "" || len(req.Description) < 20 {
+		return response.BadRequest(c, "INVALID_DESCRIPTION", "description must be at least 20 characters")
+	}
+	if req.Latitude == 0 && req.Longitude == 0 {
+		return response.BadRequest(c, "MISSING_LOCATION", "GPS coordinates are required")
+	}
+
+	// Validate connection type
+	validTypes := map[string]bool{
+		"BYPASS": true, "ILLEGAL_TAP": true, "TAMPERED_METER": true,
+		"REVERSED_METER": true, "SHARED_CONNECTION": true, "BROKEN_SEAL": true, "OTHER": true,
+	}
+	if !validTypes[req.ConnectionType] {
+		return response.BadRequest(c, "INVALID_CONNECTION_TYPE", "Invalid connection type")
+	}
+
+	// Validate severity
+	validSeverities := map[string]bool{
+		"CRITICAL": true, "HIGH": true, "MEDIUM": true, "LOW": true,
+	}
+	if req.Severity == "" {
+		req.Severity = "HIGH"
+	}
+	if !validSeverities[req.Severity] {
+		return response.BadRequest(c, "INVALID_SEVERITY", "Invalid severity level")
+	}
+
+	// Persist to illegal_connections table
+	var reportID uuid.UUID
+	err := h.auditRepo.DB().QueryRow(c.Context(), `
+		INSERT INTO illegal_connections (
+			officer_id, job_id, connection_type, severity, description,
+			estimated_daily_loss_litres, address, account_number,
+			latitude, longitude, gps_accuracy, photo_count, reported_at
+		) VALUES (
+			$1::uuid, $2::uuid, $3, $4, $5,
+			$6, $7, $8,
+			$9, $10, $11, $12, NOW()
+		) RETURNING id`,
+		officerID, req.JobID, req.ConnectionType, req.Severity, req.Description,
+		req.EstimatedDailyLossLitres, req.Address, req.AccountNumber,
+		req.Latitude, req.Longitude, req.GPSAccuracy, req.PhotoCount,
+	).Scan(&reportID)
+	if err != nil {
+		h.logger.Error("Failed to save illegal connection report", zap.Error(err))
+		return response.InternalError(c, "Failed to save report")
+	}
+
+	h.logger.Info("Illegal connection reported",
+		zap.String("report_id", reportID.String()),
+		zap.String("officer_id", officerID),
+		zap.String("type", req.ConnectionType),
+		zap.String("severity", req.Severity),
+	)
+
+	return response.Created(c, fiber.Map{
+		"report_id": reportID,
+		"message":   "Illegal connection report submitted successfully",
+	})
+}

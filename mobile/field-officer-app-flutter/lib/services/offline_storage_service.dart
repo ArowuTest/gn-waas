@@ -100,36 +100,86 @@ class OfflineStorageService {
 
   // ─── Job Cache ─────────────────────────────────────────────────────────────
 
-  /// Cache jobs fetched from the API
+  /// Cache jobs fetched from the API using server-wins conflict resolution.
+  ///
+  /// H2 Fix: Instead of blindly replacing local records (ConflictAlgorithm.replace),
+  /// we implement a "server-wins for status, preserve local pending submissions"
+  /// strategy:
+  ///   - If the local record has a PENDING submission queued, we keep the local
+  ///     status and merge only non-status fields from the server.
+  ///   - If no pending submission exists, the server version wins entirely.
+  ///
+  /// This prevents data loss when a job is updated on the server while the
+  /// officer is offline and has queued a local status change.
   Future<void> cacheJobs(List<FieldJob> jobs) async {
     final database = await db;
-    final batch = database.batch();
+
     for (final job in jobs) {
-      batch.insert(
-        'offline_jobs',
-        {
-          'id':                     job.id,
-          'job_reference':          job.jobReference,
-          'audit_event_id':         job.auditEventId,
-          'account_number':         job.accountNumber,
-          'customer_name':          job.customerName,
-          'address':                job.address,
-          'gps_lat':                job.gpsLat,
-          'gps_lng':                job.gpsLng,
-          'anomaly_type':           job.anomalyType,
-          'alert_level':            job.alertLevel.toApiString(),
-          'status':                 job.status.toApiString(),
-          'scheduled_at':           job.scheduledAt?.toIso8601String(),
-          'dispatched_at':          job.dispatchedAt?.toIso8601String(),
-          'notes':                  job.notes,
-          'estimated_variance_ghs': job.estimatedVarianceGhs,
-          'synced_at':              DateTime.now().toIso8601String(),
-          'updated_at':             DateTime.now().toIso8601String(),
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
+      // Check if there is a pending (unsynced) submission for this job
+      final pendingRows = await database.query(
+        'pending_submissions',
+        where: 'job_id = ? AND status = ?',
+        whereArgs: [job.id, 'PENDING'],
+        limit: 1,
       );
+      final hasPendingSubmission = pendingRows.isNotEmpty;
+
+      // Check if we have a local record with a more recent update
+      final localRows = await database.query(
+        'offline_jobs',
+        where: 'id = ?',
+        whereArgs: [job.id],
+        limit: 1,
+      );
+
+      final serverData = {
+        'id':                     job.id,
+        'job_reference':          job.jobReference,
+        'audit_event_id':         job.auditEventId,
+        'account_number':         job.accountNumber,
+        'customer_name':          job.customerName,
+        'address':                job.address,
+        'gps_lat':                job.gpsLat,
+        'gps_lng':                job.gpsLng,
+        'anomaly_type':           job.anomalyType,
+        'alert_level':            job.alertLevel.toApiString(),
+        'status':                 job.status.toApiString(),
+        'scheduled_at':           job.scheduledAt?.toIso8601String(),
+        'dispatched_at':          job.dispatchedAt?.toIso8601String(),
+        'notes':                  job.notes,
+        'estimated_variance_ghs': job.estimatedVarianceGhs,
+        'synced_at':              DateTime.now().toIso8601String(),
+        'updated_at':             DateTime.now().toIso8601String(),
+      };
+
+      if (localRows.isEmpty) {
+        // No local record — insert server version
+        await database.insert('offline_jobs', serverData,
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+      } else if (hasPendingSubmission) {
+        // Local pending submission exists — server-wins for metadata only,
+        // preserve local status to avoid overwriting the officer's work.
+        final localStatus = localRows.first['status'] as String?;
+        final mergedData = Map<String, dynamic>.from(serverData);
+        if (localStatus != null) {
+          mergedData['status'] = localStatus; // preserve local status
+        }
+        await database.update(
+          'offline_jobs',
+          mergedData,
+          where: 'id = ?',
+          whereArgs: [job.id],
+        );
+      } else {
+        // No pending submission — server wins entirely (latest truth)
+        await database.update(
+          'offline_jobs',
+          serverData,
+          where: 'id = ?',
+          whereArgs: [job.id],
+        );
+      }
     }
-    await batch.commit(noResult: true);
   }
 
   /// Load cached jobs from SQLite
@@ -154,6 +204,37 @@ class OfflineStorageService {
       where: 'id = ?',
       whereArgs: [jobId],
     );
+  }
+
+  // ─── Illegal Connection Reports ───────────────────────────────────────────
+
+  /// Queue an illegal connection report for background sync when offline
+  Future<void> queueIllegalConnectionReport({
+    required String connectionType,
+    required String severity,
+    required String description,
+    required double latitude,
+    required double longitude,
+    required int photoCount,
+  }) async {
+    final database = await db;
+    await database.insert('pending_submissions', {
+      'id':              _uuid.v4(),
+      'job_id':          'illegal_connection',
+      'submission_json': jsonEncode({
+        'type': 'ILLEGAL_CONNECTION',
+        'connection_type': connectionType,
+        'severity': severity,
+        'description': description,
+        'latitude': latitude,
+        'longitude': longitude,
+        'photo_count': photoCount,
+      }),
+      'photo_uris':      jsonEncode(<String>[]),
+      'status':          'PENDING',
+      'retry_count':     0,
+      'created_at':      DateTime.now().toIso8601String(),
+    });
   }
 
   // ─── Pending Submissions ───────────────────────────────────────────────────

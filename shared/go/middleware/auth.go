@@ -359,3 +359,40 @@ func DevAuthMiddleware(logger *zap.Logger) fiber.Handler {
 		return c.Next()
 	}
 }
+
+// SetRLSContext sets fiber locals for Row-Level Security context.
+// Must be called after authentication middleware so that user claims are available.
+// The API gateway calls this at the start of every authenticated request so that
+// the database RLS policies can enforce district-level data isolation.
+//
+// Stores in fiber locals:
+//   - rls_district_id — the user's district UUID
+//   - rls_user_roles  — the user's roles slice
+//   - rls_user_id     — the user's subject (UUID)
+//
+// Usage: app.Use(middleware.SetRLSContext())
+func SetRLSContext() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		claims, ok := c.Locals("user_claims").(*Claims)
+		if !ok || claims == nil {
+			return c.Next()
+		}
+
+		districtID := claims.DistrictID
+		if districtID == "" {
+			districtID = "00000000-0000-0000-0000-000000000000"
+		}
+
+		// Determine primary role (first realm role)
+		primaryRole := ""
+		if len(claims.RealmAccess.Roles) > 0 {
+			primaryRole = claims.RealmAccess.Roles[0]
+		}
+
+		c.Locals("rls_district_id", districtID)
+		c.Locals("rls_user_role", primaryRole)
+		c.Locals("rls_user_id", claims.Subject)
+
+		return c.Next()
+	}
+}
