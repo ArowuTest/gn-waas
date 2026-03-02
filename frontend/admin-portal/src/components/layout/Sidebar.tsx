@@ -47,13 +47,13 @@ const navItems: NavItem[] = [
     label: 'NRW Analysis',
     to: '/nrw',
     icon: <BarChart3 size={18} />,
-    roles: ['SYSTEM_ADMIN', 'DISTRICT_MANAGER', 'FINANCE_ANALYST'],
+    roles: ['SYSTEM_ADMIN', 'GWL_MANAGER', 'MOF_AUDITOR'],
   },
   {
     label: 'GRA Compliance',
     to: '/gra',
     icon: <Shield size={18} />,
-    roles: ['SYSTEM_ADMIN', 'GRA_LIAISON', 'FINANCE_ANALYST'],
+    roles: ['SYSTEM_ADMIN', 'GRA_OFFICER', 'MOF_AUDITOR'],
   },
   {
     label: 'Reports',

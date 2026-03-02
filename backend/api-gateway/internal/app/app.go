@@ -338,7 +338,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	users := api.Group("/users")
 	users.Get("/me", userHandler.GetMe)
 	users.Get("/field-officers",
-		middleware.RequireRoles("SYSTEM_ADMIN", "DISTRICT_MANAGER", "AUDIT_SUPERVISOR"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "GWL_MANAGER", "FIELD_SUPERVISOR"),
 		userHandler.GetFieldOfficers,
 	)
 
@@ -352,13 +352,13 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	audits := api.Group("/audits")
 	audits.Get("/dashboard", auditHandler.GetDashboardStats)
 	audits.Post("/",
-		middleware.RequireRoles("SYSTEM_ADMIN", "AUDIT_SUPERVISOR", "DISTRICT_MANAGER"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
 		auditHandler.CreateAuditEvent,
 	)
 	audits.Get("/", auditHandler.ListAuditEvents)
 	audits.Get("/:id", auditHandler.GetAuditEvent)
 	audits.Patch("/:id/assign",
-		middleware.RequireRoles("SYSTEM_ADMIN", "AUDIT_SUPERVISOR", "DISTRICT_MANAGER"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
 		auditHandler.AssignAuditEvent,
 	)
 
@@ -369,7 +369,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		fieldJobHandler.GetMyJobs,
 	)
 	fieldJobs.Patch("/:id/status",
-		middleware.RequireRoles("FIELD_OFFICER", "AUDIT_SUPERVISOR"),
+		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR"),
 		fieldJobHandler.UpdateJobStatus,
 	)
 	fieldJobs.Post("/:id/sos",
@@ -385,20 +385,20 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── Sentinel routes (admin portal compatibility) ───────────────────────────
 	// The admin portal hooks use /sentinel/* paths — proxy to anomaly-flags handler
 	sentinel := api.Group("/sentinel",
-		middleware.RequireRoles("SYSTEM_ADMIN", "AUDIT_SUPERVISOR", "DISTRICT_MANAGER", "EXECUTIVE"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
 	)
 	sentinel.Get("/anomalies", flagHandler.ListAnomalyFlags)
 	sentinel.Get("/anomalies/:id", flagHandler.GetAnomalyFlag)
 	sentinel.Get("/summary/:district_id", flagHandler.GetDistrictSummary)
 	sentinel.Post("/scan/:district_id",
-		middleware.RequireRoles("SYSTEM_ADMIN", "AUDIT_SUPERVISOR"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR"),
 		flagHandler.TriggerScan,
 	)
 
 	// ── OCR proxy (Flutter calls /ocr/process via api-gateway) ────────────────
 	// Proxies to the ocr-service on port 3005 (or OCR_SERVICE_URL env var)
 	ocr := api.Group("/ocr",
-		middleware.RequireRoles("FIELD_OFFICER", "SYSTEM_ADMIN", "AUDIT_SUPERVISOR"),
+		middleware.RequireRoles("FIELD_OFFICER", "SYSTEM_ADMIN", "FIELD_SUPERVISOR"),
 	)
 	ocr.Post("/process", fieldJobHandler.ProxyOCRProcess)
 
@@ -406,7 +406,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// Flutter calls POST /evidence/upload-url to get a presigned PUT URL,
 	// uploads photo directly to MinIO, then submits the object_key with the job.
 	evidence := api.Group("/evidence",
-		middleware.RequireRoles("FIELD_OFFICER", "AUDIT_SUPERVISOR", "SYSTEM_ADMIN"),
+		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR", "SYSTEM_ADMIN"),
 	)
 	evidence.Post("/upload-url", evidenceHandler.GetUploadURL)
 	evidence.Post("/verify-hash", evidenceHandler.VerifyPhotoHash)
@@ -416,7 +416,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	reports := api.Group("/reports")
 	reports.Get("/nrw", nrwHandler.GetNRWSummary)
 	reports.Get("/nrw/my-district",
-		middleware.RequireRoles("FIELD_OFFICER", "DISTRICT_MANAGER", "AUDIT_SUPERVISOR"),
+		middleware.RequireRoles("FIELD_OFFICER", "GWL_MANAGER", "FIELD_SUPERVISOR"),
 		nrwHandler.GetMyDistrictSummary,
 	)
 	reports.Get("/nrw/:district_id/trend", nrwHandler.GetDistrictNRWTrend)
@@ -446,7 +446,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── GWL Case Management Portal ───────────────────────────────────────────
 	// All GWL routes require GWL_SUPERVISOR, GWL_BILLING_OFFICER, or GWL_MANAGER role
-	gwlRoles := middleware.RequireRoles("GWL_SUPERVISOR", "GWL_BILLING_OFFICER", "GWL_MANAGER", "SYSTEM_ADMIN")
+	gwlRoles := middleware.RequireRoles("GWL_MANAGER", "GWL_ANALYST", "GWL_EXECUTIVE", "SYSTEM_ADMIN")
 	gwl := api.Group("/gwl", gwlRoles)
 
 	// Case queue and summary

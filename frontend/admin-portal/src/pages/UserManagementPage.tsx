@@ -24,12 +24,17 @@ interface District {
 }
 
 const ROLES = [
-  { value: 'SYSTEM_ADMIN', label: 'System Admin', color: '#7c3aed' },
-  { value: 'AUDIT_MANAGER', label: 'Audit Manager', color: '#1d4ed8' },
-  { value: 'DISTRICT_MANAGER', label: 'District Manager', color: '#0369a1' },
-  { value: 'FIELD_OFFICER', label: 'Field Officer', color: '#047857' },
-  { value: 'GRA_LIAISON', label: 'GRA Liaison', color: '#b45309' },
-  { value: 'READONLY_VIEWER', label: 'Read-Only Viewer', color: '#6b7280' },
+  { value: 'SUPER_ADMIN',      label: 'Super Admin',        color: '#7c3aed' },
+  { value: 'SYSTEM_ADMIN',     label: 'System Admin',       color: '#6d28d9' },
+  { value: 'MINISTER_VIEW',    label: 'Minister View',      color: '#1d4ed8' },
+  { value: 'GRA_OFFICER',      label: 'GRA Officer',        color: '#b45309' },
+  { value: 'MOF_AUDITOR',      label: 'MOF Auditor',        color: '#0369a1' },
+  { value: 'GWL_EXECUTIVE',    label: 'GWL Executive',      color: '#0f766e' },
+  { value: 'GWL_MANAGER',      label: 'GWL Manager',        color: '#047857' },
+  { value: 'GWL_ANALYST',      label: 'GWL Analyst',        color: '#15803d' },
+  { value: 'FIELD_SUPERVISOR', label: 'Field Supervisor',   color: '#b45309' },
+  { value: 'FIELD_OFFICER',    label: 'Field Officer',      color: '#d97706' },
+  { value: 'MDA_USER',         label: 'MDA User',           color: '#6b7280' },
 ]
 
 function roleBadge(role: string) {
@@ -60,7 +65,7 @@ function UserModal({
     is_active: user?.is_active ?? true,
   })
 
-  const needsDistrict = ['DISTRICT_MANAGER', 'FIELD_OFFICER'].includes(form.role)
+  const needsDistrict = ['GWL_MANAGER', 'FIELD_SUPERVISOR', 'FIELD_OFFICER'].includes(form.role)
 
   return (
     <div className="modal-overlay" onClick={onClose}>

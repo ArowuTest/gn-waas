@@ -3,14 +3,14 @@ import { LayoutDashboard, Search, BookOpen, AlertTriangle, Briefcase, BarChart3,
 import { useAuth } from '../../contexts/AuthContext'
 
 const navItems = [
-  { to: '/district',      icon: LayoutDashboard, label: 'My District',     roles: ['DISTRICT_MANAGER','AUDIT_SUPERVISOR','FIELD_OFFICER','FINANCE_ANALYST','READONLY_VIEWER'] },
-  { to: '/accounts',      icon: Search,           label: 'Account Search',  roles: ['DISTRICT_MANAGER','AUDIT_SUPERVISOR','FIELD_OFFICER'] },
-  { to: '/meter-reading', icon: BookOpen,          label: 'Meter Reading',   roles: ['FIELD_OFFICER','AUDIT_SUPERVISOR'] },
-  { to: '/report-issue',  icon: AlertTriangle,     label: 'Report Issue',    roles: ['DISTRICT_MANAGER','AUDIT_SUPERVISOR','FIELD_OFFICER'] },
-  { to: '/my-jobs',       icon: Briefcase,         label: 'My Jobs',         roles: ['FIELD_OFFICER','AUDIT_SUPERVISOR'] },
-  { to: '/nrw',            icon: BarChart3,         label: 'NRW Summary',     roles: ['DISTRICT_MANAGER','FINANCE_ANALYST','READONLY_VIEWER'] },
-  { to: '/job-assignment', icon: UserCheck,         label: 'Job Assignment',  roles: ['DISTRICT_MANAGER','AUDIT_SUPERVISOR'] },
-  { to: '/reporting',      icon: FileDown,          label: 'Reports',         roles: ['DISTRICT_MANAGER','FINANCE_ANALYST','READONLY_VIEWER'] },
+  { to: '/district',      icon: LayoutDashboard, label: 'My District',     roles: ['GWL_MANAGER','FIELD_SUPERVISOR','FIELD_OFFICER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
+  { to: '/accounts',      icon: Search,           label: 'Account Search',  roles: ['GWL_MANAGER','FIELD_SUPERVISOR','FIELD_OFFICER','GWL_ANALYST'] },
+  { to: '/meter-reading', icon: BookOpen,          label: 'Meter Reading',   roles: ['FIELD_OFFICER','FIELD_SUPERVISOR'] },
+  { to: '/report-issue',  icon: AlertTriangle,     label: 'Report Issue',    roles: ['GWL_MANAGER','FIELD_SUPERVISOR','FIELD_OFFICER'] },
+  { to: '/my-jobs',       icon: Briefcase,         label: 'My Jobs',         roles: ['FIELD_OFFICER','FIELD_SUPERVISOR'] },
+  { to: '/nrw',            icon: BarChart3,         label: 'NRW Summary',     roles: ['GWL_MANAGER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
+  { to: '/job-assignment', icon: UserCheck,         label: 'Job Assignment',  roles: ['GWL_MANAGER','FIELD_SUPERVISOR'] },
+  { to: '/reporting',      icon: FileDown,          label: 'Reports',         roles: ['GWL_MANAGER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
 ]
 
 export default function Sidebar() {

@@ -2,6 +2,7 @@ package reconciler
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"time"
@@ -153,11 +154,13 @@ func (r *ReconcilerService) computeHash(
 	shadowBill *entities.ShadowBillResult,
 ) string {
 	// SHA-256 of key detection inputs for immutability verification
+	// Produces a deterministic, tamper-evident fingerprint of the anomaly detection inputs.
 	input := fmt.Sprintf("%s|%.4f|%.4f|%.4f",
 		gwlBill.ID.String(),
 		gwlBill.GWLTotalGHS,
 		shadowBill.TotalShadowBillGHS,
 		shadowBill.VariancePct,
 	)
-	return fmt.Sprintf("%x", input) // Simplified - use crypto/sha256 in production
+	h := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("%x", h[:])
 }

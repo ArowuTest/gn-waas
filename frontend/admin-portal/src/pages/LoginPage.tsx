@@ -115,9 +115,9 @@ export function LoginPage() {
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { role: 'SYSTEM_ADMIN', label: 'System Admin' },
-                  { role: 'AUDIT_SUPERVISOR', label: 'Supervisor' },
+                  { role: 'FIELD_SUPERVISOR', label: 'Field Supervisor' },
                   { role: 'FIELD_OFFICER', label: 'Field Officer' },
-                  { role: 'FINANCE_ANALYST', label: 'Finance Analyst' },
+                  { role: 'MOF_AUDITOR', label: 'MOF Auditor' },
                 ].map(({ role, label }) => (
                   <button
                     key={role}

@@ -1,37 +1,49 @@
 // GN-WAAS Field Officer App — Domain Models
 // Mirrors the backend Go types exactly
 
+/// FieldJobStatus mirrors the field_job_status PostgreSQL enum exactly.
+/// Values: QUEUED, ASSIGNED, DISPATCHED, EN_ROUTE, ON_SITE,
+///         COMPLETED, FAILED, CANCELLED, ESCALATED, SOS
 enum FieldJobStatus {
   queued,
+  assigned,
   dispatched,
   enRoute,
   onSite,
   completed,
   failed,
+  cancelled,
+  escalated,
   sos;
 
   static FieldJobStatus fromString(String s) {
     switch (s.toUpperCase()) {
-      case 'QUEUED':      return FieldJobStatus.queued;
-      case 'DISPATCHED':  return FieldJobStatus.dispatched;
-      case 'EN_ROUTE':    return FieldJobStatus.enRoute;
-      case 'ON_SITE':     return FieldJobStatus.onSite;
-      case 'COMPLETED':   return FieldJobStatus.completed;
-      case 'FAILED':      return FieldJobStatus.failed;
-      case 'SOS':         return FieldJobStatus.sos;
-      default:            return FieldJobStatus.queued;
+      case 'QUEUED':     return FieldJobStatus.queued;
+      case 'ASSIGNED':   return FieldJobStatus.assigned;
+      case 'DISPATCHED': return FieldJobStatus.dispatched;
+      case 'EN_ROUTE':   return FieldJobStatus.enRoute;
+      case 'ON_SITE':    return FieldJobStatus.onSite;
+      case 'COMPLETED':  return FieldJobStatus.completed;
+      case 'FAILED':     return FieldJobStatus.failed;
+      case 'CANCELLED':  return FieldJobStatus.cancelled;
+      case 'ESCALATED':  return FieldJobStatus.escalated;
+      case 'SOS':        return FieldJobStatus.sos;
+      default:           return FieldJobStatus.queued;
     }
   }
 
   String toApiString() {
     switch (this) {
-      case FieldJobStatus.queued:      return 'QUEUED';
-      case FieldJobStatus.dispatched:  return 'DISPATCHED';
-      case FieldJobStatus.enRoute:     return 'EN_ROUTE';
-      case FieldJobStatus.onSite:      return 'ON_SITE';
-      case FieldJobStatus.completed:   return 'COMPLETED';
-      case FieldJobStatus.failed:      return 'FAILED';
-      case FieldJobStatus.sos:         return 'SOS';
+      case FieldJobStatus.queued:     return 'QUEUED';
+      case FieldJobStatus.assigned:   return 'ASSIGNED';
+      case FieldJobStatus.dispatched: return 'DISPATCHED';
+      case FieldJobStatus.enRoute:    return 'EN_ROUTE';
+      case FieldJobStatus.onSite:     return 'ON_SITE';
+      case FieldJobStatus.completed:  return 'COMPLETED';
+      case FieldJobStatus.failed:     return 'FAILED';
+      case FieldJobStatus.cancelled:  return 'CANCELLED';
+      case FieldJobStatus.escalated:  return 'ESCALATED';
+      case FieldJobStatus.sos:        return 'SOS';
     }
   }
 }

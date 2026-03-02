@@ -301,11 +301,14 @@ class _StatusBadge extends StatelessWidget {
   Color get _color {
     switch (status) {
       case FieldJobStatus.queued:     return const Color(0xFF6B7280);
+      case FieldJobStatus.assigned:   return const Color(0xFF0369A1);
       case FieldJobStatus.dispatched: return const Color(0xFF2563EB);
       case FieldJobStatus.enRoute:    return const Color(0xFF7C3AED);
       case FieldJobStatus.onSite:     return const Color(0xFFD97706);
       case FieldJobStatus.completed:  return const Color(0xFF16A34A);
       case FieldJobStatus.failed:     return const Color(0xFFDC2626);
+      case FieldJobStatus.cancelled:  return const Color(0xFF6B7280);
+      case FieldJobStatus.escalated:  return const Color(0xFFB45309);
       case FieldJobStatus.sos:        return const Color(0xFFDC2626);
     }
   }

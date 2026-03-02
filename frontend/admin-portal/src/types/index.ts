@@ -1,19 +1,54 @@
 // ============================================================
 // GN-WAAS TypeScript Type Definitions
+// All enum values MUST match the PostgreSQL ENUM types defined
+// in database/migrations/001_extensions_and_types.sql exactly.
 // ============================================================
 
-export type AlertLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
-export type AuditStatus = 'PENDING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CLOSED'
-export type GRAStatus = 'PENDING' | 'SUBMITTED' | 'SIGNED' | 'FAILED'
-export type FieldJobStatus = 'ASSIGNED' | 'DISPATCHED' | 'ARRIVED' | 'COMPLETED' | 'CANCELLED'
+// ── Alert / Severity ──────────────────────────────────────────────────────────
+export type AlertLevel = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+
+// ── Audit Event lifecycle (matches audit_status SQL enum) ─────────────────────
+export type AuditStatus =
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'AWAITING_GRA'
+  | 'GRA_CONFIRMED'
+  | 'GRA_FAILED'
+  | 'COMPLETED'
+  | 'DISPUTED'
+  | 'ESCALATED'
+  | 'CLOSED'
+  | 'PENDING_COMPLIANCE'
+
+// ── GRA VSDC compliance (matches gra_compliance_status SQL enum) ──────────────
+export type GRAStatus = 'PENDING' | 'SIGNED' | 'FAILED' | 'RETRYING' | 'EXEMPT'
+
+// ── Field Job lifecycle (matches field_job_status SQL enum + migration 009) ───
+export type FieldJobStatus =
+  | 'QUEUED'
+  | 'ASSIGNED'
+  | 'DISPATCHED'
+  | 'EN_ROUTE'
+  | 'ON_SITE'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'ESCALATED'
+  | 'SOS'
+
+// ── RBAC User Roles (matches user_role SQL enum) ──────────────────────────────
 export type UserRole =
+  | 'SUPER_ADMIN'
   | 'SYSTEM_ADMIN'
-  | 'DISTRICT_MANAGER'
-  | 'AUDIT_SUPERVISOR'
+  | 'MINISTER_VIEW'
+  | 'GRA_OFFICER'
+  | 'MOF_AUDITOR'
+  | 'GWL_EXECUTIVE'
+  | 'GWL_MANAGER'
+  | 'GWL_ANALYST'
+  | 'FIELD_SUPERVISOR'
   | 'FIELD_OFFICER'
-  | 'GRA_LIAISON'
-  | 'FINANCE_ANALYST'
-  | 'READONLY_VIEWER'
+  | 'MDA_USER'
 
 export interface District {
   id: string
@@ -82,6 +117,9 @@ export interface AuditEvent {
   field_job_id?: string
   meter_photo_url?: string
   surroundings_photo_url?: string
+  photo_urls?: string[]
+  evidence_object_keys?: string[]
+  photo_hashes?: string[]
   ocr_reading_value?: number
   manual_reading_value?: number
   ocr_status?: string
@@ -93,6 +131,9 @@ export interface AuditEvent {
   gra_status: GRAStatus
   gra_sdc_id?: string
   gra_qr_code_url?: string
+  gra_qr_code?: string
+  gra_receipt_number?: string
+  gra_locked_at?: string
   gra_signed_at?: string
   gwl_billed_ghs?: number
   shadow_bill_ghs?: number
@@ -130,6 +171,8 @@ export interface FieldJob {
   requires_security_escort: boolean
   sos_triggered: boolean
   sos_triggered_at?: string
+  evidence_submitted_at?: string
+  evidence_photo_count?: number
   notes?: string
   created_at: string
   updated_at: string

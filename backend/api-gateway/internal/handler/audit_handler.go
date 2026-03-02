@@ -185,7 +185,7 @@ func (h *AuditHandler) AssignAuditEvent(c *fiber.Ctx) error {
 		AccountID:       event.AccountID,
 		DistrictID:      event.DistrictID,
 		AssignedOfficerID: officerID,
-		Status:          "ASSIGNED",
+		Status:          "IN_PROGRESS",
 		IsBlindAudit:    true, // Always blind audit - officer doesn't see expected reading
 		GPSFenceRadiusM: 50.0, // 50m GPS fence
 		Priority:        1,
@@ -199,7 +199,7 @@ func (h *AuditHandler) AssignAuditEvent(c *fiber.Ctx) error {
 	}
 
 	// Update audit event status
-	if err := h.auditRepo.UpdateStatus(c.Context(), id, "ASSIGNED"); err != nil {
+	if err := h.auditRepo.UpdateStatus(c.Context(), id, "IN_PROGRESS"); err != nil {
 		return response.InternalError(c, "Failed to update audit status")
 	}
 
