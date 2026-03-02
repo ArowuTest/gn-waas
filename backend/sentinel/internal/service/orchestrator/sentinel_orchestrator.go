@@ -11,6 +11,7 @@ import (
 	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/service/night_flow"
 	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/service/phantom_checker"
 	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/service/reconciler"
+	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/service/supply_validator"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -18,15 +19,16 @@ import (
 // SentinelOrchestrator coordinates all fraud detection checks
 // It runs all checks in parallel where possible and persists results
 type SentinelOrchestrator struct {
-	anomalyRepo    interfaces.AnomalyFlagRepository
-	billingRepo    interfaces.GWLBillingRepository
-	accountRepo    interfaces.WaterAccountRepository
-	districtRepo   interfaces.DistrictRepository
-	scheduleRepo   interfaces.SupplyScheduleRepository
-	reconcilerSvc  *reconciler.ReconcilerService
-	phantomSvc     *phantom_checker.PhantomCheckerService
-	nightFlowSvc   *night_flow.NightFlowAnalyser
-	logger         *zap.Logger
+	anomalyRepo       interfaces.AnomalyFlagRepository
+	billingRepo       interfaces.GWLBillingRepository
+	accountRepo       interfaces.WaterAccountRepository
+	districtRepo      interfaces.DistrictRepository
+	scheduleRepo      interfaces.SupplyScheduleRepository
+	reconcilerSvc     *reconciler.ReconcilerService
+	phantomSvc        *phantom_checker.PhantomCheckerService
+	nightFlowSvc      *night_flow.NightFlowAnalyser
+	supplyValidatorSvc *supply_validator.SupplyValidator // TECH-SE-002: off-schedule detection
+	logger            *zap.Logger
 }
 
 // RunResult holds the results of a sentinel run
@@ -52,16 +54,21 @@ func NewSentinelOrchestrator(
 	nightFlowSvc *night_flow.NightFlowAnalyser,
 	logger *zap.Logger,
 ) *SentinelOrchestrator {
+	// Create supply validator using the district repo's DB pool.
+	// This implements TECH-SE-002: off-schedule consumption detection.
+	supplyValidatorSvc := supply_validator.New(districtRepo.DB(), logger)
+
 	return &SentinelOrchestrator{
-		anomalyRepo:   anomalyRepo,
-		billingRepo:   billingRepo,
-		accountRepo:   accountRepo,
-		districtRepo:  districtRepo,
-		scheduleRepo:  scheduleRepo,
-		reconcilerSvc: reconcilerSvc,
-		phantomSvc:    phantomSvc,
-		nightFlowSvc:  nightFlowSvc,
-		logger:        logger,
+		anomalyRepo:        anomalyRepo,
+		billingRepo:        billingRepo,
+		accountRepo:        accountRepo,
+		districtRepo:       districtRepo,
+		scheduleRepo:       scheduleRepo,
+		reconcilerSvc:      reconcilerSvc,
+		phantomSvc:         phantomSvc,
+		nightFlowSvc:       nightFlowSvc,
+		supplyValidatorSvc: supplyValidatorSvc,
+		logger:             logger,
 	}
 }
 
@@ -133,6 +140,19 @@ func (o *SentinelOrchestrator) RunDistrictScan(ctx context.Context, districtID u
 	go func() {
 		defer wg.Done()
 		flags, errs := o.runCategoryMismatchCheck(ctx, districtID)
+		mu.Lock()
+		allFlags = append(allFlags, flags...)
+		errors = append(errors, errs...)
+		mu.Unlock()
+	}()
+
+	// Check 6: Off-schedule consumption (TECH-SE-002 — supply schedule validator)
+	// Detects consumption during scheduled supply outages, which indicates illegal
+	// connections, bypasses, or tampered meters.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		flags, errs := o.runSupplyScheduleValidation(ctx, districtID)
 		mu.Lock()
 		allFlags = append(allFlags, flags...)
 		errors = append(errors, errs...)
@@ -388,4 +408,34 @@ type ScanSummary struct {
 	AnomaliesFound int
 	CriticalCount  int
 	Duration       time.Duration
+}
+
+// runSupplyScheduleValidation detects off-schedule consumption (TECH-SE-002).
+// It checks all meters in the district for consumption during scheduled supply
+// outages — a key indicator of illegal connections or bypassed meters.
+func (o *SentinelOrchestrator) runSupplyScheduleValidation(
+	ctx context.Context,
+	districtID uuid.UUID,
+) ([]*entities.AnomalyFlag, []string) {
+	// Analyse the last 7 days for off-schedule consumption
+	to := time.Now().UTC()
+	from := to.AddDate(0, 0, -7)
+
+	flags, err := o.supplyValidatorSvc.ValidateDistrict(ctx, districtID, from, to)
+	if err != nil {
+		o.logger.Warn("Supply schedule validation failed",
+			zap.String("district_id", districtID.String()),
+			zap.Error(err),
+		)
+		return nil, []string{fmt.Sprintf("SupplyScheduleValidation: %v", err)}
+	}
+
+	if len(flags) > 0 {
+		o.logger.Info("Off-schedule consumption detected",
+			zap.String("district_id", districtID.String()),
+			zap.Int("violations", len(flags)),
+		)
+	}
+
+	return flags, nil
 }

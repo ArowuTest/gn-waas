@@ -208,7 +208,8 @@ class OfflineStorageService {
 
   // ─── Illegal Connection Reports ───────────────────────────────────────────
 
-  /// Queue an illegal connection report for background sync when offline
+  /// Queue an illegal connection report for background sync when offline.
+  /// Photo hashes are stored to maintain chain of custody even when offline.
   Future<void> queueIllegalConnectionReport({
     required String connectionType,
     required String severity,
@@ -216,6 +217,7 @@ class OfflineStorageService {
     required double latitude,
     required double longitude,
     required int photoCount,
+    List<String> photoHashes = const [],
   }) async {
     final database = await db;
     await database.insert('pending_submissions', {
@@ -229,6 +231,8 @@ class OfflineStorageService {
         'latitude': latitude,
         'longitude': longitude,
         'photo_count': photoCount,
+        // SHA-256 hashes preserved offline for chain-of-custody integrity
+        'photo_hashes': photoHashes,
       }),
       'photo_uris':      jsonEncode(<String>[]),
       'status':          'PENDING',

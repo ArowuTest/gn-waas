@@ -210,3 +210,61 @@ func (r *AuditEventRepository) GetDashboardStats(ctx context.Context, districtID
 
 // DB returns the underlying database pool for direct queries.
 func (r *AuditEventRepository) DB() *pgxpool.Pool { return r.db }
+
+// ─── RLS-Activated Variants ───────────────────────────────────────────────────
+// These methods accept a pgx.Tx that has already had SET LOCAL rls.* executed
+// (via the rls.BeginReadOnlyTx helper). They enforce Row-Level Security by
+// running queries inside the RLS-activated transaction.
+
+// GetByDistrictTx is identical to GetByDistrict but runs inside an RLS transaction.
+// Use this for all user-facing list operations to enforce district isolation.
+func (r *AuditEventRepository) GetByDistrictTx(
+	ctx context.Context,
+	q Querier,
+	districtID interface{},
+	status string,
+	limit, offset int,
+) ([]*domain.AuditEvent, int, error) {
+	args := []interface{}{districtID}
+	where := "district_id = $1"
+	argIdx := 2
+
+	if status != "" {
+		where += fmt.Sprintf(" AND status = $%d", argIdx)
+		args = append(args, status)
+		argIdx++
+	}
+
+	var total int
+	q.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM audit_events WHERE %s", where), args...).Scan(&total)
+
+	args = append(args, limit, offset)
+	rows, err := q.Query(ctx, fmt.Sprintf(`
+		SELECT id, audit_reference, account_id, district_id, anomaly_flag_id,
+		       status, assigned_officer_id, gra_status,
+		       gwl_billed_ghs, shadow_bill_ghs, variance_pct,
+		       is_locked, created_at, updated_at
+		FROM audit_events WHERE %s
+		ORDER BY created_at DESC
+		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1), args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("GetByDistrictTx failed: %w", err)
+	}
+	defer rows.Close()
+
+	var events []*domain.AuditEvent
+	for rows.Next() {
+		e := &domain.AuditEvent{}
+		err := rows.Scan(
+			&e.ID, &e.AuditReference, &e.AccountID, &e.DistrictID, &e.AnomalyFlagID,
+			&e.Status, &e.AssignedOfficerID, &e.GRAStatus,
+			&e.GWLBilledGHS, &e.ShadowBillGHS, &e.VariancePct,
+			&e.IsLocked, &e.CreatedAt, &e.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		events = append(events, e)
+	}
+	return events, total, rows.Err()
+}

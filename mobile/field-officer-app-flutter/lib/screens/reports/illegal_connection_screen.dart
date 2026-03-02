@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -42,7 +44,9 @@ class _IllegalConnectionScreenState
   bool _isSubmitting = false;
   bool _isCapturingLocation = false;
   LocationData? _capturedLocation;
-  final List<File> _photos = [];
+  /// Each photo entry stores the File and its SHA-256 hash.
+  /// The hash is computed immediately on capture to ensure chain of custody.
+  final List<({File file, String hash})> _photos = [];
   final _picker = ImagePicker();
 
   static const _connectionTypes = [
@@ -105,7 +109,13 @@ class _IllegalConnectionScreenState
         maxWidth: 1920,
       );
       if (picked != null) {
-        setState(() => _photos.add(File(picked.path)));
+        final file = File(picked.path);
+        // Compute SHA-256 hash immediately to establish chain of custody.
+        // This matches the approach in meter_capture_screen.dart and satisfies
+        // the FIO-004 tamper-evidence requirement.
+        final bytes = await file.readAsBytes();
+        final hash = sha256.convert(bytes).toString();
+        setState(() => _photos.add((file: file, hash: hash)));
       }
     } catch (e) {
       if (mounted) {
@@ -141,6 +151,11 @@ class _IllegalConnectionScreenState
 
     try {
       final user = ref.read(authProvider).user;
+      // Extract photo hashes for chain-of-custody evidence.
+      // Hashes were computed at capture time (SHA-256 of raw bytes).
+      final photoHashes = _photos.map((p) => p.hash).toList();
+      final photoFiles = _photos.map((p) => p.file).toList();
+
       final report = IllegalConnectionReport(
         officerId: user?.id ?? '',
         jobId: widget.jobId,
@@ -156,11 +171,12 @@ class _IllegalConnectionScreenState
         longitude: _capturedLocation!.longitude,
         gpsAccuracy: _capturedLocation!.accuracy,
         photoCount: _photos.length,
+        photoHashes: photoHashes,
         reportedAt: DateTime.now().toUtc(),
       );
 
       final apiService = ref.read(apiServiceProvider);
-      await apiService.submitIllegalConnectionReport(report, _photos);
+      await apiService.submitIllegalConnectionReport(report, photoFiles);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -182,6 +198,7 @@ class _IllegalConnectionScreenState
           latitude: _capturedLocation!.latitude,
           longitude: _capturedLocation!.longitude,
           photoCount: _photos.length,
+          photoHashes: _photos.map((p) => p.hash).toList(),
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -424,7 +441,7 @@ class _IllegalConnectionScreenState
 
             // Photo Evidence
             _SectionHeader(
-              title: 'Photo Evidence (${_photos.length}/5)',
+              title: 'Photo Evidence (${_photos.length}/5) — SHA-256 hashed',
               icon: Icons.camera_alt,
             ),
             const SizedBox(height: 8),
@@ -440,7 +457,7 @@ class _IllegalConnectionScreenState
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.file(
-                          _photos[i],
+                          _photos[i].file,
                           width: 100,
                           height: 100,
                           fit: BoxFit.cover,
@@ -557,7 +574,10 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Data model for an illegal connection report
+/// Data model for an illegal connection report.
+///
+/// Photo hashes (SHA-256) are included to establish chain of custody.
+/// This satisfies the FIO-004 tamper-evidence requirement.
 class IllegalConnectionReport {
   final String officerId;
   final String? jobId;
@@ -571,6 +591,9 @@ class IllegalConnectionReport {
   final double longitude;
   final double gpsAccuracy;
   final int photoCount;
+  /// SHA-256 hashes of each photo, computed at capture time.
+  /// Used to verify photo integrity and establish chain of custody.
+  final List<String> photoHashes;
   final DateTime reportedAt;
 
   const IllegalConnectionReport({
@@ -586,6 +609,7 @@ class IllegalConnectionReport {
     required this.longitude,
     required this.gpsAccuracy,
     required this.photoCount,
+    required this.photoHashes,
     required this.reportedAt,
   });
 
@@ -602,6 +626,8 @@ class IllegalConnectionReport {
     'longitude': longitude,
     'gps_accuracy': gpsAccuracy,
     'photo_count': photoCount,
+    // SHA-256 hashes sent to backend for server-side verification
+    'photo_hashes': photoHashes,
     'reported_at': reportedAt.toIso8601String(),
   };
 }

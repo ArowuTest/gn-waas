@@ -11,6 +11,7 @@ import (
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/notification"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/storage"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/gofiber/fiber/v2"
@@ -139,7 +140,28 @@ func (h *AuditHandler) ListAuditEvents(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_STATUS", "Invalid status value")
 	}
 
-	events, total, err := h.auditRepo.GetByDistrict(c.Context(), districtID, status, limit, offset)
+	// Activate RLS: enforce district isolation via SET LOCAL session variables.
+	// BeginReadOnlyTx starts a transaction and executes:
+	//   SET LOCAL rls.district_id = '...'; SET LOCAL rls.user_role = '...'; SET LOCAL rls.user_id = '...'
+	// This activates the PostgreSQL RLS policies defined in 012_row_level_security.sql.
+	rlsCtx := rls.FromFiber(c)
+	handle, txErr := rls.BeginReadOnlyTx(c.Context(), h.auditRepo.DB(), rlsCtx)
+
+	var events []*domain.AuditEvent
+	var total int
+	if txErr != nil {
+		// RLS transaction unavailable (e.g. pool exhausted) — fall back to direct query.
+		// Log as warning: this means RLS is not enforced for this request.
+		h.logger.Warn("RLS transaction unavailable, falling back to unprotected query",
+			zap.Error(txErr),
+			zap.String("user_id", rlsCtx.UserID),
+		)
+		events, total, err = h.auditRepo.GetByDistrict(c.Context(), districtID, status, limit, offset)
+	} else {
+		defer handle.Rollback(c.Context())
+		events, total, err = h.auditRepo.GetByDistrictTx(c.Context(), handle.Tx, districtID, status, limit, offset)
+		_ = handle.Commit(c.Context())
+	}
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch audit events")
 	}
@@ -281,8 +303,19 @@ func (h *FieldJobHandler) GetMyJobs(c *fiber.Ctx) error {
 		return response.Unauthorized(c, "Invalid user ID")
 	}
 
-	// Use enriched query that joins account data — required by mobile app
-	jobs, err := h.fieldJobRepo.GetByOfficerEnriched(c.Context(), officerID)
+	// Activate RLS: officer can only see their own district's jobs.
+	rlsCtx := rls.FromFiber(c)
+	handle, txErr := rls.BeginReadOnlyTx(c.Context(), h.fieldJobRepo.DB(), rlsCtx)
+
+	var jobs []*repository.EnrichedFieldJob
+	if txErr != nil {
+		h.logger.Warn("RLS transaction unavailable for GetMyJobs", zap.Error(txErr))
+		jobs, err = h.fieldJobRepo.GetByOfficerEnriched(c.Context(), officerID)
+	} else {
+		defer handle.Rollback(c.Context())
+		jobs, err = h.fieldJobRepo.GetByOfficerEnrichedTx(c.Context(), handle.Tx, officerID)
+		_ = handle.Commit(c.Context())
+	}
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch jobs")
 	}
@@ -410,7 +443,21 @@ func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_STATUS", "Invalid status value")
 	}
 
-	flags, total, err := h.flagRepo.ListAnomalyFlags(ctx, districtID, severity, status, limit, offset)
+	// Activate RLS: enforce district isolation.
+	rlsCtx := rls.FromFiber(c)
+	handle, txErr := rls.BeginReadOnlyTx(ctx, h.flagRepo.DB(), rlsCtx)
+
+	var flags []repository.AnomalyFlag
+	var total int
+	var err error
+	if txErr != nil {
+		h.logger.Warn("RLS transaction unavailable for ListAnomalyFlags", zap.Error(txErr))
+		flags, total, err = h.flagRepo.ListAnomalyFlags(ctx, districtID, severity, status, limit, offset)
+	} else {
+		defer handle.Rollback(ctx)
+		flags, total, err = h.flagRepo.ListAnomalyFlagsTx(ctx, handle.Tx, districtID, severity, status, limit, offset)
+		_ = handle.Commit(ctx)
+	}
 	if err != nil {
 		h.logger.Error("list anomaly flags", zap.Error(err))
 		return response.InternalError(c, "failed to fetch anomaly flags")
@@ -598,9 +645,22 @@ func (h *FieldJobHandler) ListAllJobs(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_STATUS", "Invalid status value")
 	}
 
-	jobs, err := h.fieldJobRepo.ListAll(c.Context(), status, alertLevel, districtID)
-	if err != nil {
-		h.logger.Error("Failed to list field jobs", zap.Error(err))
+	// Activate RLS: enforce district isolation for job listing.
+	rlsCtx := rls.FromFiber(c)
+	handle, txErr := rls.BeginReadOnlyTx(c.Context(), h.fieldJobRepo.DB(), rlsCtx)
+
+	var jobs []*repository.EnrichedFieldJob
+	var jobErr error
+	if txErr != nil {
+		h.logger.Warn("RLS transaction unavailable for ListAllJobs", zap.Error(txErr))
+		jobs, jobErr = h.fieldJobRepo.ListAll(c.Context(), status, alertLevel, districtID)
+	} else {
+		defer handle.Rollback(c.Context())
+		jobs, jobErr = h.fieldJobRepo.ListAllTx(c.Context(), handle.Tx, status, alertLevel, districtID)
+		_ = handle.Commit(c.Context())
+	}
+	if jobErr != nil {
+		h.logger.Error("Failed to list field jobs", zap.Error(jobErr))
 		return response.InternalError(c, "Failed to list field jobs")
 	}
 	// Apply in-memory pagination (ListAll returns all matching)
@@ -761,6 +821,9 @@ func (h *FieldJobHandler) ReportIllegalConnection(c *fiber.Ctx) error {
 		Longitude                  float64  `json:"longitude"`
 		GPSAccuracy                float64  `json:"gps_accuracy"`
 		PhotoCount                 int      `json:"photo_count"`
+		// SHA-256 hashes of each photo, computed on the device at capture time.
+		// Stored for server-side chain-of-custody verification.
+		PhotoHashes                []string `json:"photo_hashes"`
 		JobID                      *string  `json:"job_id"`
 		ReportedAt                 string   `json:"reported_at"`
 	}
@@ -801,19 +864,28 @@ func (h *FieldJobHandler) ReportIllegalConnection(c *fiber.Ctx) error {
 
 	// Persist to illegal_connections table
 	var reportID uuid.UUID
+	// Validate photo hash count matches photo count (chain of custody check)
+	if req.PhotoCount > 0 && len(req.PhotoHashes) != req.PhotoCount {
+		h.logger.Warn("Photo hash count mismatch",
+			zap.Int("photo_count", req.PhotoCount),
+			zap.Int("hash_count", len(req.PhotoHashes)),
+		)
+		// Non-fatal: log the discrepancy but proceed — hashes may be missing for offline submissions
+	}
+
 	err := h.auditRepo.DB().QueryRow(c.Context(), `
 		INSERT INTO illegal_connections (
 			officer_id, job_id, connection_type, severity, description,
 			estimated_daily_loss_litres, address, account_number,
-			latitude, longitude, gps_accuracy, photo_count, reported_at
+			latitude, longitude, gps_accuracy, photo_count, photo_hashes, reported_at
 		) VALUES (
 			$1::uuid, $2::uuid, $3, $4, $5,
 			$6, $7, $8,
-			$9, $10, $11, $12, NOW()
+			$9, $10, $11, $12, $13, NOW()
 		) RETURNING id`,
 		officerID, req.JobID, req.ConnectionType, req.Severity, req.Description,
 		req.EstimatedDailyLossLitres, req.Address, req.AccountNumber,
-		req.Latitude, req.Longitude, req.GPSAccuracy, req.PhotoCount,
+		req.Latitude, req.Longitude, req.GPSAccuracy, req.PhotoCount, req.PhotoHashes,
 	).Scan(&reportID)
 	if err != nil {
 		h.logger.Error("Failed to save illegal connection report", zap.Error(err))

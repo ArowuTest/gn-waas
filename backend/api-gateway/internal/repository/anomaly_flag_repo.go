@@ -133,3 +133,80 @@ func (r *AnomalyFlagRepository) GetByID(ctx context.Context, id uuid.UUID) (*Ano
 func itoa(n int) string {
 	return strconv.Itoa(n)
 }
+
+// ─── RLS-Activated Variants ───────────────────────────────────────────────────
+
+// ListAnomalyFlagsTx is identical to ListAnomalyFlags but runs inside an
+// RLS-activated transaction (via rls.BeginReadOnlyTx).
+func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
+	ctx context.Context,
+	q Querier,
+	districtID *uuid.UUID,
+	severity string,
+	status string,
+	limit, offset int,
+) ([]AnomalyFlag, int, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+
+	args := []interface{}{}
+	argIdx := 1
+	where := "WHERE 1=1"
+
+	if districtID != nil {
+		where += " AND district_id = $" + itoa(argIdx)
+		args = append(args, *districtID)
+		argIdx++
+	}
+	if severity != "" {
+		where += " AND severity = $" + itoa(argIdx)
+		args = append(args, severity)
+		argIdx++
+	}
+	if status != "" {
+		where += " AND status = $" + itoa(argIdx)
+		args = append(args, status)
+		argIdx++
+	}
+
+	countSQL := `SELECT COUNT(*) FROM anomaly_flags ` + where
+	var total int
+	if err := q.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	args = append(args, limit, offset)
+	dataSQL := `
+		SELECT id, district_id, account_id, flag_type, severity, status,
+		       gwl_status, estimated_loss_ghs, confirmed_loss_ghs, recovered_ghs,
+		       description, detected_at, resolved_at, created_at
+		FROM anomaly_flags
+		` + where + `
+		ORDER BY detected_at DESC
+		LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
+
+	rows, err := q.Query(ctx, dataSQL, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var flags []AnomalyFlag
+	for rows.Next() {
+		var f AnomalyFlag
+		if err := rows.Scan(
+			&f.ID, &f.DistrictID, &f.AccountID, &f.FlagType, &f.Severity, &f.Status,
+			&f.GWLStatus, &f.EstimatedLossGHS, &f.ConfirmedLossGHS, &f.RecoveredGHS,
+			&f.Description, &f.DetectedAt, &f.ResolvedAt, &f.CreatedAt,
+		); err != nil {
+			r.logger.Error("scan anomaly flag (tx)", zap.Error(err))
+			continue
+		}
+		flags = append(flags, f)
+	}
+	return flags, total, nil
+}
+
+// DB returns the underlying database pool for RLS transaction creation.
+func (r *AnomalyFlagRepository) DB() *pgxpool.Pool { return r.db }

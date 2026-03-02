@@ -555,3 +555,130 @@ func (r *FieldJobRepository) GetByOfficerEnriched(ctx context.Context, officerID
 
 // DB returns the underlying database pool for direct queries
 func (r *DistrictRepository) DB() *pgxpool.Pool { return r.db }
+
+// ─── RLS-Activated Variants ───────────────────────────────────────────────────
+
+// ListAllTx is identical to ListAll but runs inside an RLS-activated transaction.
+func (r *FieldJobRepository) ListAllTx(ctx context.Context, q Querier, status, alertLevel, districtID string) ([]*EnrichedFieldJob, error) {
+	query := `
+		SELECT
+			fj.id, fj.job_reference, fj.audit_event_id, fj.account_id, fj.district_id,
+			fj.assigned_officer_id, fj.status, fj.is_blind_audit,
+			fj.target_gps_lat, fj.target_gps_lng, fj.gps_fence_radius_m,
+			fj.dispatched_at, fj.arrived_at, fj.completed_at,
+			fj.officer_gps_lat, fj.officer_gps_lng, fj.gps_verified,
+			fj.biometric_verified, fj.priority, fj.requires_security_escort,
+			fj.sos_triggered, fj.sos_triggered_at, fj.notes, fj.created_at, fj.updated_at,
+			COALESCE(wa.account_holder_name, 'Unknown Customer') AS customer_name,
+			COALESCE(wa.gwl_account_number, '')                  AS account_number,
+			COALESCE(wa.address_line1, '')                       AS address,
+			af.anomaly_type,
+			af.alert_level::text,
+			af.estimated_loss_ghs
+		FROM field_jobs fj
+		LEFT JOIN water_accounts wa ON wa.id = fj.account_id
+		LEFT JOIN LATERAL (
+			SELECT anomaly_type, alert_level, estimated_loss_ghs
+			FROM anomaly_flags
+			WHERE account_id = fj.account_id AND status = 'OPEN'
+			ORDER BY created_at DESC LIMIT 1
+		) af ON true
+		WHERE ($1 = '' OR fj.status = $1)
+		  AND ($2 = '' OR af.alert_level::text = $2)
+		  AND ($3 = '' OR fj.district_id::text = $3)
+		ORDER BY
+			CASE fj.status WHEN 'SOS' THEN 0 WHEN 'ON_SITE' THEN 1 WHEN 'EN_ROUTE' THEN 2
+			WHEN 'DISPATCHED' THEN 3 WHEN 'QUEUED' THEN 4 ELSE 5 END,
+			fj.priority DESC,
+			fj.created_at DESC
+		LIMIT 500`
+
+	rows, err := q.Query(ctx, query, status, alertLevel, districtID)
+	if err != nil {
+		return nil, fmt.Errorf("ListAllTx field jobs failed: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []*EnrichedFieldJob
+	for rows.Next() {
+		j := &EnrichedFieldJob{}
+		if err := rows.Scan(
+			&j.ID, &j.JobReference, &j.AuditEventID, &j.AccountID, &j.DistrictID,
+			&j.AssignedOfficerID, &j.Status, &j.IsBlindAudit,
+			&j.TargetGPSLat, &j.TargetGPSLng, &j.GPSFenceRadiusM,
+			&j.DispatchedAt, &j.ArrivedAt, &j.CompletedAt,
+			&j.OfficerGPSLat, &j.OfficerGPSLng, &j.GPSVerified,
+			&j.BiometricVerified, &j.Priority, &j.RequiresSecurityEscort,
+			&j.SOSTriggered, &j.SOSTriggeredAt, &j.Notes, &j.CreatedAt, &j.UpdatedAt,
+			&j.AccountHolderName, &j.GWLAccountNumber, &j.AddressLine1,
+			&j.AnomalyType, &j.AlertLevel, &j.EstimatedLossGHS,
+		); err != nil {
+			return nil, fmt.Errorf("ListAllTx scan failed: %w", err)
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
+// GetByOfficerEnrichedTx is identical to GetByOfficerEnriched but runs inside
+// an RLS-activated transaction.
+func (r *FieldJobRepository) GetByOfficerEnrichedTx(ctx context.Context, q Querier, officerID uuid.UUID) ([]*EnrichedFieldJob, error) {
+	rows, err := q.Query(ctx, `
+		SELECT
+			fj.id, fj.job_reference, fj.audit_event_id, fj.account_id, fj.district_id,
+			fj.assigned_officer_id, fj.status, fj.is_blind_audit,
+			fj.target_gps_lat, fj.target_gps_lng, fj.gps_fence_radius_m,
+			fj.dispatched_at, fj.arrived_at, fj.completed_at,
+			fj.officer_gps_lat, fj.officer_gps_lng, fj.gps_verified,
+			fj.biometric_verified, fj.priority, fj.requires_security_escort,
+			fj.sos_triggered, fj.sos_triggered_at, fj.notes, fj.created_at, fj.updated_at,
+			COALESCE(wa.account_holder_name, 'Unknown Customer') AS customer_name,
+			COALESCE(wa.gwl_account_number, '')                  AS account_number,
+			COALESCE(wa.address_line1, '')                       AS address,
+			af.anomaly_type,
+			af.alert_level::text,
+			af.estimated_loss_ghs
+		FROM field_jobs fj
+		LEFT JOIN water_accounts wa ON wa.id = fj.account_id
+		LEFT JOIN LATERAL (
+			SELECT anomaly_type, alert_level, estimated_loss_ghs
+			FROM anomaly_flags
+			WHERE account_id = fj.account_id AND status = 'OPEN'
+			ORDER BY created_at DESC LIMIT 1
+		) af ON true
+		WHERE fj.assigned_officer_id = $1
+		ORDER BY
+			CASE fj.status WHEN 'SOS' THEN 0 WHEN 'ON_SITE' THEN 1 WHEN 'EN_ROUTE' THEN 2
+			WHEN 'DISPATCHED' THEN 3 WHEN 'QUEUED' THEN 4 ELSE 5 END,
+			fj.priority DESC,
+			fj.created_at DESC`,
+		officerID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetByOfficerEnrichedTx failed: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []*EnrichedFieldJob
+	for rows.Next() {
+		j := &EnrichedFieldJob{}
+		if err := rows.Scan(
+			&j.ID, &j.JobReference, &j.AuditEventID, &j.AccountID, &j.DistrictID,
+			&j.AssignedOfficerID, &j.Status, &j.IsBlindAudit,
+			&j.TargetGPSLat, &j.TargetGPSLng, &j.GPSFenceRadiusM,
+			&j.DispatchedAt, &j.ArrivedAt, &j.CompletedAt,
+			&j.OfficerGPSLat, &j.OfficerGPSLng, &j.GPSVerified,
+			&j.BiometricVerified, &j.Priority, &j.RequiresSecurityEscort,
+			&j.SOSTriggered, &j.SOSTriggeredAt, &j.Notes, &j.CreatedAt, &j.UpdatedAt,
+			&j.AccountHolderName, &j.GWLAccountNumber, &j.AddressLine1,
+			&j.AnomalyType, &j.AlertLevel, &j.EstimatedLossGHS,
+		); err != nil {
+			return nil, fmt.Errorf("GetByOfficerEnrichedTx scan failed: %w", err)
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
+// DB returns the underlying database pool for RLS transaction creation.
+func (r *FieldJobRepository) DB() *pgxpool.Pool { return r.db }
