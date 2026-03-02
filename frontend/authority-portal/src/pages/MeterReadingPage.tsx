@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import apiClient from '../lib/api-client'
 import { Camera, MapPin, CheckCircle, AlertCircle } from 'lucide-react'
 
 type Step = 'account' | 'photo' | 'reading' | 'confirm' | 'done'
@@ -8,6 +9,27 @@ export default function MeterReadingPage() {
   const [accountNum, setAccountNum] = useState('')
   const [reading, setReading] = useState('')
   const [notes, setNotes] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const submitReading = async () => {
+    if (!accountNum || !reading) return
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      await apiClient.post('/audits', {
+        account_number: accountNum,
+        manual_reading_value: parseFloat(reading),
+        notes,
+        source: 'MANUAL_FIELD_READING',
+      })
+      setStep('done')
+    } catch (err: any) {
+      setSubmitError(err.response?.data?.error || 'Submission failed. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const steps: { key: Step; label: string }[] = [
     { key: 'account', label: 'Find Account' },
@@ -152,8 +174,11 @@ export default function MeterReadingPage() {
             </div>
             <div className="flex gap-3">
               <button onClick={() => setStep('reading')} className="flex-1 border border-gray-200 text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-50">Back</button>
-              <button onClick={() => setStep('done')} className="flex-1 bg-green-800 text-white font-bold py-3 rounded-xl hover:bg-green-900">Submit Reading</button>
+              <button onClick={submitReading} disabled={submitting} className="flex-1 bg-green-800 text-white font-bold py-3 rounded-xl hover:bg-green-900 disabled:opacity-50">{submitting ? 'Submitting...' : 'Submit Reading'}</button>
             </div>
+            {submitError && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{submitError}</div>
+            )}
           </div>
         )}
 

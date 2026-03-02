@@ -479,7 +479,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// This enforces least-privilege and prevents cross-district evidence access.
 	api.Get("/evidence/*",
 		middleware.RequireRoles(
-			"SYSTEM_ADMIN", "NATIONAL_REGULATOR",
+			"SYSTEM_ADMIN", "MOF_AUDITOR",
 			"FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE",
 		),
 		evidenceHandler.GetDownloadURL,

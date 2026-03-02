@@ -75,9 +75,9 @@ func TestContext_IsAdmin_SystemAdmin(t *testing.T) {
 }
 
 func TestContext_IsAdmin_NationalRegulator(t *testing.T) {
-	ctx := rls.Context{UserRole: "NATIONAL_REGULATOR"}
+	ctx := rls.Context{UserRole: "MOF_AUDITOR"}
 	if !ctx.IsAdmin() {
-		t.Error("IsAdmin: NATIONAL_REGULATOR should return true")
+		t.Error("IsAdmin: MOF_AUDITOR should return true")
 	}
 }
 
@@ -182,7 +182,7 @@ func TestFromFiber_HandlesWrongLocalType(t *testing.T) {
 
 func TestFromFiber_AllRolesExtractCorrectly(t *testing.T) {
 	roles := []string{
-		"SYSTEM_ADMIN", "NATIONAL_REGULATOR", "FIELD_OFFICER",
+		"SYSTEM_ADMIN", "MOF_AUDITOR", "FIELD_OFFICER",
 		"FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_ANALYST", "GWL_EXECUTIVE",
 	}
 
@@ -467,7 +467,7 @@ func TestSanitizeUUID_SQLInjectionAttempt_ReturnsFallback(t *testing.T) {
 
 func TestSanitizeRole_KnownRoles(t *testing.T) {
 	knownRoles := []string{
-		"SYSTEM_ADMIN", "NATIONAL_REGULATOR", "FIELD_OFFICER",
+		"SYSTEM_ADMIN", "MOF_AUDITOR", "FIELD_OFFICER",
 		"FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_ANALYST", "GWL_EXECUTIVE",
 	}
 	for _, role := range knownRoles {

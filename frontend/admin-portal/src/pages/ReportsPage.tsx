@@ -165,7 +165,7 @@ export function ReportsPage() {
       description: 'VSDC invoice signing status, VAT collected, compliance rate, and failed submission details for the selected period.',
       onDownloadCSV: () => triggerDownload(
         'gra-csv',
-        '/audit-events',
+        '/audits',
         { period, format: 'csv' },
         `gnwaas-gra-compliance-${period}.csv`,
         'blob',
@@ -178,7 +178,7 @@ export function ReportsPage() {
       description: 'Immutable log of all field officer audit events, OCR readings, GPS coordinates, and photo evidence references.',
       onDownloadCSV: () => triggerDownload(
         'audit-csv',
-        '/audit-events',
+        '/audits',
         { period, include_evidence: 'true', format: 'csv' },
         `gnwaas-audit-trail-${period}.csv`,
         'blob',

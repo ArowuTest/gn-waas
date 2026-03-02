@@ -75,7 +75,7 @@ type Context struct {
 
 // IsAdmin returns true if the user has a system-wide admin role that bypasses RLS.
 func (c Context) IsAdmin() bool {
-	return c.UserRole == "SYSTEM_ADMIN" || c.UserRole == "NATIONAL_REGULATOR"
+	return c.UserRole == "SYSTEM_ADMIN" || c.UserRole == "MOF_AUDITOR"
 }
 
 // FromFiber extracts the RLS context from Fiber locals set by SetRLSContext middleware.
@@ -286,7 +286,7 @@ const validUUIDPattern = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 // Any value not in this set is rejected and replaced with "ANONYMOUS".
 var knownRoles = map[string]struct{}{
 	"SYSTEM_ADMIN":       {},
-	"NATIONAL_REGULATOR": {},
+	"MOF_AUDITOR": {},
 	"FIELD_OFFICER":      {},
 	"FIELD_SUPERVISOR":   {},
 	"GWL_MANAGER":        {},

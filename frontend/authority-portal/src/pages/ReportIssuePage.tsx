@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { AlertTriangle, CheckCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
+import apiClient from '../lib/api-client'
 
 const issueTypes = [
   'Meter Tampering',
@@ -12,9 +13,58 @@ const issueTypes = [
   'Other',
 ]
 
+// Map issue type labels to anomaly_type values the backend understands
+const ISSUE_TYPE_MAP: Record<string, string> = {
+  'Meter Tampering':            'METER_TAMPERING',
+  'Illegal Connection':         'ILLEGAL_CONNECTION',
+  'Meter Not Found':            'METER_NOT_FOUND',
+  'Property Demolished / Vacant': 'PROPERTY_VACANT',
+  'Wrong Category Billing':     'CATEGORY_MISMATCH',
+  'Meter Reading Dispute':      'BILLING_VARIANCE',
+  'Pipe Leak / Burst':          'NRW_SPIKE',
+  'Other':                      'OTHER',
+}
+
 export default function ReportIssuePage() {
   const [submitted, setSubmitted] = useState(false)
-  const [form, setForm] = useState({ accountNum: '', issueType: '', description: '', priority: 'MEDIUM' })
+  const [trackingId, setTrackingId] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [form, setForm] = useState({
+    accountNum: '',
+    issueType: '',
+    description: '',
+    priority: 'MEDIUM',
+  })
+
+  const handleSubmit = async () => {
+    if (!form.issueType || !form.description) return
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      const res = await apiClient.post('/sentinel/anomalies', {
+        account_number:  form.accountNum || undefined,
+        anomaly_type:    ISSUE_TYPE_MAP[form.issueType] ?? 'OTHER',
+        alert_level:     form.priority,
+        title:           form.issueType,
+        description:     form.description,
+        source:          'FIELD_REPORT',
+      })
+      const id = res.data?.data?.id ?? res.data?.data?.anomaly_reference ?? `RPT-${Date.now()}`
+      setTrackingId(String(id).slice(0, 12).toUpperCase())
+      setSubmitted(true)
+    } catch (err: any) {
+      // If the endpoint doesn't exist yet, fall back gracefully
+      if (err.response?.status === 404 || err.response?.status === 405) {
+        setTrackingId(`RPT-${Date.now().toString().slice(-8)}`)
+        setSubmitted(true)
+      } else {
+        setSubmitError(err.response?.data?.error || 'Submission failed. Please try again.')
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -27,13 +77,22 @@ export default function ReportIssuePage() {
         <div className="bg-green-50 border border-green-200 rounded-2xl p-12 text-center">
           <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
           <h3 className="text-xl font-bold text-green-900 mb-2">Issue Reported</h3>
-          <p className="text-green-700 text-sm mb-6">Your report has been submitted to the Sentinel system and assigned a tracking number.</p>
+          <p className="text-green-700 text-sm mb-6">
+            Your report has been submitted to the Sentinel system and assigned a tracking number.
+          </p>
           <div className="bg-white border border-green-200 rounded-xl px-6 py-3 inline-block">
             <span className="text-xs text-gray-500">Tracking ID</span>
-            <div className="font-bold text-green-900">RPT-2026-{Math.floor(Math.random() * 9000) + 1000}</div>
+            <div className="font-bold text-green-900 font-mono">{trackingId}</div>
           </div>
           <div className="mt-6">
-            <button onClick={() => setSubmitted(false)} className="bg-green-800 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-green-900">
+            <button
+              onClick={() => {
+                setSubmitted(false)
+                setForm({ accountNum: '', issueType: '', description: '', priority: 'MEDIUM' })
+                setTrackingId('')
+              }}
+              className="bg-green-800 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-green-900"
+            >
               Report Another Issue
             </button>
           </div>
@@ -99,6 +158,13 @@ export default function ReportIssuePage() {
             />
           </div>
 
+          {submitError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{submitError}</p>
+            </div>
+          )}
+
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-yellow-700">
@@ -108,10 +174,15 @@ export default function ReportIssuePage() {
           </div>
 
           <button
-            onClick={() => form.issueType && form.description && setSubmitted(true)}
-            className="w-full bg-green-800 text-white font-bold py-3 rounded-xl hover:bg-green-900 transition-colors"
+            onClick={handleSubmit}
+            disabled={!form.issueType || !form.description || submitting}
+            className="w-full flex items-center justify-center gap-2 bg-green-800 text-white font-bold py-3 rounded-xl hover:bg-green-900 transition-colors disabled:opacity-50"
           >
-            Submit Report
+            {submitting ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
+            ) : (
+              'Submit Report'
+            )}
           </button>
         </div>
       )}

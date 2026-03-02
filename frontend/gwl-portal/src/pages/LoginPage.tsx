@@ -25,7 +25,7 @@ export default function LoginPage() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role: 'GWL_STAFF', email: email || 'dev-gwl@gnwaas.gov.gh' }),
+            body: JSON.stringify({ role: 'GWL_MANAGER', email: email || 'dev-gwl@gnwaas.gov.gh' }),
           }
         );
         if (devRes.ok) {

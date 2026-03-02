@@ -60,17 +60,35 @@ function useGRACompliance(period: string, districtId: string, status: string) {
   })
 }
 
-function useGRAComplianceSummary(period: string) {
-  return useQuery<{ data: GRAComplianceSummary }>({
-    queryKey: ['gra-compliance-summary', period],
-    queryFn: () =>
-      apiClient.get('/reports/monthly/pdf', {
-        params: { period },
-        responseType: 'json',
-      }).catch(() =>
-        apiClient.get('/gwl/reports/monthly', { params: { period } })
-      ),
-    staleTime: 60_000,
+function useGRAComplianceSummary(period: string, districtId: string) {
+  return useQuery<GRAComplianceSummary>({
+    queryKey: ['gra-compliance-summary', period, districtId],
+    queryFn: async () => {
+      // Fetch all audit records for the period to compute summary client-side
+      const res = await apiClient.get('/audits', {
+        params: {
+          period,
+          district_id: districtId || undefined,
+          limit: 500,
+        },
+      })
+      const records: GRAComplianceRecord[] = res.data?.data?.data ?? []
+      const signed   = records.filter(r => r.status === 'SIGNED').length
+      const pending  = records.filter(r => r.status === 'PENDING').length
+      const failed   = records.filter(r => r.status === 'FAILED').length
+      const total    = records.length
+      const totalVat = records.reduce((sum, r) => sum + (r.vat_amount_ghs ?? 0), 0)
+      return {
+        total_invoices:          total,
+        signed_count:            signed,
+        pending_count:           pending,
+        failed_count:            failed,
+        compliance_rate_pct:     total > 0 ? (signed / total) * 100 : 0,
+        total_vat_collected_ghs: totalVat,
+        period,
+      }
+    },
+    staleTime: 30_000,
   })
 }
 
@@ -118,10 +136,10 @@ export function GRACompliancePage() {
   const [search, setSearch]       = useState('')
 
   const { data: recordsData, isLoading, refetch } = useGRACompliance(period, districtId, statusFilter)
-  const { data: summaryData } = useGRAComplianceSummary(period)
+  const { data: summary = {} as Partial<GRAComplianceSummary> } = useGRAComplianceSummary(period, districtId)
 
   const records: GRAComplianceRecord[] = (recordsData as any)?.data?.data ?? []
-  const summary: Partial<GRAComplianceSummary> = (summaryData as any)?.data ?? {}
+
 
   const filtered = records.filter(r =>
     !search ||

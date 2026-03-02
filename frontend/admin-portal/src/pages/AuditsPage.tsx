@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { RefreshCw, Plus, Eye } from 'lucide-react'
+import { RefreshCw, Eye, X, ExternalLink } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { StatusBadge, GRAStatusBadge } from '../components/ui/Badge'
 import { useAuditEvents, useDistricts } from '../hooks/useQueries'
 import { formatCurrency, formatDate } from '../lib/utils'
 
 export function AuditsPage() {
-  const navigate = useNavigate()
+  const [selectedAudit, setSelectedAudit] = useState<typeof audits[0] | null>(null)
   const [filters, setFilters] = useState({
     district_id: '',
     status: '',
@@ -36,12 +35,7 @@ export function AuditsPage() {
           <button onClick={() => refetch()} className="btn-secondary btn-sm">
             <RefreshCw size={14} /> Refresh
           </button>
-          <button
-            onClick={() => navigate('/audits/new')}
-            className="btn-primary btn-sm"
-          >
-            <Plus size={14} /> New Audit
-          </button>
+          <span className="text-xs text-gray-400 italic">Audits are created automatically by Sentinel</span>
         </div>
       </div>
 
@@ -108,7 +102,7 @@ export function AuditsPage() {
                 <tr
                   key={audit.id}
                   className="cursor-pointer"
-                  onClick={() => navigate(`/audits/${audit.id}`)}
+                  onClick={() => setSelectedAudit(audit)}
                 >
                   <td>
                     <span className="font-mono text-sm font-medium text-brand-600">
@@ -134,7 +128,7 @@ export function AuditsPage() {
                   <td><GRAStatusBadge status={audit.gra_status} /></td>
                   <td className="text-gray-400 text-xs">{formatDate(audit.created_at)}</td>
                   <td>
-                    <button className="btn-ghost btn-sm">
+                    <button className="btn-ghost btn-sm" onClick={() => setSelectedAudit(audit)}>
                       <Eye size={14} />
                     </button>
                   </td>
@@ -145,5 +139,47 @@ export function AuditsPage() {
         )}
       </Card>
     </div>
+
+    {/* Audit Detail Modal */}
+    {selectedAudit && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between p-6 border-b border-gray-100">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Audit Detail</h2>
+              <p className="text-sm font-mono text-brand-600 mt-0.5">{selectedAudit.audit_reference}</p>
+            </div>
+            <button onClick={() => setSelectedAudit(null)} className="text-gray-400 hover:text-gray-600">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div><span className="text-gray-500">Status</span><div className="mt-1"><StatusBadge status={selectedAudit.status} /></div></div>
+              <div><span className="text-gray-500">GRA Status</span><div className="mt-1"><GRAStatusBadge status={selectedAudit.gra_status} /></div></div>
+              <div><span className="text-gray-500">GWL Billed</span><div className="mt-1 font-mono font-medium">{selectedAudit.gwl_billed_ghs ? formatCurrency(selectedAudit.gwl_billed_ghs) : '—'}</div></div>
+              <div><span className="text-gray-500">Shadow Bill</span><div className="mt-1 font-mono font-medium">{selectedAudit.shadow_bill_ghs ? formatCurrency(selectedAudit.shadow_bill_ghs) : '—'}</div></div>
+              <div><span className="text-gray-500">Variance</span><div className={`mt-1 font-mono font-bold ${selectedAudit.variance_pct != null && Math.abs(selectedAudit.variance_pct) > 15 ? 'text-danger' : 'text-success'}`}>{selectedAudit.variance_pct != null ? `${selectedAudit.variance_pct > 0 ? '+' : ''}${selectedAudit.variance_pct.toFixed(1)}%` : '—'}</div></div>
+              <div><span className="text-gray-500">Created</span><div className="mt-1">{formatDate(selectedAudit.created_at)}</div></div>
+              {selectedAudit.confirmed_loss_ghs != null && (
+                <div><span className="text-gray-500">Confirmed Loss</span><div className="mt-1 font-mono font-medium text-danger">{formatCurrency(selectedAudit.confirmed_loss_ghs)}</div></div>
+              )}
+              {selectedAudit.gra_receipt_number && (
+                <div><span className="text-gray-500">GRA Receipt</span><div className="mt-1 font-mono text-xs">{selectedAudit.gra_receipt_number}</div></div>
+              )}
+            </div>
+            {selectedAudit.notes && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-1">Notes</p>
+                <p className="text-sm text-gray-700">{selectedAudit.notes}</p>
+              </div>
+            )}
+          </div>
+          <div className="px-6 pb-6 flex justify-end">
+            <button onClick={() => setSelectedAudit(null)} className="btn-secondary btn-sm">Close</button>
+          </div>
+        </div>
+      </div>
+    )}
   )
 }
