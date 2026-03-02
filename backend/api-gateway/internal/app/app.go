@@ -10,6 +10,7 @@ import (
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/config"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/handler"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/notification"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/storage"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/ansrivas/fiberprometheus/v2"
@@ -346,7 +347,16 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		})
 	})
 
-	api := app.Group("/api/v1", authMW)
+	// ── RLS Middleware ───────────────────────────────────────────────────────
+	// Applied to ALL authenticated endpoints. For each request it:
+	//   1. Reads JWT claims (district_id, user_role, user_id) from Fiber locals
+	//   2. Begins a pgx transaction with SET LOCAL rls.* session variables
+	//   3. Stores the transaction in the Go request context
+	//   4. Commits on success (HTTP < 400), rolls back on error
+	// Repositories retrieve the transaction via rls.TxFromContext and use it
+	// for all queries, ensuring PostgreSQL RLS policies are enforced.
+	rlsMW := rls.Middleware(db, logger)
+	api := app.Group("/api/v1", authMW, rlsMW)
 
 	// ── Districts ─────────────────────────────────────────────────────────────
 	districts := api.Group("/districts")

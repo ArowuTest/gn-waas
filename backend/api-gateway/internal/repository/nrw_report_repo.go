@@ -8,6 +8,7 @@ import (
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"go.uber.org/zap"
 )
 
@@ -21,6 +22,17 @@ type NRWReportRepository struct {
 
 func NewNRWReportRepository(db *pgxpool.Pool, logger *zap.Logger) *NRWReportRepository {
 	return &NRWReportRepository{db: db, logger: logger}
+}
+
+// q returns the Querier to use for this request.
+// If an RLS-activated transaction is stored in ctx (by rls.Middleware), it is
+// returned so that all queries run within that transaction and RLS is enforced.
+// Otherwise the connection pool is returned (RLS not enforced — ops alert).
+func (r *NRWReportRepository) q(ctx context.Context) Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return r.db
 }
 
 // NRWSummaryRow represents one district's NRW performance for a reporting period
@@ -116,7 +128,7 @@ func (r *NRWReportRepository) GetNRWSummary(ctx context.Context, districtID *uui
 		WHERE d.is_active = TRUE %s
 		ORDER BY COALESCE(flag_stats.total_estimated_loss, 0) DESC`, districtFilter)
 
-	rows, err := r.db.Query(ctx, query, args...)
+	rows, err := r.q(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("NRW summary query failed: %w", err)
 	}
@@ -166,7 +178,7 @@ func deriveNRWGrade(lossRatioPct *float64) string {
 
 // GetDistrictNRWTrend returns monthly NRW trend for a specific district (last 12 months)
 func (r *NRWReportRepository) GetDistrictNRWTrend(ctx context.Context, districtID uuid.UUID) ([]map[string]interface{}, error) {
-	rows, err := r.db.Query(ctx, `
+	rows, err := r.q(ctx).Query(ctx, `
 		SELECT
 			DATE_TRUNC('month', created_at)                              AS month,
 			COUNT(*) FILTER (WHERE status = 'OPEN')                      AS open_flags,

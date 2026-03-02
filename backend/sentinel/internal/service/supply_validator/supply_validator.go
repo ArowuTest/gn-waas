@@ -56,6 +56,9 @@ func (v *SupplyValidator) ValidateDistrict(
 	districtID uuid.UUID,
 	from, to time.Time,
 ) ([]*entities.AnomalyFlag, error) {
+	if v.db == nil {
+		return nil, fmt.Errorf("supply_validator: database pool is nil")
+	}
 	// Load supply schedule windows for this district
 	schedule, err := v.loadSchedule(ctx, districtID)
 	if err != nil {
@@ -253,4 +256,42 @@ func (v *SupplyValidator) estimateLossGHS(m3 float64) float64 {
 	const ratePerM3 = 10.8320 // 2026 PURC residential tier-2 rate
 	const vatRate = 0.20
 	return m3 * ratePerM3 * (1 + vatRate)
+}
+
+// ─── Exported test helpers ────────────────────────────────────────────────────
+// These exported wrappers allow unit tests to exercise internal logic without
+// requiring a real database connection.
+
+// NewForTest creates a SupplyValidator with a custom minimum flag threshold.
+// Use in tests to control the threshold without modifying the production default.
+func NewForTest(db *pgxpool.Pool, logger *zap.Logger, minFlagThresholdLitres float64) *SupplyValidator {
+	return &SupplyValidator{
+		db:                     db,
+		logger:                 logger,
+		minFlagThresholdLitres: minFlagThresholdLitres,
+	}
+}
+
+// IsOffSchedule is an exported wrapper for the internal isOffSchedule method.
+// Used in unit tests to verify the core detection algorithm.
+func (v *SupplyValidator) IsOffSchedule(t time.Time, schedule []SupplyWindow) bool {
+	return v.isOffSchedule(t, schedule)
+}
+
+// ClassifySeverity is an exported wrapper for the internal classifySeverity method.
+// Used in unit tests to verify severity thresholds.
+func (v *SupplyValidator) ClassifySeverity(litres float64) string {
+	return v.classifySeverity(litres)
+}
+
+// EstimateLossGHS is an exported wrapper for the internal estimateLossGHS method.
+// Used in unit tests to verify financial calculations.
+func (v *SupplyValidator) EstimateLossGHS(m3 float64) float64 {
+	return v.estimateLossGHS(m3)
+}
+
+// CountOffScheduleHours is an exported wrapper for the internal countOffScheduleHours method.
+// Used in unit tests to verify off-schedule hour counting.
+func (v *SupplyValidator) CountOffScheduleHours(t time.Time, schedule []SupplyWindow) int {
+	return v.countOffScheduleHours(t, schedule)
 }

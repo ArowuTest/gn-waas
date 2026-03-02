@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"go.uber.org/zap"
 )
 
@@ -164,6 +165,17 @@ func NewGWLCaseRepository(db *pgxpool.Pool, logger *zap.Logger) *GWLCaseReposito
 	return &GWLCaseRepository{db: db, logger: logger}
 }
 
+// q returns the Querier to use for this request.
+// If an RLS-activated transaction is stored in ctx (by rls.Middleware), it is
+// returned so that all queries run within that transaction and RLS is enforced.
+// Otherwise the connection pool is returned (RLS not enforced — ops alert).
+func (r *GWLCaseRepository) q(ctx context.Context) Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return r.db
+}
+
 func (r *GWLCaseRepository) DB() *pgxpool.Pool { return r.db }
 
 // ── GetCaseSummary returns KPI strip data for the dashboard ──────────────────
@@ -191,7 +203,7 @@ func (r *GWLCaseRepository) GetCaseSummary(ctx context.Context, districtID *uuid
 	`, districtFilter)
 
 	var s GWLCaseSummary
-	err := r.db.QueryRow(ctx, query, args...).Scan(
+	err := r.q(ctx).QueryRow(ctx, query, args...).Scan(
 		&s.TotalOpen, &s.CriticalOpen, &s.PendingReview, &s.FieldAssigned,
 		&s.ResolvedThisMonth, &s.TotalEstimatedLoss, &s.UnderbillingTotal,
 		&s.OverbillingTotal, &s.MisclassifiedCount,
@@ -276,7 +288,7 @@ func (r *GWLCaseRepository) ListCases(ctx context.Context, f GWLCaseFilter) ([]*
 		WHERE %s
 	`, where)
 	var total int
-	if err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.q(ctx).QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count cases: %w", err)
 	}
 
@@ -309,7 +321,7 @@ func (r *GWLCaseRepository) ListCases(ctx context.Context, f GWLCaseFilter) ([]*
 		LIMIT $%d OFFSET $%d
 	`, where, sortBy, sortDir, argIdx, argIdx+1)
 
-	rows, err := r.db.Query(ctx, dataQuery, args...)
+	rows, err := r.q(ctx).Query(ctx, dataQuery, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list cases: %w", err)
 	}
@@ -341,7 +353,7 @@ func (r *GWLCaseRepository) ListCases(ctx context.Context, f GWLCaseFilter) ([]*
 // ── GetCaseByID returns a single case with full detail ───────────────────────
 func (r *GWLCaseRepository) GetCaseByID(ctx context.Context, id uuid.UUID) (*GWLCase, error) {
 	c := &GWLCase{}
-	err := r.db.QueryRow(ctx, `
+	err := r.q(ctx).QueryRow(ctx, `
 		SELECT
 			af.id, af.account_id, af.district_id,
 			af.flag_type, af.severity, af.title, af.description,
@@ -573,7 +585,7 @@ func (r *GWLCaseRepository) ListReclassificationRequests(ctx context.Context, st
 		where += " AND " + c
 	}
 
-	rows, err := r.db.Query(ctx, fmt.Sprintf(`
+	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
 		SELECT
 			rr.id, rr.anomaly_flag_id, rr.account_id, rr.district_id,
 			rr.current_category, rr.recommended_category, rr.justification,
@@ -688,7 +700,7 @@ func (r *GWLCaseRepository) ListCreditRequests(ctx context.Context, status strin
 		where += " AND " + c
 	}
 
-	rows, err := r.db.Query(ctx, fmt.Sprintf(`
+	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
 		SELECT
 			cr.id, cr.anomaly_flag_id, cr.account_id, cr.district_id,
 			cr.gwl_bill_id, cr.billing_period_start, cr.billing_period_end,
@@ -731,7 +743,7 @@ func (r *GWLCaseRepository) ListCreditRequests(ctx context.Context, status strin
 
 // ── GetCaseActions returns the audit trail for a case ────────────────────────
 func (r *GWLCaseRepository) GetCaseActions(ctx context.Context, flagID uuid.UUID) ([]*CaseAction, error) {
-	rows, err := r.db.Query(ctx, `
+	rows, err := r.q(ctx).Query(ctx, `
 		SELECT id, anomaly_flag_id, performed_by_name, performed_by_role,
 		       action_type, action_notes, action_metadata, created_at
 		FROM gwl_case_actions
@@ -784,7 +796,7 @@ func (r *GWLCaseRepository) GetMonthlyReport(ctx context.Context, period time.Ti
 		FieldJobsCompleted   int     `json:"field_jobs_completed"`
 	}
 
-	err := r.db.QueryRow(ctx, fmt.Sprintf(`
+	err := r.q(ctx).QueryRow(ctx, fmt.Sprintf(`
 		SELECT
 			COUNT(*)                                                                    AS total_flagged,
 			COUNT(*) FILTER (WHERE af.severity = 'CRITICAL')                           AS critical,

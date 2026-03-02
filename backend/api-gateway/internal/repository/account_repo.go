@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"go.uber.org/zap"
 )
 
@@ -20,6 +21,17 @@ type AccountRepository struct {
 
 func NewAccountRepository(db *pgxpool.Pool, logger *zap.Logger) *AccountRepository {
 	return &AccountRepository{db: db, logger: logger}
+}
+
+// q returns the Querier to use for this request.
+// If an RLS-activated transaction is stored in ctx (by rls.Middleware), it is
+// returned so that all queries run within that transaction and RLS is enforced.
+// Otherwise the connection pool is returned (RLS not enforced — ops alert).
+func (r *AccountRepository) q(ctx context.Context) Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return r.db
 }
 
 // Search performs a full-text search across account number, holder name, address, and meter number.
@@ -54,11 +66,11 @@ func (r *AccountRepository) Search(ctx context.Context, query string, districtID
 	var total int
 	countArgs := make([]interface{}, len(args))
 	copy(countArgs, args)
-	r.db.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM water_accounts WHERE %s", where), countArgs...).Scan(&total)
+	r.q(ctx).QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM water_accounts WHERE %s", where), countArgs...).Scan(&total)
 
 	// Fetch page
 	args = append(args, limit, offset)
-	rows, err := r.db.Query(ctx, fmt.Sprintf(`
+	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
 		SELECT id, gwl_account_number, account_holder_name, account_holder_tin,
 		       category, status, district_id, meter_number, address_line1,
 		       gps_latitude, gps_longitude, is_within_network,
@@ -93,7 +105,7 @@ func (r *AccountRepository) Search(ctx context.Context, query string, districtID
 // GetByID returns a single water account by UUID
 func (r *AccountRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.WaterAccount, error) {
 	a := &domain.WaterAccount{}
-	err := r.db.QueryRow(ctx, `
+	err := r.q(ctx).QueryRow(ctx, `
 		SELECT id, gwl_account_number, account_holder_name, account_holder_tin,
 		       category, status, district_id, meter_number, address_line1,
 		       gps_latitude, gps_longitude, is_within_network,
@@ -117,7 +129,7 @@ func (r *AccountRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 // GetByGWLNumber returns a water account by its GWL account number
 func (r *AccountRepository) GetByGWLNumber(ctx context.Context, gwlNumber string) (*domain.WaterAccount, error) {
 	a := &domain.WaterAccount{}
-	err := r.db.QueryRow(ctx, `
+	err := r.q(ctx).QueryRow(ctx, `
 		SELECT id, gwl_account_number, account_holder_name, account_holder_tin,
 		       category, status, district_id, meter_number, address_line1,
 		       gps_latitude, gps_longitude, is_within_network,
@@ -141,9 +153,9 @@ func (r *AccountRepository) GetByGWLNumber(ctx context.Context, gwlNumber string
 // GetByDistrict returns all accounts for a district with pagination
 func (r *AccountRepository) GetByDistrict(ctx context.Context, districtID uuid.UUID, limit, offset int) ([]*domain.WaterAccount, int, error) {
 	var total int
-	r.db.QueryRow(ctx, "SELECT COUNT(*) FROM water_accounts WHERE district_id = $1", districtID).Scan(&total)
+	r.q(ctx).QueryRow(ctx, "SELECT COUNT(*) FROM water_accounts WHERE district_id = $1", districtID).Scan(&total)
 
-	rows, err := r.db.Query(ctx, `
+	rows, err := r.q(ctx).Query(ctx, `
 		SELECT id, gwl_account_number, account_holder_name, account_holder_tin,
 		       category, status, district_id, meter_number, address_line1,
 		       gps_latitude, gps_longitude, is_within_network,

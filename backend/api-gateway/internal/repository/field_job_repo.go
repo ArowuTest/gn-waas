@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"go.uber.org/zap"
 )
 
@@ -21,6 +22,14 @@ type FieldJobRepository struct {
 
 func NewFieldJobRepository(db *pgxpool.Pool, logger *zap.Logger) *FieldJobRepository {
 	return &FieldJobRepository{db: db, logger: logger}
+}
+
+// q returns the Querier for this request (RLS tx if present, else pool).
+func (r *FieldJobRepository) q(ctx context.Context) Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return r.db
 }
 
 func (r *FieldJobRepository) Create(ctx context.Context, job *domain.FieldJob) (*domain.FieldJob, error) {
@@ -36,7 +45,7 @@ func (r *FieldJobRepository) Create(ctx context.Context, job *domain.FieldJob) (
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		RETURNING id, created_at, updated_at`
 
-	err := r.db.QueryRow(ctx, query,
+	err := r.q(ctx).QueryRow(ctx, query,
 		job.JobReference, job.AuditEventID, job.AccountID, job.DistrictID,
 		job.AssignedOfficerID, job.Status, job.IsBlindAudit,
 		job.TargetGPSLat, job.TargetGPSLng, job.GPSFenceRadiusM,
@@ -67,7 +76,7 @@ func (r *FieldJobRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 		FROM field_jobs WHERE id = $1`
 
 	job := &domain.FieldJob{}
-	err := r.db.QueryRow(ctx, query, id).Scan(
+	err := r.q(ctx).QueryRow(ctx, query, id).Scan(
 		&job.ID, &job.JobReference, &job.AuditEventID, &job.AccountID, &job.DistrictID,
 		&job.AssignedOfficerID, &job.Status, &job.IsBlindAudit,
 		&job.TargetGPSLat, &job.TargetGPSLng, &job.GPSFenceRadiusM,
@@ -93,7 +102,7 @@ func (r *FieldJobRepository) GetByOfficer(ctx context.Context, officerID uuid.UU
 		args = append(args, status)
 	}
 
-	rows, err := r.db.Query(ctx, fmt.Sprintf(`
+	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
 		SELECT id, job_reference, audit_event_id, account_id, district_id,
 		       assigned_officer_id, status, is_blind_audit,
 		       target_gps_lat, target_gps_lng, gps_fence_radius_m,
@@ -133,7 +142,7 @@ func (r *FieldJobRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 		completedAt = &now
 	}
 
-	_, err := r.db.Exec(ctx, `
+	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE field_jobs
 		SET status = $1,
 		    arrived_at = COALESCE($2, arrived_at),
@@ -148,7 +157,7 @@ func (r *FieldJobRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 
 func (r *FieldJobRepository) TriggerSOS(ctx context.Context, id uuid.UUID, officerLat, officerLng float64) error {
 	now := time.Now()
-	_, err := r.db.Exec(ctx, `
+	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE field_jobs
 		SET sos_triggered = TRUE, sos_triggered_at = $1,
 		    officer_gps_lat = $2, officer_gps_lng = $3, updated_at = NOW()
@@ -166,9 +175,17 @@ func NewUserRepository(db *pgxpool.Pool, logger *zap.Logger) *UserRepository {
 	return &UserRepository{db: db, logger: logger}
 }
 
+// q returns the Querier for this request (RLS tx if present, else pool).
+func (r *UserRepository) q(ctx context.Context) Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return r.db
+}
+
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	user := &domain.User{}
-	err := r.db.QueryRow(ctx, `
+	err := r.q(ctx).QueryRow(ctx, `
 		SELECT id, email, full_name, phone_number, role, status,
 		       organisation, employee_id, district_id, keycloak_id, last_login_at, created_at, updated_at
 		FROM users WHERE id = $1`, id,
@@ -185,7 +202,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Use
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	user := &domain.User{}
-	err := r.db.QueryRow(ctx, `
+	err := r.q(ctx).QueryRow(ctx, `
 		SELECT id, email, full_name, phone_number, role, status,
 		       organisation, employee_id, district_id, keycloak_id, last_login_at, created_at, updated_at
 		FROM users WHERE email = $1`, email,
@@ -208,7 +225,7 @@ func (r *UserRepository) GetFieldOfficers(ctx context.Context, districtID *uuid.
 		args = append(args, *districtID)
 	}
 
-	rows, err := r.db.Query(ctx, fmt.Sprintf(`
+	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
 		SELECT id, email, full_name, phone_number, role, status,
 		       organisation, employee_id, district_id, created_at, updated_at
 		FROM users WHERE %s ORDER BY full_name`, where), args...)
@@ -233,7 +250,7 @@ func (r *UserRepository) GetFieldOfficers(ctx context.Context, districtID *uuid.
 }
 
 func (r *UserRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID) error {
-	_, err := r.db.Exec(ctx, "UPDATE users SET last_login_at = NOW() WHERE id = $1", id)
+	_, err := r.q(ctx).Exec(ctx, "UPDATE users SET last_login_at = NOW() WHERE id = $1", id)
 	return err
 }
 
@@ -247,8 +264,16 @@ func NewDistrictRepository(db *pgxpool.Pool, logger *zap.Logger) *DistrictReposi
 	return &DistrictRepository{db: db, logger: logger}
 }
 
+// q returns the Querier for this request (RLS tx if present, else pool).
+func (r *DistrictRepository) q(ctx context.Context) Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return r.db
+}
+
 func (r *DistrictRepository) GetAll(ctx context.Context) ([]*domain.District, error) {
-	rows, err := r.db.Query(ctx, `
+	rows, err := r.q(ctx).Query(ctx, `
 		SELECT id, district_code, district_name, region,
 		       population_estimate, total_connections, supply_status, zone_type,
 		       loss_ratio_pct, data_confidence_grade, is_pilot_district, is_active, created_at
@@ -276,7 +301,7 @@ func (r *DistrictRepository) GetAll(ctx context.Context) ([]*domain.District, er
 
 func (r *DistrictRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.District, error) {
 	d := &domain.District{}
-	err := r.db.QueryRow(ctx, `
+	err := r.q(ctx).QueryRow(ctx, `
 		SELECT id, district_code, district_name, region,
 		       population_estimate, total_connections, supply_status, zone_type,
 		       loss_ratio_pct, data_confidence_grade, is_pilot_district, is_active, created_at
@@ -302,9 +327,17 @@ func NewSystemConfigRepository(db *pgxpool.Pool, logger *zap.Logger) *SystemConf
 	return &SystemConfigRepository{db: db, logger: logger}
 }
 
+// q returns the Querier for this request (RLS tx if present, else pool).
+func (r *SystemConfigRepository) q(ctx context.Context) Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return r.db
+}
+
 func (r *SystemConfigRepository) GetByKey(ctx context.Context, key string) (*domain.SystemConfig, error) {
 	cfg := &domain.SystemConfig{}
-	err := r.db.QueryRow(ctx, `
+	err := r.q(ctx).QueryRow(ctx, `
 		SELECT id, config_key, config_value, config_type, description, category, updated_at
 		FROM system_config WHERE config_key = $1`, key,
 	).Scan(&cfg.ID, &cfg.ConfigKey, &cfg.ConfigValue, &cfg.ConfigType, &cfg.Description, &cfg.Category, &cfg.UpdatedAt)
@@ -315,7 +348,7 @@ func (r *SystemConfigRepository) GetByKey(ctx context.Context, key string) (*dom
 }
 
 func (r *SystemConfigRepository) GetByCategory(ctx context.Context, category string) ([]*domain.SystemConfig, error) {
-	rows, err := r.db.Query(ctx, `
+	rows, err := r.q(ctx).Query(ctx, `
 		SELECT id, config_key, config_value, config_type, description, category, updated_at
 		FROM system_config WHERE category = $1 ORDER BY config_key`, category)
 	if err != nil {
@@ -336,7 +369,7 @@ func (r *SystemConfigRepository) GetByCategory(ctx context.Context, category str
 }
 
 func (r *SystemConfigRepository) Update(ctx context.Context, key, value string, updatedBy uuid.UUID) error {
-	_, err := r.db.Exec(ctx, `
+	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE system_config
 		SET config_value = $1, updated_at = NOW(), updated_by = $2
 		WHERE config_key = $3`, value, updatedBy, key)
@@ -349,7 +382,7 @@ func (r *FieldJobRepository) WriteEvidence(ctx context.Context, jobID uuid.UUID,
 	photoURLsJSON, _ := json.Marshal(ev.PhotoURLs)
 	photoHashesJSON, _ := json.Marshal(ev.PhotoHashes)
 
-	_, err := r.db.Exec(ctx, `
+	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE audit_events
 		SET
 			ocr_reading_value       = $1,
@@ -416,7 +449,7 @@ func (r *FieldJobRepository) ListAll(ctx context.Context, status, alertLevel, di
 			fj.created_at DESC
 		LIMIT 500`
 
-	rows, err := r.db.Query(ctx, query, status, alertLevel, districtID)
+	rows, err := r.q(ctx).Query(ctx, query, status, alertLevel, districtID)
 	if err != nil {
 		return nil, fmt.Errorf("ListAll field jobs failed: %w", err)
 	}
@@ -445,7 +478,7 @@ func (r *FieldJobRepository) ListAll(ctx context.Context, status, alertLevel, di
 
 // AssignOfficer assigns a field officer to a job and sets status to DISPATCHED.
 func (r *FieldJobRepository) AssignOfficer(ctx context.Context, jobID, officerID uuid.UUID) error {
-	_, err := r.db.Exec(ctx, `
+	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE field_jobs
 		SET assigned_officer_id = $1,
 		    status              = 'DISPATCHED',
@@ -494,7 +527,7 @@ type EnrichedFieldJob struct {
 // GetByOfficerEnriched returns field jobs for an officer with joined account data.
 // This is the endpoint used by the mobile app.
 func (r *FieldJobRepository) GetByOfficerEnriched(ctx context.Context, officerID uuid.UUID) ([]*EnrichedFieldJob, error) {
-	rows, err := r.db.Query(ctx, `
+	rows, err := r.q(ctx).Query(ctx, `
 		SELECT
 			fj.id, fj.job_reference, fj.audit_event_id, fj.account_id, fj.district_id,
 			fj.assigned_officer_id, fj.status, fj.is_blind_audit,

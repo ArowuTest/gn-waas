@@ -10,6 +10,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +19,16 @@ import (
 type AdminUserHandler struct {
 	db     *pgxpool.Pool
 	logger *zap.Logger
+}
+
+// q returns the Querier for this request (RLS tx if present, else pool).
+// This ensures all queries in AdminUserHandler run within the RLS-activated
+// transaction started by rls.Middleware, enforcing district isolation.
+func (h *AdminUserHandler) q(ctx context.Context) repository.Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return h.db
 }
 
 func NewAdminUserHandler(db *pgxpool.Pool, logger *zap.Logger) *AdminUserHandler {
@@ -76,7 +88,7 @@ func (h *AdminUserHandler) ListUsers(c *fiber.Ctx) error {
 		ORDER BY u.created_at DESC
 		LIMIT 200`, strings.Join(conditions, " AND "))
 
-	rows, err := h.db.Query(context.Background(), query, args...)
+	rows, err := h.q(c.Context()).Query(c.Context(), query, args...)
 	if err != nil {
 		h.logger.Error("ListUsers query failed", zap.Error(err))
 		return response.InternalError(c, "Failed to fetch users")
@@ -143,7 +155,7 @@ func (h *AdminUserHandler) CreateUser(c *fiber.Ctx) error {
 	}
 
 	var userID uuid.UUID
-	err := h.db.QueryRow(context.Background(), `
+	err := h.q(c.Context()).QueryRow(c.Context(), `
 		INSERT INTO users (email, full_name, role, district_id, badge_number, is_active)
 		VALUES ($1, $2, $3, $4, $5, true)
 		RETURNING id`,
@@ -241,7 +253,7 @@ func (h *AdminUserHandler) UpdateUser(c *fiber.Ctx) error {
 	query := fmt.Sprintf("UPDATE users SET %s WHERE id = $%d",
 		strings.Join(setClauses, ", "), argIdx)
 
-	result, err := h.db.Exec(context.Background(), query, args...)
+	result, err := h.q(c.Context()).Exec(c.Context(), query, args...)
 	if err != nil {
 		h.logger.Error("UpdateUser failed", zap.Error(err))
 		return response.InternalError(c, "Failed to update user")

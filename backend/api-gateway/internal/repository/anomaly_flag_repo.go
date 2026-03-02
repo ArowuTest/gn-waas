@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"strconv"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"go.uber.org/zap"
 )
 
@@ -38,6 +39,17 @@ type AnomalyFlagRepository struct {
 
 func NewAnomalyFlagRepository(db *pgxpool.Pool, logger *zap.Logger) *AnomalyFlagRepository {
 	return &AnomalyFlagRepository{db: db, logger: logger}
+}
+
+// q returns the Querier to use for this request.
+// If an RLS-activated transaction is stored in ctx (by rls.Middleware), it is
+// returned so that all queries run within that transaction and RLS is enforced.
+// Otherwise the connection pool is returned (RLS not enforced — ops alert).
+func (r *AnomalyFlagRepository) q(ctx context.Context) Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return r.db
 }
 
 // ListAnomalyFlags returns anomaly flags, optionally filtered by district
@@ -74,7 +86,7 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 
 	countSQL := `SELECT COUNT(*) FROM anomaly_flags ` + where
 	var total int
-	if err := r.db.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := r.q(ctx).QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -88,7 +100,7 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 		ORDER BY detected_at DESC
 		LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
 
-	rows, err := r.db.Query(ctx, dataSQL, args...)
+	rows, err := r.q(ctx).Query(ctx, dataSQL, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -113,7 +125,7 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 // GetByID returns a single anomaly flag by ID
 func (r *AnomalyFlagRepository) GetByID(ctx context.Context, id uuid.UUID) (*AnomalyFlag, error) {
 	var f AnomalyFlag
-	err := r.db.QueryRow(ctx, `
+	err := r.q(ctx).QueryRow(ctx, `
 		SELECT id, district_id, account_id, flag_type, severity, status,
 		       gwl_status, estimated_loss_ghs, confirmed_loss_ghs, recovered_ghs,
 		       description, detected_at, resolved_at, created_at

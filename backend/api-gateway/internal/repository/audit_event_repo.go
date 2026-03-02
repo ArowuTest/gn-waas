@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"go.uber.org/zap"
 )
 
@@ -22,11 +23,22 @@ func NewAuditEventRepository(db *pgxpool.Pool, logger *zap.Logger) *AuditEventRe
 	return &AuditEventRepository{db: db, logger: logger}
 }
 
+// q returns the Querier to use for this request.
+// If an RLS-activated transaction is stored in ctx (by rls.Middleware), it is
+// returned so that all queries run within that transaction and RLS is enforced.
+// Otherwise the connection pool is returned (RLS not enforced — ops alert).
+func (r *AuditEventRepository) q(ctx context.Context) Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return r.db
+}
+
 // Create creates a new audit event with auto-generated reference number
 func (r *AuditEventRepository) Create(ctx context.Context, event *domain.AuditEvent) (*domain.AuditEvent, error) {
 	// Generate audit reference: AUD-2026-XXXXXX
 	var ref string
-	err := r.db.QueryRow(ctx, `
+	err := r.q(ctx).QueryRow(ctx, `
 		SELECT 'AUD-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(nextval('audit_ref_seq')::TEXT, 6, '0')
 	`).Scan(&ref)
 	if err != nil {
@@ -43,7 +55,7 @@ func (r *AuditEventRepository) Create(ctx context.Context, event *domain.AuditEv
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		RETURNING id, created_at, updated_at`
 
-	err = r.db.QueryRow(ctx, query,
+	err = r.q(ctx).QueryRow(ctx, query,
 		event.AuditReference, event.AccountID, event.DistrictID, event.AnomalyFlagID,
 		event.Status, event.AssignedOfficerID, event.AssignedSupervisorID,
 		event.DueDate, event.GWLBilledGHS, event.ShadowBillGHS, event.VariancePct, event.Notes,
@@ -77,7 +89,7 @@ func (r *AuditEventRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 		FROM audit_events WHERE id = $1`
 
 	event := &domain.AuditEvent{}
-	err := r.db.QueryRow(ctx, query, id).Scan(
+	err := r.q(ctx).QueryRow(ctx, query, id).Scan(
 		&event.ID, &event.AuditReference, &event.AccountID, &event.DistrictID, &event.AnomalyFlagID,
 		&event.Status, &event.AssignedOfficerID, &event.AssignedSupervisorID, &event.AssignedAt, &event.DueDate,
 		&event.FieldJobID, &event.MeterPhotoURL, &event.SurroundingsPhotoURL,
@@ -111,10 +123,10 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 	}
 
 	var total int
-	r.db.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM audit_events WHERE %s", where), args...).Scan(&total)
+	r.q(ctx).QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM audit_events WHERE %s", where), args...).Scan(&total)
 
 	args = append(args, limit, offset)
-	rows, err := r.db.Query(ctx, fmt.Sprintf(`
+	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
 		SELECT id, audit_reference, account_id, district_id, anomaly_flag_id,
 		       status, assigned_officer_id, gra_status,
 		       gwl_billed_ghs, shadow_bill_ghs, variance_pct,
@@ -147,7 +159,7 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 
 // UpdateStatus updates the status of an audit event
 func (r *AuditEventRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
-	_, err := r.db.Exec(ctx,
+	_, err := r.q(ctx).Exec(ctx,
 		"UPDATE audit_events SET status = $1, updated_at = NOW() WHERE id = $2 AND is_locked = FALSE",
 		status, id)
 	return err
@@ -155,7 +167,7 @@ func (r *AuditEventRepository) UpdateStatus(ctx context.Context, id uuid.UUID, s
 
 // LockAudit locks an audit event after GRA signing (immutable)
 func (r *AuditEventRepository) LockAudit(ctx context.Context, id uuid.UUID, reason string) error {
-	_, err := r.db.Exec(ctx, `
+	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE audit_events
 		SET is_locked = TRUE, locked_at = NOW(), lock_reason = $1, updated_at = NOW()
 		WHERE id = $2`, reason, id)
@@ -164,7 +176,7 @@ func (r *AuditEventRepository) LockAudit(ctx context.Context, id uuid.UUID, reas
 
 // UpdateGRAStatus updates GRA compliance status and QR code details
 func (r *AuditEventRepository) UpdateGRAStatus(ctx context.Context, id uuid.UUID, sdcID, qrCodeURL string) error {
-	_, err := r.db.Exec(ctx, `
+	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE audit_events
 		SET gra_status = 'SIGNED', gra_sdc_id = $1, gra_qr_code_url = $2,
 		    gra_signed_at = NOW(), updated_at = NOW()
@@ -183,7 +195,7 @@ func (r *AuditEventRepository) GetDashboardStats(ctx context.Context, districtID
 
 	stats := make(map[string]interface{})
 
-	row := r.db.QueryRow(ctx, fmt.Sprintf(`
+	row := r.q(ctx).QueryRow(ctx, fmt.Sprintf(`
 		SELECT
 			COUNT(*) AS total,
 			COUNT(*) FILTER (WHERE status = 'PENDING') AS pending,
