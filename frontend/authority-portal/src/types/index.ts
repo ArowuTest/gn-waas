@@ -99,6 +99,9 @@ export interface AnomalyFlag {
   status: string
   detection_hash?: string
   sentinel_version: string
+  billing_period_start?: string
+  billing_period_end?: string
+  resolution_notes?: string
   created_at: string
   updated_at: string
 }
@@ -182,14 +185,18 @@ export interface User {
   id: string
   email: string
   full_name: string
-  phone_number: string
+  phone_number?: string
   role: UserRole
   status: string
   organisation: string
-  employee_id: string
+  employee_id?: string
   district_id?: string
   keycloak_id?: string
   last_login_at?: string
+  is_mfa_enabled?: boolean
+  device_id?: string
+  last_location_lat?: number
+  last_location_lng?: number
   created_at: string
   updated_at: string
 }

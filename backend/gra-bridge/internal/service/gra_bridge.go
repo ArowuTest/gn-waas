@@ -105,6 +105,24 @@ func NewGRABridgeService(
 	}
 }
 
+// NewGRABridgeServiceWithClient creates a GRABridgeService with a custom HTTP client.
+// Used in tests to inject an httptest server client.
+func NewGRABridgeServiceWithClient(
+	baseURL, apiKey, businessTIN string,
+	sandboxMode bool,
+	client *http.Client,
+	logger *zap.Logger,
+) *GRABridgeService {
+	return &GRABridgeService{
+		client:      client,
+		baseURL:     baseURL,
+		apiKey:      apiKey,
+		businessTIN: businessTIN,
+		sandboxMode: sandboxMode,
+		logger:      logger,
+	}
+}
+
 // SignAuditInvoice is the primary entry point for GN-WAAS audit compliance.
 // It converts an audit event into a GRA VSDC invoice, signs it, and returns
 // the QR code that locks the audit record.

@@ -33,7 +33,6 @@ Thumbs.db
 *.log
 
 # ── CI (managed separately) ──────────────────────────────────
-.github/workflows/
 
 # ── Secrets ──────────────────────────────────────────────────
 *.pem

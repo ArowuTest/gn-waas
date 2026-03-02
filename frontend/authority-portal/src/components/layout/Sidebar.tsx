@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Search, BookOpen, AlertTriangle, Briefcase, BarChart3, LogOut, Droplets, UserCheck, FileDown } from 'lucide-react'
+import { LayoutDashboard, Search, BookOpen, AlertTriangle, Briefcase, BarChart3, LogOut, Droplets, UserCheck, FileDown, Flag, ClipboardList, Users } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 const navItems = [
@@ -11,6 +11,9 @@ const navItems = [
   { to: '/nrw',            icon: BarChart3,         label: 'NRW Summary',     roles: ['GWL_MANAGER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
   { to: '/job-assignment', icon: UserCheck,         label: 'Job Assignment',  roles: ['GWL_MANAGER','FIELD_SUPERVISOR'] },
   { to: '/reporting',      icon: FileDown,          label: 'Reports',         roles: ['GWL_MANAGER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
+  { to: '/anomaly-flags',  icon: Flag,              label: 'Anomaly Flags',   roles: ['GWL_MANAGER','FIELD_SUPERVISOR','MOF_AUDITOR','GWL_ANALYST','GWL_EXECUTIVE'] },
+  { to: '/audit-events',   icon: ClipboardList,     label: 'Audit Events',    roles: ['GWL_MANAGER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
+  { to: '/field-officers', icon: Users,             label: 'Field Officers',  roles: ['GWL_MANAGER','FIELD_SUPERVISOR'] },
 ]
 
 export default function Sidebar() {

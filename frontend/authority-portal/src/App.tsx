@@ -11,6 +11,9 @@ import MyJobsPage from './pages/MyJobsPage'
 import NRWSummaryPage from './pages/NRWSummaryPage'
 import JobAssignmentPage from './pages/JobAssignmentPage'
 import ReportingPage from './pages/ReportingPage'
+import AnomalyFlagsPage from './pages/AnomalyFlagsPage'
+import AuditEventsPage from './pages/AuditEventsPage'
+import FieldOfficersPage from './pages/FieldOfficersPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -50,6 +53,9 @@ export default function App() {
               <Route path="nrw" element={<NRWSummaryPage />} />
               <Route path="job-assignment" element={<JobAssignmentPage />} />
               <Route path="reporting" element={<ReportingPage />} />
+              <Route path="anomaly-flags" element={<AnomalyFlagsPage />} />
+              <Route path="audit-events" element={<AuditEventsPage />} />
+              <Route path="field-officers" element={<FieldOfficersPage />} />
             </Route>
           </Routes>
         </BrowserRouter>
