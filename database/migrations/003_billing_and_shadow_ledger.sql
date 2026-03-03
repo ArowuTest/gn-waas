@@ -175,11 +175,15 @@ CREATE TABLE production_records (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Convert to TimescaleDB hypertable for time-series performance
-SELECT create_hypertable('production_records', 'recorded_at',
-    chunk_time_interval => INTERVAL '1 month',
-    if_not_exists => TRUE
-);
+-- DB-H01 fix: wrap in DO block so migration succeeds even without TimescaleDB
+DO $hyper$ BEGIN
+    PERFORM create_hypertable('production_records', 'recorded_at',
+        chunk_time_interval => INTERVAL '1 month',
+        if_not_exists => TRUE
+    );
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'TimescaleDB not available — production_records will be a plain table: %', SQLERRM;
+END $hyper$;
 
 CREATE INDEX idx_production_district_time ON production_records(district_id, recorded_at DESC);
 

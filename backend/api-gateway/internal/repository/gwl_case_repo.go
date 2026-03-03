@@ -430,12 +430,13 @@ func (r *GWLCaseRepository) UpdateCaseStatus(ctx context.Context,
 		return fmt.Errorf("update case status: %w", err)
 	}
 
-	// Record the action in the audit trail
+	// DB-H02 fix: include account_id (NOT NULL after migration 007).
+	// Fetch it from anomaly_flags using the flagID already in scope.
 	_, err = tx.Exec(ctx, `
 		INSERT INTO gwl_case_actions (
-			anomaly_flag_id, performed_by_name, performed_by_role,
+			anomaly_flag_id, account_id, performed_by_name, performed_by_role,
 			action_type, action_notes
-		) VALUES ($1, $2, $3, $4, $5)
+		) VALUES ($1, (SELECT account_id FROM anomaly_flags WHERE id = $1), $2, $3, $4, $5)
 	`, flagID, performedByName, performedByRole, actionType, actionNotes)
 	if err != nil {
 		return fmt.Errorf("insert case action: %w", err)
@@ -471,6 +472,14 @@ func (r *GWLCaseRepository) AssignToFieldOfficer(ctx context.Context,
 		return fmt.Errorf("update flag for field assignment: %w", err)
 	}
 
+	// BE-C01 fix: fetch the real district_id from anomaly_flags.
+	// Previously flagID was incorrectly passed as district_id, corrupting RLS.
+	var districtID uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT district_id FROM anomaly_flags WHERE id = $1`, flagID).Scan(&districtID)
+	if err != nil {
+		return fmt.Errorf("fetch district_id for field job: %w", err)
+	}
+
 	// Create a field job using only columns that exist in the field_jobs schema.
 	// job_type, title, description, due_date are not columns in field_jobs;
 	// we store them in the notes field and use a generated job_reference.
@@ -495,21 +504,21 @@ func (r *GWLCaseRepository) AssignToFieldOfficer(ctx context.Context,
 			0, 0, 50,
 			$5, $6
 		) ON CONFLICT (job_reference) DO NOTHING
-	`, jobRef, accountID, flagID, officerID, priorityInt, jobNotes)
+	`, jobRef, accountID, districtID, officerID, priorityInt, jobNotes)
 	if err != nil {
 		return fmt.Errorf("create field job: %w", err)
 	}
 
-	// Record the action
+	// DB-H02 fix: include account_id (NOT NULL after migration 007).
 	_, err = tx.Exec(ctx, `
 		INSERT INTO gwl_case_actions (
-			anomaly_flag_id, performed_by_name, performed_by_role,
+			anomaly_flag_id, account_id, performed_by_name, performed_by_role,
 			action_type, action_notes,
 			action_metadata
-		) VALUES ($1, $2, $3, 'ASSIGNED', $4,
-			jsonb_build_object('officer_id', $5::text, 'due_date', $6::text)
+		) VALUES ($1, $2, $3, $4, 'ASSIGNED', $5,
+			jsonb_build_object('officer_id', $6::text, 'due_date', $7::text)
 		)
-	`, flagID, performedByName, performedByRole,
+	`, flagID, accountID, performedByName, performedByRole,
 		fmt.Sprintf("Assigned to field officer for %s", jobType),
 		officerID.String(), dueDate.Format("2006-01-02"),
 	)
@@ -560,11 +569,12 @@ func (r *GWLCaseRepository) CreateReclassificationRequest(ctx context.Context, r
 	}
 
 	// Record action
+	// DB-H02 fix: include account_id (NOT NULL after migration 007).
 	_, err = tx.Exec(ctx, `
 		INSERT INTO gwl_case_actions (
-			anomaly_flag_id, performed_by_name, performed_by_role,
+			anomaly_flag_id, account_id, performed_by_name, performed_by_role,
 			action_type, action_notes
-		) VALUES ($1, $2, 'GWL_SUPERVISOR', 'APPROVED_RECLASSIFICATION', $3)
+		) VALUES ($1, (SELECT account_id FROM anomaly_flags WHERE id = $1), $2, 'GWL_SUPERVISOR', 'APPROVED_RECLASSIFICATION', $3)
 	`, req.AnomalyFlagID, req.RequestedByName,
 		fmt.Sprintf("Reclassification requested: %s → %s", req.CurrentCategory, req.RecommendedCategory),
 	)
@@ -675,11 +685,12 @@ func (r *GWLCaseRepository) CreateCreditRequest(ctx context.Context, req *Credit
 		return fmt.Errorf("update flag for credit: %w", err)
 	}
 
+	// DB-H02 fix: include account_id (NOT NULL after migration 007).
 	_, err = tx.Exec(ctx, `
 		INSERT INTO gwl_case_actions (
-			anomaly_flag_id, performed_by_name, performed_by_role,
+			anomaly_flag_id, account_id, performed_by_name, performed_by_role,
 			action_type, action_notes
-		) VALUES ($1, $2, 'GWL_SUPERVISOR', 'ISSUED_CREDIT', $3)
+		) VALUES ($1, (SELECT account_id FROM anomaly_flags WHERE id = $1), $2, 'GWL_SUPERVISOR', 'ISSUED_CREDIT', $3)
 	`, req.AnomalyFlagID, req.RequestedByName,
 		fmt.Sprintf("Credit request raised: GHS %.2f overcharge", req.OverchargeAmountGHS),
 	)

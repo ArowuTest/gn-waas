@@ -116,10 +116,15 @@ CREATE TABLE system_health_metrics (
     tags            JSONB DEFAULT '{}'
 );
 
-SELECT create_hypertable('system_health_metrics', 'time',
-    chunk_time_interval => INTERVAL '1 day',
-    if_not_exists => TRUE
-);
+-- DB-H01 fix: wrap in DO block so migration succeeds even without TimescaleDB
+DO $hyper$ BEGIN
+    PERFORM create_hypertable('system_health_metrics', 'time',
+        chunk_time_interval => INTERVAL '1 day',
+        if_not_exists => TRUE
+    );
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'TimescaleDB not available — system_health_metrics will be a plain table: %', SQLERRM;
+END $hyper$;
 
 CREATE INDEX idx_health_service_time ON system_health_metrics(service_name, time DESC);
 

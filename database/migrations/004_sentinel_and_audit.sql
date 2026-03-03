@@ -231,11 +231,15 @@ CREATE TABLE audit_trail (
     request_id      VARCHAR(100)
 );
 
--- Convert to TimescaleDB hypertable
-SELECT create_hypertable('audit_trail', 'changed_at',
-    chunk_time_interval => INTERVAL '1 month',
-    if_not_exists => TRUE
-);
+-- DB-H01 fix: wrap in DO block so migration succeeds even without TimescaleDB
+DO $hyper$ BEGIN
+    PERFORM create_hypertable('audit_trail', 'changed_at',
+        chunk_time_interval => INTERVAL '1 month',
+        if_not_exists => TRUE
+    );
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'TimescaleDB not available — audit_trail will be a plain table: %', SQLERRM;
+END $hyper$;
 
 CREATE INDEX idx_audit_trail_entity ON audit_trail(entity_type, entity_id);
 CREATE INDEX idx_audit_trail_user ON audit_trail(changed_by);

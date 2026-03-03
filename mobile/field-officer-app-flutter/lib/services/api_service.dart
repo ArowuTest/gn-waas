@@ -149,10 +149,12 @@ class ApiService {
     double? gpsLat,
     double? gpsLng,
   }) async {
+    // BE-H03 fix: backend UpdateJobStatus expects officer_lat/officer_lng,
+    // not gps_lat/gps_lng.
     await _dio.patch('/field-jobs/$jobId/status', data: {
-      'status':  status.toApiString(),
-      if (gpsLat != null) 'gps_lat': gpsLat,
-      if (gpsLng != null) 'gps_lng': gpsLng,
+      'status':      status.toApiString(),
+      if (gpsLat != null) 'officer_lat': gpsLat,
+      if (gpsLng != null) 'officer_lng': gpsLng,
     });
   }
 
@@ -162,9 +164,11 @@ class ApiService {
     required double gpsLng,
     required double gpsAccuracyM,
   }) async {
+    // BE-H03 fix: backend TriggerSOS expects officer_lat/officer_lng,
+    // not gps_lat/gps_lng.
     await _dio.post('/field-jobs/$jobId/sos', data: {
-      'gps_lat':        gpsLat,
-      'gps_lng':        gpsLng,
+      'officer_lat':    gpsLat,
+      'officer_lng':    gpsLng,
       'gps_accuracy_m': gpsAccuracyM,
       'notes':          'SOS triggered from Flutter mobile app',
     });

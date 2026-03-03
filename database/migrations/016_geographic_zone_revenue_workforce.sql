@@ -80,8 +80,12 @@ CREATE TABLE IF NOT EXISTS officer_gps_tracks (
     device_id       VARCHAR(100)                      -- device fingerprint
 );
 
--- TimescaleDB hypertable for efficient time-range queries
-SELECT create_hypertable('officer_gps_tracks', 'recorded_at', if_not_exists => TRUE);
+-- DB-H01 fix: wrap in DO block so migration succeeds even without TimescaleDB
+DO $hyper$ BEGIN
+    PERFORM create_hypertable('officer_gps_tracks', 'recorded_at', if_not_exists => TRUE);
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'TimescaleDB not available — officer_gps_tracks will be a plain table: %', SQLERRM;
+END $hyper$;
 
 CREATE INDEX idx_gps_tracks_officer  ON officer_gps_tracks(officer_id, recorded_at DESC);
 CREATE INDEX idx_gps_tracks_job      ON officer_gps_tracks(field_job_id) WHERE field_job_id IS NOT NULL;

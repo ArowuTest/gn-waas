@@ -140,6 +140,10 @@ services:
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:-development}
+      # BE-H04 fix: DEV_MODE must be explicitly set so DevAuthMiddleware is
+      # activated in local development. Without this it defaults to false and
+      # the gateway requires a live Keycloak JWT for every request.
+      DEV_MODE: ${DEV_MODE:-true}
       APP_PORT: 3000
       DB_HOST: postgres
       DB_PORT: 5432
