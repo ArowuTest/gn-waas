@@ -52,7 +52,7 @@ func (r *AuditEventRepository) Create(ctx context.Context, event *domain.AuditEv
 			audit_reference, account_id, district_id, anomaly_flag_id,
 			status, assigned_officer_id, assigned_supervisor_id,
 			due_date, gwl_billed_ghs, shadow_bill_ghs, variance_pct, notes
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		) VALUES ($1,$2,$3,$4,$5::audit_status,$6,$7,$8,$9,$10,$11,$12)
 		RETURNING id, created_at, updated_at`
 
 	err = r.q(ctx).QueryRow(ctx, query,
@@ -117,7 +117,7 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 	argIdx := 2
 
 	if status != "" {
-		where += fmt.Sprintf(" AND status = $%d", argIdx)
+		where += fmt.Sprintf(" AND status = $%d::audit_status", argIdx)
 		args = append(args, status)
 		argIdx++
 	}
@@ -160,7 +160,7 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 // UpdateStatus updates the status of an audit event
 func (r *AuditEventRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	_, err := r.q(ctx).Exec(ctx,
-		"UPDATE audit_events SET status = $1, updated_at = NOW() WHERE id = $2 AND is_locked = FALSE",
+		"UPDATE audit_events SET status = $1::audit_status, updated_at = NOW() WHERE id = $2 AND is_locked = FALSE",
 		status, id)
 	return err
 }
@@ -281,7 +281,7 @@ func (r *AuditEventRepository) GetByDistrictTx(
 	argIdx := 2
 
 	if status != "" {
-		where += fmt.Sprintf(" AND status = $%d", argIdx)
+		where += fmt.Sprintf(" AND status = $%d::audit_status", argIdx)
 		args = append(args, status)
 		argIdx++
 	}

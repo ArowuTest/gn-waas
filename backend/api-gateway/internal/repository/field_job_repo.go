@@ -607,7 +607,7 @@ func (r *DistrictRepository) Create(ctx context.Context, d *domain.District) (uu
 		INSERT INTO districts
 			(district_code, district_name, region, population_estimate,
 			 total_connections, supply_status, zone_type, is_pilot_district, is_active)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		VALUES ($1,$2,$3,$4,$5,$6::supply_status,$7::district_zone_type,$8,$9)
 		RETURNING id`,
 		d.DistrictCode, d.DistrictName, d.Region,
 		d.PopulationEstimate, d.TotalConnections,

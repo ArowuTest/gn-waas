@@ -42,8 +42,8 @@ type SystemUser struct {
 	Role          string     `json:"role"`
 	DistrictID    *uuid.UUID `json:"district_id,omitempty"`
 	DistrictName  *string    `json:"district_name,omitempty"`
-	BadgeNumber   *string    `json:"badge_number,omitempty"`
-	IsActive      bool       `json:"is_active"`
+	EmployeeID    *string    `json:"employee_id,omitempty"`   // DB column: employee_id
+	Status        string     `json:"status"`                  // DB column: status (user_status enum)
 	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 }
@@ -71,7 +71,7 @@ func (h *AdminUserHandler) ListUsers(c *fiber.Ctx) error {
 		argIdx += 2
 	}
 	if roleFilter != "" {
-		conditions = append(conditions, fmt.Sprintf("u.role = $%d", argIdx))
+		conditions = append(conditions, fmt.Sprintf("u.role = $%d::user_role", argIdx))
 		args = append(args, roleFilter)
 		argIdx++
 	}
@@ -79,8 +79,8 @@ func (h *AdminUserHandler) ListUsers(c *fiber.Ctx) error {
 	query := fmt.Sprintf(`
 		SELECT
 			u.id, u.email, u.full_name, u.role,
-			u.district_id, d.name AS district_name,
-			u.badge_number, u.is_active,
+			u.district_id, d.district_name,
+			u.employee_id, u.status,
 			u.last_login_at, u.created_at
 		FROM users u
 		LEFT JOIN districts d ON d.id = u.district_id
@@ -101,7 +101,7 @@ func (h *AdminUserHandler) ListUsers(c *fiber.Ctx) error {
 		err := rows.Scan(
 			&u.ID, &u.Email, &u.FullName, &u.Role,
 			&u.DistrictID, &u.DistrictName,
-			&u.BadgeNumber, &u.IsActive,
+			&u.EmployeeID, &u.Status,
 			&u.LastLoginAt, &u.CreatedAt,
 		)
 		if err != nil {
@@ -127,7 +127,7 @@ func (h *AdminUserHandler) CreateUser(c *fiber.Ctx) error {
 		FullName    string  `json:"full_name"`
 		Role        string  `json:"role"`
 		DistrictID  *string `json:"district_id"`
-		BadgeNumber *string `json:"badge_number"`
+		EmployeeID  *string `json:"employee_id"`
 		Password    string  `json:"password"`
 	}
 	if err := c.BodyParser(&req); err != nil {
@@ -156,10 +156,10 @@ func (h *AdminUserHandler) CreateUser(c *fiber.Ctx) error {
 
 	var userID uuid.UUID
 	err := h.q(c.UserContext()).QueryRow(c.UserContext(), `
-		INSERT INTO users (email, full_name, role, district_id, badge_number, is_active)
-		VALUES ($1, $2, $3, $4, $5, true)
+		INSERT INTO users (email, full_name, role, district_id, employee_id, status)
+		VALUES ($1, $2, $3::user_role, $4, $5, 'ACTIVE'::user_status)
 		RETURNING id`,
-		req.Email, req.FullName, req.Role, districtID, req.BadgeNumber,
+		req.Email, req.FullName, req.Role, districtID, req.EmployeeID,
 	).Scan(&userID)
 	if err != nil {
 		if strings.Contains(err.Error(), "unique") {
@@ -204,8 +204,8 @@ func (h *AdminUserHandler) UpdateUser(c *fiber.Ctx) error {
 		FullName    *string `json:"full_name"`
 		Role        *string `json:"role"`
 		DistrictID  *string `json:"district_id"`
-		BadgeNumber *string `json:"badge_number"`
-		IsActive    *bool   `json:"is_active"`
+		EmployeeID  *string `json:"employee_id"`
+		Status      *string `json:"status"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
@@ -221,7 +221,7 @@ func (h *AdminUserHandler) UpdateUser(c *fiber.Ctx) error {
 		argIdx++
 	}
 	if req.Role != nil {
-		setClauses = append(setClauses, fmt.Sprintf("role = $%d", argIdx))
+		setClauses = append(setClauses, fmt.Sprintf("role = $%d::user_role", argIdx))
 		args = append(args, *req.Role)
 		argIdx++
 	}
@@ -238,14 +238,14 @@ func (h *AdminUserHandler) UpdateUser(c *fiber.Ctx) error {
 			argIdx++
 		}
 	}
-	if req.BadgeNumber != nil {
-		setClauses = append(setClauses, fmt.Sprintf("badge_number = $%d", argIdx))
-		args = append(args, *req.BadgeNumber)
+	if req.EmployeeID != nil {
+		setClauses = append(setClauses, fmt.Sprintf("employee_id = $%d", argIdx))
+		args = append(args, *req.EmployeeID)
 		argIdx++
 	}
-	if req.IsActive != nil {
-		setClauses = append(setClauses, fmt.Sprintf("is_active = $%d", argIdx))
-		args = append(args, *req.IsActive)
+	if req.Status != nil {
+		setClauses = append(setClauses, fmt.Sprintf("status = $%d::user_status", argIdx))
+		args = append(args, *req.Status)
 		argIdx++
 	}
 

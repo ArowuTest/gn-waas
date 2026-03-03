@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"context"
 	"time"
 
@@ -224,4 +225,32 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 		flags = append(flags, f)
 	}
 	return flags, total, nil
+}
+
+// CreateAnomalyFlag inserts a new anomaly flag (manual report from field officer or authority portal).
+// Uses r.q(ctx) so the INSERT runs inside the RLS-activated transaction.
+func (r *AnomalyFlagRepository) CreateAnomalyFlag(ctx context.Context,
+	districtID uuid.UUID,
+	accountID *uuid.UUID,
+	anomalyType, alertLevel, title, description, source string,
+	estimatedLossGHS float64,
+) (*AnomalyFlag, error) {
+	row := r.q(ctx).QueryRow(ctx, `
+		INSERT INTO anomaly_flags (
+			district_id, account_id, anomaly_type, alert_level,
+			title, description, estimated_loss_ghs,
+			status, evidence_data, created_at, updated_at
+		) VALUES (
+			$1, $2, $3::anomaly_type, $4::alert_level,
+			$5, $6, $7,
+			'OPEN', jsonb_build_object('source', $8), NOW(), NOW()
+		) RETURNING `+anomalyFlagSelectCols,
+		districtID, accountID, anomalyType, alertLevel,
+		title, description, estimatedLossGHS, source,
+	)
+	flag, err := scanAnomalyFlag(row)
+	if err != nil {
+		return nil, fmt.Errorf("CreateAnomalyFlag: %w", err)
+	}
+	return &flag, nil
 }

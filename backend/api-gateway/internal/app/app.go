@@ -453,6 +453,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
 	)
 	sentinel.Get("/anomalies", flagHandler.ListAnomalyFlags)
+	sentinel.Post("/anomalies", flagHandler.CreateAnomalyFlag)
 	sentinel.Get("/anomalies/:id", flagHandler.GetAnomalyFlag)
 	sentinel.Get("/summary/:district_id", flagHandler.GetDistrictSummary)
 	sentinel.Post("/scan/:district_id",

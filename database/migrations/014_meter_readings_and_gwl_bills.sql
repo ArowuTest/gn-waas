@@ -99,4 +99,14 @@ CREATE INDEX IF NOT EXISTS idx_gwl_bills_payment_status ON gwl_bills(payment_sta
 COMMENT ON TABLE gwl_bills IS
     'GWL billing records mirrored from ERP via CDC. Used for shadow-bill variance detection.';
 
+-- ── illegal_connections: add photo_hashes column (missing from migration 013) ─
+-- The audit_event_repo.go CreateIllegalConnection INSERT includes photo_hashes
+-- for chain-of-custody verification but the column was omitted from migration 013.
+ALTER TABLE illegal_connections
+    ADD COLUMN IF NOT EXISTS photo_hashes TEXT[] NOT NULL DEFAULT '{}';
+
+COMMENT ON COLUMN illegal_connections.photo_hashes IS
+    'SHA-256 hashes of each photo, computed on device at capture time. '
+    'Used for server-side chain-of-custody verification.';
+
 COMMIT;

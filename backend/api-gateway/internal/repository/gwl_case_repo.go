@@ -24,7 +24,7 @@ type GWLCase struct {
 	Severity         string     `json:"alert_level"`  // DB column: alert_level
 	Title            string     `json:"title"`
 	Description      string     `json:"description"`
-	Evidence         []byte     `json:"evidence"`
+	Evidence         []byte     `json:"evidence_data"`  // DB column: evidence_data (JSONB)
 	EstimatedLossGHS float64    `json:"estimated_loss_ghs"`
 	CreatedAt        time.Time  `json:"created_at"`
 
@@ -297,7 +297,7 @@ func (r *GWLCaseRepository) ListCases(ctx context.Context, f GWLCaseFilter) ([]*
 		SELECT
 			af.id, af.account_id, af.district_id,
 			af.anomaly_type, af.alert_level, af.title, af.description,
-			af.evidence, af.estimated_loss_ghs, af.created_at,
+			af.evidence_data, af.estimated_loss_ghs, af.created_at,
 			af.gwl_status, af.gwl_assigned_to_id, af.gwl_assigned_at,
 			af.gwl_resolved_at, af.gwl_resolution, af.gwl_notes,
 			EXTRACT(DAY FROM NOW() - af.created_at)::int AS days_open,
@@ -356,7 +356,7 @@ func (r *GWLCaseRepository) GetCaseByID(ctx context.Context, id uuid.UUID) (*GWL
 		SELECT
 			af.id, af.account_id, af.district_id,
 			af.anomaly_type, af.alert_level, af.title, af.description,
-			af.evidence, af.estimated_loss_ghs, af.created_at,
+			af.evidence_data, af.estimated_loss_ghs, af.created_at,
 			af.gwl_status, af.gwl_assigned_to_id, af.gwl_assigned_at,
 			af.gwl_resolved_at, af.gwl_resolution, af.gwl_notes,
 			EXTRACT(DAY FROM NOW() - af.created_at)::int AS days_open,
@@ -471,18 +471,31 @@ func (r *GWLCaseRepository) AssignToFieldOfficer(ctx context.Context,
 		return fmt.Errorf("update flag for field assignment: %w", err)
 	}
 
-	// Create a field job
+	// Create a field job using only columns that exist in the field_jobs schema.
+	// job_type, title, description, due_date are not columns in field_jobs;
+	// we store them in the notes field and use a generated job_reference.
+	jobRef := fmt.Sprintf("FJ-GWL-%s", flagID.String()[:8])
+	priorityInt := 5 // default medium
+	switch priority {
+	case "CRITICAL": priorityInt = 1
+	case "HIGH":     priorityInt = 2
+	case "MEDIUM":   priorityInt = 5
+	case "LOW":      priorityInt = 8
+	}
+	jobNotes := fmt.Sprintf("[%s] %s — %s", jobType, title, description)
 	_, err = tx.Exec(ctx, `
 		INSERT INTO field_jobs (
-			id, account_id, assigned_officer_id,
-			job_type, priority, status,
-			title, description, due_date, created_at
+			job_reference, account_id, district_id, assigned_officer_id,
+			status, is_blind_audit,
+			target_gps_lat, target_gps_lng, gps_fence_radius_m,
+			priority, notes
 		) VALUES (
-			gen_random_uuid(), $1, $2,
-			$3, $4, 'ASSIGNED',
-			$5, $6, $7, NOW()
-		)
-	`, accountID, officerID, jobType, priority, title, description, dueDate)
+			$1, $2, $3, $4,
+			'ASSIGNED'::field_job_status, TRUE,
+			0, 0, 50,
+			$5, $6
+		) ON CONFLICT (job_reference) DO NOTHING
+	`, jobRef, accountID, flagID, officerID, priorityInt, jobNotes)
 	if err != nil {
 		return fmt.Errorf("create field job: %w", err)
 	}

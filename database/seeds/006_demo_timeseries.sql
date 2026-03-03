@@ -381,17 +381,17 @@ END $$;
 
 -- ── 5. CDC Sync Log (historical) ───────────────────────────────────────────
 INSERT INTO cdc_sync_log (
-  id, sync_started_at, sync_completed_at,
-  accounts_synced, bills_synced, readings_synced,
+  id, sync_type, started_at, completed_at,
+  records_synced, records_failed,
   status, error_message, created_at
 )
 SELECT
   gen_random_uuid(),
+  CASE FLOOR(random()*3)::int WHEN 0 THEN 'BILLING' WHEN 1 THEN 'ACCOUNTS' ELSE 'PRODUCTION' END,
   gs - INTERVAL '5 minutes',
   gs,
-  FLOOR(random()*500 + 100)::int,
   FLOOR(random()*2000 + 500)::int,
-  FLOOR(random()*2000 + 500)::int,
+  FLOOR(random()*10)::int,
   CASE WHEN random() < 0.95 THEN 'SUCCESS' ELSE 'PARTIAL' END,
   NULL,
   gs
