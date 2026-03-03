@@ -41,7 +41,7 @@ func (h *DistrictHandler) logAdminAction(ctx context.Context, actorID, entityTyp
 // ListDistricts godoc
 // GET /api/v1/districts
 func (h *DistrictHandler) ListDistricts(c *fiber.Ctx) error {
-	districts, err := h.districtRepo.GetAll(c.Context())
+	districts, err := h.districtRepo.GetAll(c.UserContext())
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch districts")
 	}
@@ -56,7 +56,7 @@ func (h *DistrictHandler) GetDistrict(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_ID", "Invalid district ID")
 	}
 
-	district, err := h.districtRepo.GetByID(c.Context(), id)
+	district, err := h.districtRepo.GetByID(c.UserContext(), id)
 	if err != nil {
 		return response.NotFound(c, "District")
 	}
@@ -87,13 +87,13 @@ func (h *UserHandler) GetMe(c *fiber.Ctx) error {
 		return response.Unauthorized(c, "Invalid user ID")
 	}
 
-	user, err := h.userRepo.GetByID(c.Context(), userID)
+	user, err := h.userRepo.GetByID(c.UserContext(), userID)
 	if err != nil {
 		return response.NotFound(c, "User")
 	}
 
 	// Update last login
-	_ = h.userRepo.UpdateLastLogin(c.Context(), userID)
+	_ = h.userRepo.UpdateLastLogin(c.UserContext(), userID)
 
 	return response.OK(c, user)
 }
@@ -109,7 +109,7 @@ func (h *UserHandler) GetFieldOfficers(c *fiber.Ctx) error {
 		}
 	}
 
-	officers, err := h.userRepo.GetFieldOfficers(c.Context(), districtID)
+	officers, err := h.userRepo.GetFieldOfficers(c.UserContext(), districtID)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch field officers")
 	}
@@ -131,7 +131,7 @@ func NewSystemConfigHandler(configRepo *repository.SystemConfigRepository, logge
 // GET /api/v1/config/:category
 func (h *SystemConfigHandler) GetConfigByCategory(c *fiber.Ctx) error {
 	category := c.Params("category")
-	configs, err := h.configRepo.GetByCategory(c.Context(), category)
+	configs, err := h.configRepo.GetByCategory(c.UserContext(), category)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch config")
 	}
@@ -153,7 +153,7 @@ func (h *SystemConfigHandler) UpdateConfig(c *fiber.Ctx) error {
 	userIDStr, _ := c.Locals("user_id").(string)
 	userID, _ := uuid.Parse(userIDStr)
 
-	if err := h.configRepo.Update(c.Context(), key, req.Value, userID); err != nil {
+	if err := h.configRepo.Update(c.UserContext(), key, req.Value, userID); err != nil {
 		return response.InternalError(c, "Failed to update config")
 	}
 
@@ -185,7 +185,7 @@ func (h *HealthHandler) HealthCheck(c *fiber.Ctx) error {
 // the pod is removed from the load balancer until it recovers.
 // GET /ready
 func (h *HealthHandler) ReadinessCheck(c *fiber.Ctx) error {
-	ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(c.UserContext(), 3*time.Second)
 	defer cancel()
 
 	if err := h.db.Ping(ctx); err != nil {
@@ -242,7 +242,7 @@ func (h *DistrictHandler) CreateDistrict(c *fiber.Ctx) error {
 		IsPilotDistrict:    req.IsPilotDistrict,
 		IsActive:           req.IsActive,
 	}
-	id, err := h.districtRepo.Create(c.Context(), newDistrict)
+	id, err := h.districtRepo.Create(c.UserContext(), newDistrict)
 	if err != nil {
 		h.logger.Error("CreateDistrict failed", zap.Error(err))
 		return response.InternalError(c, "Failed to create district")
@@ -291,7 +291,7 @@ func (h *DistrictHandler) UpdateDistrict(c *fiber.Ctx) error {
 	if req.IsPilotDistrict != nil { fields["is_pilot_district"]    = *req.IsPilotDistrict }
 	if req.IsActive != nil        { fields["is_active"]            = *req.IsActive }
 
-	rowsAffected, err := h.districtRepo.UpdateFields(c.Context(), districtID, fields)
+	rowsAffected, err := h.districtRepo.UpdateFields(c.UserContext(), districtID, fields)
 	if err != nil {
 		h.logger.Error("UpdateDistrict failed", zap.Error(err))
 		return response.InternalError(c, "Failed to update district")

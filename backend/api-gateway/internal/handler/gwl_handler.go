@@ -33,7 +33,7 @@ func (h *GWLHandler) GetCaseSummary(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	summary, err := h.caseRepo.GetCaseSummary(c.Context(), districtID)
+	summary, err := h.caseRepo.GetCaseSummary(c.UserContext(), districtID)
 	if err != nil {
 		h.logger.Error("GetCaseSummary failed", zap.Error(err))
 		return response.InternalError(c, "failed to load case summary")
@@ -82,7 +82,7 @@ func (h *GWLHandler) ListCases(c *fiber.Ctx) error {
 		}
 	}
 
-	cases, total, err := h.caseRepo.ListCases(c.Context(), filter)
+	cases, total, err := h.caseRepo.ListCases(c.UserContext(), filter)
 	if err != nil {
 		h.logger.Error("ListCases failed", zap.Error(err))
 		return response.InternalError(c, "failed to list cases")
@@ -104,13 +104,13 @@ func (h *GWLHandler) GetCase(c *fiber.Ctx) error {
 		return response.BadRequest(c, "BAD_REQUEST", "invalid case id")
 	}
 
-	gwlCase, err := h.caseRepo.GetCaseByID(c.Context(), id)
+	gwlCase, err := h.caseRepo.GetCaseByID(c.UserContext(), id)
 	if err != nil {
 		h.logger.Error("GetCase failed", zap.Error(err))
 		return response.NotFound(c, "case not found")
 	}
 
-	actions, err := h.caseRepo.GetCaseActions(c.Context(), id)
+	actions, err := h.caseRepo.GetCaseActions(c.UserContext(), id)
 	if err != nil {
 		h.logger.Warn("GetCaseActions failed", zap.Error(err))
 	}
@@ -177,7 +177,7 @@ func (h *GWLHandler) AssignToFieldOfficer(c *fiber.Ctx) error {
 	if role == "" { role = "GWL_SUPERVISOR" }
 
 	if err := h.caseRepo.AssignToFieldOfficer(
-		c.Context(), flagID, officerID, accountID,
+		c.UserContext(), flagID, officerID, accountID,
 		priority, jobType, title, description, dueDate,
 		performedBy, role,
 	); err != nil {
@@ -230,7 +230,7 @@ func (h *GWLHandler) UpdateCaseStatus(c *fiber.Ctx) error {
 	if actionType == "" { actionType = body.Status }
 
 	if err := h.caseRepo.UpdateCaseStatus(
-		c.Context(), flagID, body.Status, nil,
+		c.UserContext(), flagID, body.Status, nil,
 		body.Resolution, body.Notes,
 		performedBy, role, actionType, body.ActionNotes,
 	); err != nil {
@@ -286,7 +286,7 @@ func (h *GWLHandler) RequestReclassification(c *fiber.Ctx) error {
 		RequestedByName:     body.RequestedByName,
 	}
 
-	if err := h.caseRepo.CreateReclassificationRequest(c.Context(), req); err != nil {
+	if err := h.caseRepo.CreateReclassificationRequest(c.UserContext(), req); err != nil {
 		h.logger.Error("RequestReclassification failed", zap.Error(err))
 		return response.InternalError(c, "failed to create reclassification request")
 	}
@@ -307,7 +307,7 @@ func (h *GWLHandler) ListReclassifications(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	results, err := h.caseRepo.ListReclassificationRequests(c.Context(), status, districtID)
+	results, err := h.caseRepo.ListReclassificationRequests(c.UserContext(), status, districtID)
 	if err != nil {
 		h.logger.Error("ListReclassifications failed", zap.Error(err))
 		return response.InternalError(c, "failed to list reclassifications")
@@ -381,7 +381,7 @@ func (h *GWLHandler) RequestCredit(c *fiber.Ctx) error {
 		RequestedByName:     body.RequestedByName,
 	}
 
-	if err := h.caseRepo.CreateCreditRequest(c.Context(), req); err != nil {
+	if err := h.caseRepo.CreateCreditRequest(c.UserContext(), req); err != nil {
 		h.logger.Error("RequestCredit failed", zap.Error(err))
 		return response.InternalError(c, "failed to create credit request")
 	}
@@ -402,7 +402,7 @@ func (h *GWLHandler) ListCredits(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	results, err := h.caseRepo.ListCreditRequests(c.Context(), status, districtID)
+	results, err := h.caseRepo.ListCreditRequests(c.UserContext(), status, districtID)
 	if err != nil {
 		h.logger.Error("ListCredits failed", zap.Error(err))
 		return response.InternalError(c, "failed to list credit requests")
@@ -428,7 +428,7 @@ func (h *GWLHandler) GetMonthlyReport(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	report, err := h.caseRepo.GetMonthlyReport(c.Context(), period, districtID)
+	report, err := h.caseRepo.GetMonthlyReport(c.UserContext(), period, districtID)
 	if err != nil {
 		h.logger.Error("GetMonthlyReport failed", zap.Error(err))
 		return response.InternalError(c, "failed to generate monthly report")
@@ -444,7 +444,7 @@ func (h *GWLHandler) GetCaseActions(c *fiber.Ctx) error {
 		return response.BadRequest(c, "BAD_REQUEST", "invalid case id")
 	}
 
-	actions, err := h.caseRepo.GetCaseActions(c.Context(), id)
+	actions, err := h.caseRepo.GetCaseActions(c.UserContext(), id)
 	if err != nil {
 		h.logger.Error("GetCaseActions failed", zap.Error(err))
 		return response.InternalError(c, "failed to get case actions")

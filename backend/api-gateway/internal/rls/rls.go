@@ -7,9 +7,9 @@
 // enforce district-level data isolation. However, RLS policies only take effect
 // when the session variables they depend on are set:
 //
-//	SET LOCAL rls.district_id = '<uuid>';
-//	SET LOCAL rls.user_role   = '<role>';
-//	SET LOCAL rls.user_id     = '<uuid>';
+//	SET LOCAL app.district_id = '<uuid>';
+//	SET LOCAL app.user_role   = '<role>';
+//	SET LOCAL app.user_id     = '<uuid>';
 //
 // These must be set inside a transaction (SET LOCAL is transaction-scoped).
 // Without this, every query runs as the superuser and RLS is bypassed entirely.
@@ -75,7 +75,9 @@ type Context struct {
 
 // IsAdmin returns true if the user has a system-wide admin role that bypasses RLS.
 func (c Context) IsAdmin() bool {
-	return c.UserRole == "SYSTEM_ADMIN" || c.UserRole == "MOF_AUDITOR"
+	return c.UserRole == "SUPER_ADMIN" ||
+		c.UserRole == "SYSTEM_ADMIN" ||
+		c.UserRole == "MOF_AUDITOR"
 }
 
 // FromFiber extracts the RLS context from Fiber locals set by SetRLSContext middleware.
@@ -285,13 +287,17 @@ const validUUIDPattern = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 // knownRoles is the exhaustive set of roles defined in the SQL enum user_role.
 // Any value not in this set is rejected and replaced with "ANONYMOUS".
 var knownRoles = map[string]struct{}{
+	"SUPER_ADMIN":        {},
 	"SYSTEM_ADMIN":       {},
-	"MOF_AUDITOR": {},
-	"FIELD_OFFICER":      {},
-	"FIELD_SUPERVISOR":   {},
+	"MINISTER_VIEW":      {},
+	"GRA_OFFICER":        {},
+	"MOF_AUDITOR":        {},
+	"GWL_EXECUTIVE":      {},
 	"GWL_MANAGER":        {},
 	"GWL_ANALYST":        {},
-	"GWL_EXECUTIVE":      {},
+	"FIELD_SUPERVISOR":   {},
+	"FIELD_OFFICER":      {},
+	"MDA_USER":           {},
 	"ANONYMOUS":          {},
 }
 
@@ -320,9 +326,9 @@ func setLocals(ctx context.Context, tx pgx.Tx, rlsCtx Context) error {
 	// is_local=true → equivalent to SET LOCAL (transaction-scoped)
 	// Each call is a separate parameterized query — no string interpolation.
 	for _, kv := range []struct{ key, val string }{
-		{"rls.district_id", districtID},
-		{"rls.user_role", userRole},
-		{"rls.user_id", userID},
+		{"app.district_id", districtID},
+		{"app.user_role", userRole},
+		{"app.user_id", userID},
 	} {
 		if _, err := tx.Exec(ctx, "SELECT set_config($1, $2, true)", kv.key, kv.val); err != nil {
 			return fmt.Errorf("rls.setLocals: set_config(%s): %w", kv.key, err)

@@ -281,12 +281,19 @@ func AuthMiddleware(cfg AuthConfig, logger *zap.Logger) fiber.Handler {
 	}
 }
 
-// RequireRoles creates a middleware that enforces role-based access
+// RequireRoles creates a middleware that enforces role-based access.
+// SUPER_ADMIN always passes regardless of the roles list — it is the
+// system-wide superuser and must never be locked out of any endpoint.
 func RequireRoles(roles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		claims, ok := c.Locals("claims").(*Claims)
 		if !ok {
 			return response.Unauthorized(c, "Authentication required")
+		}
+
+		// SUPER_ADMIN bypasses all role restrictions.
+		if claims.HasRole("SUPER_ADMIN") {
+			return c.Next()
 		}
 
 		if !claims.HasAnyRole(roles...) {

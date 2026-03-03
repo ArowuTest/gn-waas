@@ -98,7 +98,7 @@ func (h *EvidenceHandler) GetUploadURL(c *fiber.Ctx) error {
 	}
 
 	objectKey, uploadURL, err := h.storage.PresignedUploadURL(
-		c.Context(), req.JobID, req.Filename, req.ContentType,
+		c.UserContext(), req.JobID, req.Filename, req.ContentType,
 	)
 	if err != nil {
 		h.logger.Error("Failed to generate presigned upload URL",
@@ -135,7 +135,7 @@ func (h *EvidenceHandler) GetDownloadURL(c *fiber.Ctx) error {
 		return response.ServiceUnavailable(c, "Evidence storage")
 	}
 
-	downloadURL, err := h.storage.PresignedDownloadURL(c.Context(), objectKey)
+	downloadURL, err := h.storage.PresignedDownloadURL(c.UserContext(), objectKey)
 	if err != nil {
 		h.logger.Error("Failed to generate presigned download URL",
 			zap.String("object_key", objectKey),
@@ -169,7 +169,7 @@ func (h *EvidenceHandler) VerifyPhotoHash(c *fiber.Ctx) error {
 		return response.ServiceUnavailable(c, "Evidence storage")
 	}
 
-	match, err := h.storage.VerifyPhotoHash(c.Context(), req.ObjectKey, req.ExpectedHash)
+	match, err := h.storage.VerifyPhotoHash(c.UserContext(), req.ObjectKey, req.ExpectedHash)
 	if err != nil {
 		h.logger.Error("Hash verification failed",
 			zap.String("object_key", req.ObjectKey),

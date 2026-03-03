@@ -84,7 +84,7 @@ func (h *AuditHandler) CreateAuditEvent(c *fiber.Ctx) error {
 		}
 	}
 
-	created, err := h.auditRepo.Create(c.Context(), event)
+	created, err := h.auditRepo.Create(c.UserContext(), event)
 	if err != nil {
 		h.logger.Error("Failed to create audit event", zap.Error(err))
 		return response.InternalError(c, "Failed to create audit event")
@@ -101,7 +101,7 @@ func (h *AuditHandler) GetAuditEvent(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_ID", "Invalid audit event ID")
 	}
 
-	event, err := h.auditRepo.GetByID(c.Context(), id)
+	event, err := h.auditRepo.GetByID(c.UserContext(), id)
 	if err != nil {
 		return response.NotFound(c, "Audit event")
 	}
@@ -141,9 +141,9 @@ func (h *AuditHandler) ListAuditEvents(c *fiber.Ctx) error {
 
 	// RLS is enforced by the rls.Middleware applied to the /api/v1 group.
 	// The middleware begins a transaction with SET LOCAL rls.* and stores it in
-	// c.Context(). The repository's q(ctx) helper retrieves it automatically.
+	// c.UserContext(). The repository's q(ctx) helper retrieves it automatically.
 	// No manual BeginReadOnlyTx needed here.
-	events, total, err := h.auditRepo.GetByDistrict(c.Context(), districtID, status, limit, offset)
+	events, total, err := h.auditRepo.GetByDistrict(c.UserContext(), districtID, status, limit, offset)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch audit events")
 	}
@@ -178,13 +178,13 @@ func (h *AuditHandler) AssignAuditEvent(c *fiber.Ctx) error {
 	}
 
 	// Verify officer exists and has correct role
-	officer, err := h.userRepo.GetByID(c.Context(), officerID)
+	officer, err := h.userRepo.GetByID(c.UserContext(), officerID)
 	if err != nil || officer.Role != "FIELD_OFFICER" {
 		return response.BadRequest(c, "INVALID_OFFICER", "Officer not found or invalid role")
 	}
 
 	// Create field job for the officer
-	event, err := h.auditRepo.GetByID(c.Context(), id)
+	event, err := h.auditRepo.GetByID(c.UserContext(), id)
 	if err != nil {
 		return response.NotFound(c, "Audit event")
 	}
@@ -210,13 +210,13 @@ func (h *AuditHandler) AssignAuditEvent(c *fiber.Ctx) error {
 
 	_ = dueDate // Will be set on audit event
 
-	createdJob, err := h.fieldJobRepo.Create(c.Context(), job)
+	createdJob, err := h.fieldJobRepo.Create(c.UserContext(), job)
 	if err != nil {
 		return response.InternalError(c, "Failed to create field job")
 	}
 
 	// Update audit event status
-	if err := h.auditRepo.UpdateStatus(c.Context(), id, "IN_PROGRESS"); err != nil {
+	if err := h.auditRepo.UpdateStatus(c.UserContext(), id, "IN_PROGRESS"); err != nil {
 		return response.InternalError(c, "Failed to update audit status")
 	}
 
@@ -239,7 +239,7 @@ func (h *AuditHandler) GetDashboardStats(c *fiber.Ctx) error {
 		}
 	}
 
-	stats, err := h.auditRepo.GetDashboardStats(c.Context(), districtID)
+	stats, err := h.auditRepo.GetDashboardStats(c.UserContext(), districtID)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch dashboard stats")
 	}
@@ -286,7 +286,7 @@ func (h *FieldJobHandler) GetMyJobs(c *fiber.Ctx) error {
 	}
 
 	// RLS is enforced by the rls.Middleware applied to the /api/v1 group.
-	jobs, err := h.fieldJobRepo.GetByOfficerEnriched(c.Context(), officerID)
+	jobs, err := h.fieldJobRepo.GetByOfficerEnriched(c.UserContext(), officerID)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch jobs")
 	}
@@ -311,7 +311,7 @@ func (h *FieldJobHandler) UpdateJobStatus(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
 	}
 
-	if err := h.fieldJobRepo.UpdateStatus(c.Context(), id, req.Status, req.OfficerLat, req.OfficerLng); err != nil {
+	if err := h.fieldJobRepo.UpdateStatus(c.UserContext(), id, req.Status, req.OfficerLat, req.OfficerLng); err != nil {
 		return response.InternalError(c, "Failed to update job status")
 	}
 
@@ -334,14 +334,14 @@ func (h *FieldJobHandler) TriggerSOS(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
 	}
 
-	if err := h.fieldJobRepo.TriggerSOS(c.Context(), id, req.OfficerLat, req.OfficerLng); err != nil {
+	if err := h.fieldJobRepo.TriggerSOS(c.UserContext(), id, req.OfficerLat, req.OfficerLng); err != nil {
 		return response.InternalError(c, "Failed to trigger SOS")
 	}
 
 	// Dispatch SOS alert to supervisors via webhook + SMS
 	officerID, _ := c.Locals("user_id").(string)
 	officerName, _ := c.Locals("user_name").(string)
-	h.sosNotifier.SendSOSAlert(c.Context(), notification.SOSAlert{
+	h.sosNotifier.SendSOSAlert(c.UserContext(), notification.SOSAlert{
 		JobID:       id.String(),
 		OfficerID:   officerID,
 		OfficerName: officerName,
@@ -381,7 +381,7 @@ func NewAnomalyFlagHandler(flagRepo *repository.AnomalyFlagRepository, logger *z
 
 // ListAnomalyFlags GET /api/v1/anomaly-flags
 func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
-	ctx := c.Context()
+	ctx := c.UserContext()
 
 	var districtID *uuid.UUID
 	if d := c.Query("district_id"); d != "" {
@@ -437,7 +437,7 @@ func (h *AnomalyFlagHandler) GetAnomalyFlag(c *fiber.Ctx) error {
 	if err != nil {
 		return response.BadRequest(c, "INVALID_ID", "Invalid anomaly flag ID")
 	}
-	flag, err := h.flagRepo.GetByID(c.Context(), id)
+	flag, err := h.flagRepo.GetByID(c.UserContext(), id)
 	if err != nil {
 		return response.NotFound(c, "Anomaly flag")
 	}
@@ -451,7 +451,7 @@ func (h *AnomalyFlagHandler) GetDistrictSummary(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_ID", "Invalid district ID")
 	}
 	// Return counts by severity for the district
-	flags, total, err := h.flagRepo.ListAnomalyFlags(c.Context(), &districtID, "", "OPEN", 1000, 0)
+	flags, total, err := h.flagRepo.ListAnomalyFlags(c.UserContext(), &districtID, "", "OPEN", 1000, 0)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch district summary")
 	}
@@ -521,7 +521,7 @@ func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
 
 	// 1. Mark job as COMPLETED with officer GPS
 	lat, lng := req.GPSLat, req.GPSLng
-	if err := h.fieldJobRepo.UpdateStatus(c.Context(), jobID, "COMPLETED", &lat, &lng); err != nil {
+	if err := h.fieldJobRepo.UpdateStatus(c.UserContext(), jobID, "COMPLETED", &lat, &lng); err != nil {
 		h.logger.Error("Failed to complete field job", zap.Error(err))
 		return response.InternalError(c, "Failed to update job status")
 	}
@@ -540,7 +540,7 @@ func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
 		}
 		// Verify hash against MinIO object metadata
 		if h.evidenceStorage != nil {
-			ok, err := h.evidenceStorage.VerifyPhotoHash(c.Context(), objectKey, clientHash)
+			ok, err := h.evidenceStorage.VerifyPhotoHash(c.UserContext(), objectKey, clientHash)
 			if err != nil {
 				h.logger.Warn("Hash verification error", zap.String("object_key", objectKey), zap.Error(err))
 				// Non-fatal: log and continue
@@ -560,7 +560,7 @@ func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
 	}
 
 	// 3. Write evidence to the linked audit_event (if one exists)
-	if err := h.fieldJobRepo.WriteEvidence(c.Context(), jobID, &domain.FieldJobEvidence{
+	if err := h.fieldJobRepo.WriteEvidence(c.UserContext(), jobID, &domain.FieldJobEvidence{
 		OCRReadingValue:  req.OCRReadingM3,
 		OCRConfidence:    req.OCRConfidence,
 		OCRStatus:        req.OCRStatus,
@@ -605,7 +605,7 @@ func (h *FieldJobHandler) ListAllJobs(c *fiber.Ctx) error {
 	}
 
 	// RLS is enforced by the rls.Middleware applied to the /api/v1 group.
-	jobs, jobErr := h.fieldJobRepo.ListAll(c.Context(), status, alertLevel, districtID)
+	jobs, jobErr := h.fieldJobRepo.ListAll(c.UserContext(), status, alertLevel, districtID)
 	if jobErr != nil {
 		h.logger.Error("Failed to list field jobs", zap.Error(jobErr))
 		return response.InternalError(c, "Failed to list field jobs")
@@ -670,7 +670,7 @@ func (h *FieldJobHandler) CreateFieldJob(c *fiber.Ctx) error {
 		}
 	}
 
-	created, err := h.fieldJobRepo.Create(c.Context(), job)
+	created, err := h.fieldJobRepo.Create(c.UserContext(), job)
 	if err != nil {
 		h.logger.Error("Failed to create field job", zap.Error(err))
 		return response.InternalError(c, "Failed to create field job")
@@ -699,7 +699,7 @@ func (h *FieldJobHandler) AssignOfficer(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_OFFICER_ID", "Invalid officer ID")
 	}
 
-	if err := h.fieldJobRepo.AssignOfficer(c.Context(), jobID, officerID); err != nil {
+	if err := h.fieldJobRepo.AssignOfficer(c.UserContext(), jobID, officerID); err != nil {
 		h.logger.Error("Failed to assign officer", zap.Error(err))
 		return response.InternalError(c, "Failed to assign officer")
 	}
@@ -821,7 +821,7 @@ func (h *FieldJobHandler) ReportIllegalConnection(c *fiber.Ctx) error {
 
 	// Use the repository method so the INSERT runs inside the RLS-activated
 	// transaction from rls.Middleware — no raw DB() bypass.
-	reportID, err := h.auditRepo.CreateIllegalConnection(c.Context(), &repository.IllegalConnectionReport{
+	reportID, err := h.auditRepo.CreateIllegalConnection(c.UserContext(), &repository.IllegalConnectionReport{
 		OfficerID:                officerID,
 		JobID:                    derefString(req.JobID),
 		ConnectionType:           req.ConnectionType,

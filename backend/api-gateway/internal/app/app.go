@@ -367,7 +367,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	users := api.Group("/users")
 	users.Get("/me", userHandler.GetMe)
 	users.Get("/field-officers",
-		middleware.RequireRoles("SYSTEM_ADMIN", "GWL_MANAGER", "FIELD_SUPERVISOR"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "GWL_MANAGER", "FIELD_SUPERVISOR"),
 		userHandler.GetFieldOfficers,
 	)
 
@@ -499,7 +499,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── Admin User Management (SYSTEM_ADMIN only) ───────────────────────────
 	adminUsers := api.Group("/admin/users",
-		middleware.RequireRoles("SYSTEM_ADMIN"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN"),
 	)
 	adminUsers.Get("/", adminUserHandler.ListUsers)
 	adminUsers.Post("/", adminUserHandler.CreateUser)
@@ -508,21 +508,21 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── Admin District Management (SYSTEM_ADMIN only) ───────────────────────
 	adminDistricts := api.Group("/admin/districts",
-		middleware.RequireRoles("SYSTEM_ADMIN"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN"),
 	)
 	adminDistricts.Post("/", districtHandler.CreateDistrict)
 	adminDistricts.Patch("/:id", districtHandler.UpdateDistrict)
 
 	// ── System Config (admin only) ────────────────────────────────────────────
 	sysConfig := api.Group("/config",
-		middleware.RequireRoles("SYSTEM_ADMIN"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN"),
 	)
 	sysConfig.Get("/:category", configHandler.GetConfigByCategory)
 	sysConfig.Patch("/:key", configHandler.UpdateConfig)
 
 	// ── GWL Case Management Portal ───────────────────────────────────────────
 	// All GWL routes require GWL_SUPERVISOR, GWL_BILLING_OFFICER, or GWL_MANAGER role
-	gwlRoles := middleware.RequireRoles("GWL_MANAGER", "GWL_ANALYST", "GWL_EXECUTIVE", "SYSTEM_ADMIN")
+	gwlRoles := middleware.RequireRoles("SUPER_ADMIN", "GWL_MANAGER", "GWL_ANALYST", "GWL_EXECUTIVE", "SYSTEM_ADMIN")
 	gwl := api.Group("/gwl", gwlRoles)
 
 	// Case queue and summary

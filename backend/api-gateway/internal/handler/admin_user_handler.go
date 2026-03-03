@@ -88,7 +88,7 @@ func (h *AdminUserHandler) ListUsers(c *fiber.Ctx) error {
 		ORDER BY u.created_at DESC
 		LIMIT 200`, strings.Join(conditions, " AND "))
 
-	rows, err := h.q(c.Context()).Query(c.Context(), query, args...)
+	rows, err := h.q(c.UserContext()).Query(c.UserContext(), query, args...)
 	if err != nil {
 		h.logger.Error("ListUsers query failed", zap.Error(err))
 		return response.InternalError(c, "Failed to fetch users")
@@ -155,7 +155,7 @@ func (h *AdminUserHandler) CreateUser(c *fiber.Ctx) error {
 	}
 
 	var userID uuid.UUID
-	err := h.q(c.Context()).QueryRow(c.Context(), `
+	err := h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		INSERT INTO users (email, full_name, role, district_id, badge_number, is_active)
 		VALUES ($1, $2, $3, $4, $5, true)
 		RETURNING id`,
@@ -253,7 +253,7 @@ func (h *AdminUserHandler) UpdateUser(c *fiber.Ctx) error {
 	query := fmt.Sprintf("UPDATE users SET %s WHERE id = $%d",
 		strings.Join(setClauses, ", "), argIdx)
 
-	result, err := h.q(c.Context()).Exec(c.Context(), query, args...)
+	result, err := h.q(c.UserContext()).Exec(c.UserContext(), query, args...)
 	if err != nil {
 		h.logger.Error("UpdateUser failed", zap.Error(err))
 		return response.InternalError(c, "Failed to update user")

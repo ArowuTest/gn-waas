@@ -38,7 +38,7 @@ func (h *AccountHandler) SearchAccounts(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	accounts, total, err := h.accountRepo.Search(c.Context(), query, districtID, limit, offset)
+	accounts, total, err := h.accountRepo.Search(c.UserContext(), query, districtID, limit, offset)
 	if err != nil {
 		h.logger.Error("Account search failed", zap.Error(err), zap.String("query", query))
 		return response.InternalError(c, "Account search failed")
@@ -59,7 +59,7 @@ func (h *AccountHandler) GetAccount(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_ID", "Invalid account ID")
 	}
 
-	account, err := h.accountRepo.GetByID(c.Context(), id)
+	account, err := h.accountRepo.GetByID(c.UserContext(), id)
 	if err != nil {
 		return response.NotFound(c, "Account")
 	}
@@ -83,7 +83,7 @@ func (h *AccountHandler) GetAccountsByDistrict(c *fiber.Ctx) error {
 	limit := c.QueryInt("limit", 50)
 	offset := c.QueryInt("offset", 0)
 
-	accounts, total, err := h.accountRepo.GetByDistrict(c.Context(), districtID, limit, offset)
+	accounts, total, err := h.accountRepo.GetByDistrict(c.UserContext(), districtID, limit, offset)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch accounts")
 	}
@@ -117,7 +117,7 @@ func (h *NRWHandler) GetNRWSummary(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	summaries, err := h.nrwRepo.GetNRWSummary(c.Context(), districtID, nil, nil)
+	summaries, err := h.nrwRepo.GetNRWSummary(c.UserContext(), districtID, nil, nil)
 	if err != nil {
 		h.logger.Error("NRW summary failed", zap.Error(err))
 		return response.InternalError(c, "Failed to fetch NRW summary")
@@ -134,7 +134,7 @@ func (h *NRWHandler) GetDistrictNRWTrend(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_DISTRICT_ID", "Invalid district ID")
 	}
 
-	trend, err := h.nrwRepo.GetDistrictNRWTrend(c.Context(), districtID)
+	trend, err := h.nrwRepo.GetDistrictNRWTrend(c.UserContext(), districtID)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch NRW trend")
 	}

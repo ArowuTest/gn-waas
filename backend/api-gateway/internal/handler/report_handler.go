@@ -44,7 +44,7 @@ func (h *ReportHandler) GetMonthlyReportPDF(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	report, err := h.gwlCaseRepo.GetMonthlyReport(c.Context(), period, districtID)
+	report, err := h.gwlCaseRepo.GetMonthlyReport(c.UserContext(), period, districtID)
 	if err != nil {
 		h.logger.Error("GetMonthlyReport failed for PDF", zap.Error(err))
 		return response.InternalError(c, "failed to generate monthly report")
@@ -84,7 +84,7 @@ func (h *ReportHandler) GetMonthlyReportCSV(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	report, err := h.gwlCaseRepo.GetMonthlyReport(c.Context(), period, districtID)
+	report, err := h.gwlCaseRepo.GetMonthlyReport(c.UserContext(), period, districtID)
 	if err != nil {
 		h.logger.Error("GetMonthlyReport failed for CSV", zap.Error(err))
 		return response.InternalError(c, "failed to generate monthly report")

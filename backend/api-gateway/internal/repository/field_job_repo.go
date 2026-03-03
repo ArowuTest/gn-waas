@@ -99,7 +99,7 @@ func (r *FieldJobRepository) GetByOfficer(ctx context.Context, officerID uuid.UU
 	args := []interface{}{officerID}
 	where := "assigned_officer_id = $1"
 	if status != "" {
-		where += " AND status = $2"
+		where += " AND status = $2::field_job_status"
 		args = append(args, status)
 	}
 
@@ -145,7 +145,7 @@ func (r *FieldJobRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 
 	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE field_jobs
-		SET status = $1,
+		SET status = $1::field_job_status,
 		    arrived_at = COALESCE($2, arrived_at),
 		    completed_at = COALESCE($3, completed_at),
 		    officer_gps_lat = COALESCE($4, officer_gps_lat),
@@ -440,7 +440,7 @@ func (r *FieldJobRepository) ListAll(ctx context.Context, status, alertLevel, di
 			WHERE account_id = fj.account_id AND status = 'OPEN'
 			ORDER BY created_at DESC LIMIT 1
 		) af ON true
-		WHERE ($1 = '' OR fj.status = $1)
+		WHERE ($1 = '' OR fj.status = $1::field_job_status)
 		  AND ($2 = '' OR af.alert_level::text = $2)
 		  AND ($3 = '' OR fj.district_id::text = $3)
 		ORDER BY
@@ -690,7 +690,7 @@ func (r *FieldJobRepository) ListAllTx(ctx context.Context, q Querier, status, a
 			WHERE account_id = fj.account_id AND status = 'OPEN'
 			ORDER BY created_at DESC LIMIT 1
 		) af ON true
-		WHERE ($1 = '' OR fj.status = $1)
+		WHERE ($1 = '' OR fj.status = $1::field_job_status)
 		  AND ($2 = '' OR af.alert_level::text = $2)
 		  AND ($3 = '' OR fj.district_id::text = $3)
 		ORDER BY

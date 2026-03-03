@@ -60,7 +60,7 @@ DECLARE
     v_role TEXT;
 BEGIN
     v_role := current_setting('app.user_role', true);
-    RETURN v_role IN ('SYSTEM_ADMIN', 'SUPER_ADMIN', 'NATIONAL_REGULATOR');
+    RETURN v_role IN ('SYSTEM_ADMIN', 'SUPER_ADMIN', 'MOF_AUDITOR');
 EXCEPTION WHEN others THEN
     RETURN FALSE;
 END;
@@ -224,5 +224,5 @@ COMMENT ON FUNCTION current_district_id() IS
     'of every authenticated request transaction.';
 
 COMMENT ON FUNCTION current_user_is_admin() IS
-    'Returns true if app.user_role is SYSTEM_ADMIN, SUPER_ADMIN, or NATIONAL_REGULATOR. '
+    'Returns true if app.user_role is SYSTEM_ADMIN, SUPER_ADMIN, or MOF_AUDITOR. '
     'These roles bypass district-level RLS and can see all districts.';

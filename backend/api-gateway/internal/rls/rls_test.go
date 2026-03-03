@@ -467,8 +467,9 @@ func TestSanitizeUUID_SQLInjectionAttempt_ReturnsFallback(t *testing.T) {
 
 func TestSanitizeRole_KnownRoles(t *testing.T) {
 	knownRoles := []string{
-		"SYSTEM_ADMIN", "MOF_AUDITOR", "FIELD_OFFICER",
-		"FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_ANALYST", "GWL_EXECUTIVE",
+		"SUPER_ADMIN", "SYSTEM_ADMIN", "MINISTER_VIEW", "GRA_OFFICER",
+		"MOF_AUDITOR", "GWL_EXECUTIVE", "GWL_MANAGER", "GWL_ANALYST",
+		"FIELD_SUPERVISOR", "FIELD_OFFICER", "MDA_USER",
 	}
 	for _, role := range knownRoles {
 		got := rls.SanitizeRole(role)
