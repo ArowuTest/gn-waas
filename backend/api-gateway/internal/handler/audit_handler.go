@@ -113,7 +113,8 @@ func (h *AuditHandler) GetAuditEvent(c *fiber.Ctx) error {
 // GET /api/v1/audits
 func (h *AuditHandler) ListAuditEvents(c *fiber.Ctx) error {
 	districtIDStr := c.Query("district_id")
-	status := c.Query("status")
+	status    := c.Query("status")
+	graStatus := c.Query("gra_status")
 	limit := c.QueryInt("limit", 20)
 	offset := c.QueryInt("offset", 0)
 	if limit > 100 { limit = 100 }
@@ -143,7 +144,7 @@ func (h *AuditHandler) ListAuditEvents(c *fiber.Ctx) error {
 	// The middleware begins a transaction with SET LOCAL rls.* and stores it in
 	// c.UserContext(). The repository's q(ctx) helper retrieves it automatically.
 	// No manual BeginReadOnlyTx needed here.
-	events, total, err := h.auditRepo.GetByDistrict(c.UserContext(), districtID, status, limit, offset)
+	events, total, err := h.auditRepo.GetByDistrict(c.UserContext(), districtID, status, graStatus, limit, offset)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch audit events")
 	}

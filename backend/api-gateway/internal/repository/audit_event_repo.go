@@ -111,7 +111,7 @@ func (r *AuditEventRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 }
 
 // GetByDistrict returns audit events for a district with pagination
-func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uuid.UUID, status string, limit, offset int) ([]*domain.AuditEvent, int, error) {
+func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uuid.UUID, status, graStatus string, limit, offset int) ([]*domain.AuditEvent, int, error) {
 	args := []interface{}{districtID}
 	where := "district_id = $1"
 	argIdx := 2
@@ -119,6 +119,11 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 	if status != "" {
 		where += fmt.Sprintf(" AND status = $%d::audit_status", argIdx)
 		args = append(args, status)
+		argIdx++
+	}
+	if graStatus != "" {
+		where += fmt.Sprintf(" AND gra_status = $%d::gra_compliance_status", argIdx)
+		args = append(args, graStatus)
 		argIdx++
 	}
 
@@ -283,6 +288,11 @@ func (r *AuditEventRepository) GetByDistrictTx(
 	if status != "" {
 		where += fmt.Sprintf(" AND status = $%d::audit_status", argIdx)
 		args = append(args, status)
+		argIdx++
+	}
+	if graStatus != "" {
+		where += fmt.Sprintf(" AND gra_status = $%d::gra_compliance_status", argIdx)
+		args = append(args, graStatus)
 		argIdx++
 	}
 

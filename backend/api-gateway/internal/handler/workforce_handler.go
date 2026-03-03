@@ -211,8 +211,8 @@ func (h *WorkforceHandler) GetWorkforceSummary(c *fiber.Ctx) error {
 
 	// On active job
 	h.db.QueryRow(ctx, `
-		SELECT COUNT(DISTINCT assigned_to) FROM field_jobs
-		WHERE status IN ('ASSIGNED','IN_PROGRESS') AND assigned_to IS NOT NULL`,
+		SELECT COUNT(DISTINCT assigned_officer_id) FROM field_jobs
+		WHERE status IN ('ASSIGNED','IN_PROGRESS') AND assigned_officer_id IS NOT NULL`,
 	).Scan(&s.OnActiveJob)
 
 	// Jobs completed today

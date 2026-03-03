@@ -47,11 +47,11 @@ interface GRAComplianceSummary {
 function useGRACompliance(period: string, districtId: string, status: string) {
   return useQuery<{ data: { data: GRAComplianceRecord[]; meta?: { total?: number } } }>({
     queryKey: ['gra-compliance', period, districtId, status],
+    enabled: !!districtId,
     queryFn: () =>
       apiClient.get('/audits', {
         params: {
-          period,
-          district_id: districtId || undefined,
+          district_id: districtId,
           gra_status: status || undefined,
           limit: 100,
         },
@@ -63,12 +63,12 @@ function useGRACompliance(period: string, districtId: string, status: string) {
 function useGRAComplianceSummary(period: string, districtId: string) {
   return useQuery<GRAComplianceSummary>({
     queryKey: ['gra-compliance-summary', period, districtId],
+    enabled: !!districtId,
     queryFn: async () => {
       // Fetch all audit records for the period to compute summary client-side
       const res = await apiClient.get('/audits', {
         params: {
-          period,
-          district_id: districtId || undefined,
+          district_id: districtId,
           limit: 500,
         },
       })
@@ -139,6 +139,14 @@ export function GRACompliancePage() {
   const { data: summary = {} as Partial<GRAComplianceSummary> } = useGRAComplianceSummary(period, districtId)
 
   const records: GRAComplianceRecord[] = (recordsData as any)?.data?.data ?? []
+
+  if (!districtId) {
+    return (
+      <div className="p-8 text-center text-gray-500">
+        <p className="text-lg font-medium">Select a district to view GRA compliance records</p>
+      </div>
+    )
+  }
 
 
   const filtered = records.filter(r =>
