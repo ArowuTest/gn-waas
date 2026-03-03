@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
 import apiClient from '../lib/api-client'
 
+// FE-FIX-03: Issue types aligned with valid anomaly_type enum values
 const issueTypes = [
   'Meter Tampering',
   'Illegal Connection',
@@ -11,19 +12,24 @@ const issueTypes = [
   'Wrong Category Billing',
   'Meter Reading Dispute',
   'Pipe Leak / Burst',
+  'Night Flow Anomaly',
   'Other',
 ]
 
-// Map issue type labels to anomaly_type values the backend understands
+// FE-FIX-03: ISSUE_TYPE_MAP values must be valid anomaly_type PostgreSQL enum values.
+// Previous values (METER_TAMPERING, ILLEGAL_CONNECTION, METER_NOT_FOUND, PROPERTY_VACANT, OTHER)
+// do not exist in the enum and would cause a runtime "invalid input value for enum" error.
+// Mapped to the closest valid enum values from 001_extensions_and_types.sql + 018 migration.
 const ISSUE_TYPE_MAP: Record<string, string> = {
-  'Meter Tampering':            'METER_TAMPERING',
-  'Illegal Connection':         'ILLEGAL_CONNECTION',
-  'Meter Not Found':            'METER_NOT_FOUND',
-  'Property Demolished / Vacant': 'PROPERTY_VACANT',
-  'Wrong Category Billing':     'CATEGORY_MISMATCH',
-  'Meter Reading Dispute':      'BILLING_VARIANCE',
-  'Pipe Leak / Burst':          'NRW_SPIKE',
-  'Other':                      'OTHER',
+  'Meter Tampering':              'METERING_INACCURACY',       // tampered meter → metering inaccuracy
+  'Illegal Connection':           'UNAUTHORISED_CONSUMPTION',  // illegal tap → unauthorised consumption
+  'Meter Not Found':              'PHANTOM_METER',             // missing meter → phantom meter
+  'Property Demolished / Vacant': 'GHOST_ACCOUNT',            // vacant property → ghost account
+  'Wrong Category Billing':       'CATEGORY_MISMATCH',        // exact match
+  'Meter Reading Dispute':        'BILLING_VARIANCE',         // billing dispute → billing variance (added in 018)
+  'Pipe Leak / Burst':            'PHYSICAL_LEAK',            // physical leak → exact match
+  'Night Flow Anomaly':           'NIGHT_FLOW_ANOMALY',       // exact match
+  'Other':                        'DATA_HANDLING_ERROR',      // catch-all → data handling error
 }
 
 export default function ReportIssuePage() {

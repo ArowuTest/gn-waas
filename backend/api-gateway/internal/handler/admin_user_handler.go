@@ -137,9 +137,23 @@ func (h *AdminUserHandler) CreateUser(c *fiber.Ctx) error {
 		return response.BadRequest(c, "MISSING_FIELDS", "email, full_name, and role are required")
 	}
 
+	// BE-FIX-01: validRoles must match the user_role PostgreSQL enum exactly.
+	// Previous values (AUDIT_MANAGER, DISTRICT_MANAGER, GRA_LIAISON, READONLY_VIEWER)
+	// do not exist in the enum and would cause a runtime "invalid input value for enum"
+	// error on INSERT. GWL_SUPERVISOR is added via migration 015.
 	validRoles := map[string]bool{
-		"SYSTEM_ADMIN": true, "AUDIT_MANAGER": true, "DISTRICT_MANAGER": true,
-		"FIELD_OFFICER": true, "GRA_LIAISON": true, "READONLY_VIEWER": true,
+		"SUPER_ADMIN":      true,
+		"SYSTEM_ADMIN":     true,
+		"MINISTER_VIEW":    true,
+		"GRA_OFFICER":      true,
+		"MOF_AUDITOR":      true,
+		"GWL_EXECUTIVE":    true,
+		"GWL_MANAGER":      true,
+		"GWL_SUPERVISOR":   true,
+		"GWL_ANALYST":      true,
+		"FIELD_SUPERVISOR": true,
+		"FIELD_OFFICER":    true,
+		"MDA_USER":         true,
 	}
 	if !validRoles[req.Role] {
 		return response.BadRequest(c, "INVALID_ROLE", "Invalid role")

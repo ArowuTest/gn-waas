@@ -14,38 +14,57 @@ interface SystemConfig {
   updated_at: string
 }
 
-// Human-readable metadata for each config key
+// FE-FIX-02: CONFIG_META keys must match the actual config_key values in the
+// system_config table (seeded by database/seeds/001_system_config.sql).
+// Previous keys (sentinel.variance_threshold_pct, nrw.*, audit.*) did not exist
+// in the DB and caused the table to render with no human-readable labels.
 const CONFIG_META: Record<string, { label: string; hint: string; unit?: string; icon: string }> = {
-  // Sentinel thresholds
-  'sentinel.variance_threshold_pct':    { label: 'Bill Variance Alert Threshold', hint: 'Trigger audit when shadow bill differs from GWL bill by more than this %', unit: '%', icon: '⚡' },
-  'sentinel.critical_variance_pct':     { label: 'Critical Variance Threshold', hint: 'Escalate to CRITICAL alert level above this variance %', unit: '%', icon: '🚨' },
-  'sentinel.night_flow_threshold_m3':   { label: 'Night Flow Alert Threshold', hint: 'Flag district if 2–4 AM bulk flow exceeds this value (m³/hr)', unit: 'm³/hr', icon: '🌙' },
-  'sentinel.phantom_meter_days':        { label: 'Phantom Meter Detection Window', hint: 'Flag accounts with no readings for this many consecutive days', unit: 'days', icon: '👻' },
-  'sentinel.ghost_account_months':      { label: 'Ghost Account Detection Window', hint: 'Flag accounts billed but with zero consumption for this many months', unit: 'months', icon: '💀' },
-  'sentinel.category_mismatch_pct':     { label: 'Category Mismatch Tolerance', hint: 'Flag accounts where actual usage deviates from category average by this %', unit: '%', icon: '🔀' },
-  // NRW thresholds
-  'nrw.target_pct':                     { label: 'NRW Target (%)', hint: 'IWA target NRW percentage for Ghana (PURC guideline)', unit: '%', icon: '🎯' },
-  'nrw.critical_pct':                   { label: 'NRW Critical Threshold (%)', hint: 'Districts above this NRW % are flagged as critical', unit: '%', icon: '🔴' },
-  'nrw.water_tariff_ghs_m3':            { label: 'Water Tariff for Recovery Calc', hint: 'GHS per m³ used to estimate revenue recovery potential', unit: 'GHS/m³', icon: '💰' },
-  // Audit settings
-  'audit.auto_assign_enabled':          { label: 'Auto-Assign Field Jobs', hint: 'Automatically assign anomaly flags to available field officers', unit: '', icon: '🤖' },
-  'audit.max_jobs_per_officer':         { label: 'Max Active Jobs per Officer', hint: 'Maximum concurrent open jobs assigned to a single field officer', unit: 'jobs', icon: '👷' },
-  'audit.evidence_photo_required':      { label: 'Require Photo Evidence', hint: 'Field officers must upload meter photo before closing a job', unit: '', icon: '📷' },
-  'audit.gps_fence_radius_m':           { label: 'GPS Fence Radius', hint: 'Maximum distance (metres) from meter GPS coordinates for evidence capture', unit: 'm', icon: '📍' },
-  // GRA settings
-  'gra.sandbox_mode':                   { label: 'GRA Sandbox Mode', hint: 'Use GRA VSDC sandbox API (disable for production)', unit: '', icon: '🧪' },
-  'gra.invoice_vat_rate_pct':           { label: 'VAT Rate for Audit Invoices', hint: 'VAT percentage applied to audit recovery invoices', unit: '%', icon: '🧾' },
-  // CDC settings
+  // Sentinel thresholds (category: SENTINEL)
+  'sentinel.shadow_bill_variance_pct':  { label: 'Shadow Bill Variance Threshold', hint: 'Trigger audit when shadow bill differs from GWL actual bill by more than this %', unit: '%', icon: '⚡' },
+  'sentinel.night_flow_pct_of_daily':   { label: 'Night Flow Alert Threshold', hint: 'Flag district if 2–4 AM flow exceeds this % of daily average', unit: '%', icon: '🌙' },
+  'sentinel.phantom_meter_months':      { label: 'Phantom Meter Detection Window', hint: 'Flag accounts with identical readings for this many consecutive months', unit: 'months', icon: '👻' },
+  'sentinel.district_imbalance_pct':    { label: 'District Imbalance Threshold', hint: 'Flag district when production vs billing imbalance exceeds this %', unit: '%', icon: '⚖️' },
+  'sentinel.rationing_drop_pct':        { label: 'Rationing Drop Threshold', hint: 'Expected consumption drop during rationing period (%)', unit: '%', icon: '🚰' },
+  'sentinel.min_consumption_flag_m3':   { label: 'Minimum Consumption Flag', hint: 'Flag accounts with monthly consumption below this value', unit: 'm³', icon: '💀' },
+  // Field operations (category: FIELD)
+  'field.gps_fence_radius_m':           { label: 'GPS Fence Radius', hint: 'Maximum distance (metres) from meter GPS coordinates for evidence capture', unit: 'm', icon: '📍' },
+  'field.ocr_conflict_tolerance_pct':   { label: 'OCR Conflict Tolerance', hint: 'Flag if OCR reading differs from manual entry by more than this %', unit: '%', icon: '📷' },
+  'field.max_photo_age_minutes':        { label: 'Max Photo Age', hint: 'Maximum age of meter photo before rejection (minutes)', unit: 'min', icon: '🕐' },
+  'field.require_biometric':            { label: 'Require Biometric Verification', hint: 'Require biometric verification for field officers', unit: '', icon: '🔐' },
+  'field.blind_audit_default':          { label: 'Blind Audit Default', hint: 'Enable blind audit mode by default (officer sees GPS only, not account details)', unit: '', icon: '🙈' },
+  'field.require_surroundings_photo':   { label: 'Require Surroundings Photo', hint: 'Require surroundings photo in addition to meter face photo', unit: '', icon: '🖼️' },
+  'field.sync_interval_seconds':        { label: 'Mobile Sync Interval', hint: 'How often the Flutter app syncs pending submissions (seconds)', unit: 's', icon: '🔄' },
+  // GRA compliance (category: GRA)
+  'gra.api_base_url':                   { label: 'GRA VSDC API URL', hint: 'GRA VSDC API base URL for e-VAT signing', unit: '', icon: '🏛️' },
+  'gra.api_timeout_seconds':            { label: 'GRA API Timeout', hint: 'GRA API request timeout (seconds)', unit: 's', icon: '⏱️' },
+  'gra.max_retry_attempts':             { label: 'GRA Max Retries', hint: 'Maximum GRA API retry attempts before marking FAILED', unit: '', icon: '🔁' },
+  'gra.retry_delay_seconds':            { label: 'GRA Retry Delay', hint: 'Delay between GRA API retry attempts (seconds)', unit: 's', icon: '⏳' },
+  'gra.vat_threshold_ghs':             { label: 'VAT Signing Threshold', hint: 'Minimum bill amount requiring GRA VAT signing (GHS)', unit: 'GHS', icon: '🧾' },
+  // CDC synchronisation (category: CDC)
   'cdc.sync_interval_minutes':          { label: 'CDC Sync Interval', hint: 'How often the CDC ingestor syncs from GWL replica database', unit: 'min', icon: '🔄' },
+  'cdc.max_lag_minutes':                { label: 'CDC Max Lag', hint: 'Maximum acceptable CDC lag before alert (minutes)', unit: 'min', icon: '⚠️' },
   'cdc.batch_size':                     { label: 'CDC Batch Size', hint: 'Number of records processed per CDC sync batch', unit: 'rows', icon: '📦' },
+  // Mobile app (category: MOBILE)
+  'mobile.app_min_version':             { label: 'Minimum App Version', hint: 'Minimum Flutter app version required (older versions prompted to update)', unit: '', icon: '📱' },
+  'mobile.app_latest_version':          { label: 'Latest App Version', hint: 'Latest Flutter app version (displayed in About screen)', unit: '', icon: '🆕' },
+  'mobile.force_update':                { label: 'Force Update', hint: 'Block app usage until officer updates to minimum version', unit: '', icon: '🚫' },
+  'mobile.maintenance_mode':            { label: 'Maintenance Mode', hint: 'Disable field officer login and show maintenance message', unit: '', icon: '🔧' },
+  'mobile.maintenance_message':         { label: 'Maintenance Message', hint: 'Message shown to field officers during maintenance mode', unit: '', icon: '💬' },
+  // Business model (category: BUSINESS)
+  'business.success_fee_rate_pct':      { label: 'Success Fee Rate', hint: 'Success fee rate on recovered revenue (%)', unit: '%', icon: '💰' },
+  'business.company_name':              { label: 'Managing Company Name', hint: 'Name of the managed-service operator', unit: '', icon: '🏢' },
+  'business.company_tin':               { label: 'Managing Company TIN', hint: 'GRA TIN of the managed-service operator', unit: '', icon: '🪪' },
 }
 
+// FE-FIX-02: CATEGORY_ICONS must match actual DB categories (SENTINEL, FIELD, GRA, CDC, MOBILE, BUSINESS)
+// 'nrw' and 'audit' are not DB categories — removed.
 const CATEGORY_ICONS: Record<string, string> = {
   sentinel: '🛡️',
-  nrw: '💧',
-  audit: '📋',
-  gra: '🏛️',
-  cdc: '🔄',
+  field:    '👷',
+  gra:      '🏛️',
+  cdc:      '🔄',
+  mobile:   '📱',
+  business: '💰',
 }
 
 // ─── Inline Edit Row ──────────────────────────────────────────────────────────
@@ -136,7 +155,8 @@ function ConfigRow({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const CATEGORIES = ['sentinel', 'field', 'mobile', 'gra', 'cdc']
+// FE-FIX-02: Categories match actual DB system_config category values (case-insensitive via UPPER())
+const CATEGORIES = ['sentinel', 'field', 'gra', 'cdc', 'mobile', 'business']
 
 export default function AuditThresholdsPage() {
   const queryClient = useQueryClient()

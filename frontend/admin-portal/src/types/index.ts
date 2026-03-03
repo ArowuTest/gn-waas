@@ -37,6 +37,8 @@ export type FieldJobStatus =
   | 'SOS'
 
 // ── RBAC User Roles (matches user_role SQL enum) ──────────────────────────────
+// FE-FIX-05: UserRole must include GWL_SUPERVISOR (added via migration 015).
+// Omitting it caused TypeScript type errors when the backend returned that role.
 export type UserRole =
   | 'SUPER_ADMIN'
   | 'SYSTEM_ADMIN'
@@ -45,6 +47,7 @@ export type UserRole =
   | 'MOF_AUDITOR'
   | 'GWL_EXECUTIVE'
   | 'GWL_MANAGER'
+  | 'GWL_SUPERVISOR'
   | 'GWL_ANALYST'
   | 'FIELD_SUPERVISOR'
   | 'FIELD_OFFICER'
