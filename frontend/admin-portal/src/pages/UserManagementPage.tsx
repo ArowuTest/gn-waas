@@ -11,16 +11,16 @@ interface SystemUser {
   role: string
   district_id?: string
   district_name?: string
-  badge_number?: string
-  is_active: boolean
+  employee_id?: string
+  status: string          // 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING'
   last_login_at?: string
   created_at: string
 }
 
 interface District {
   id: string
-  name: string
-  code: string
+  district_name: string
+  district_code: string
 }
 
 const ROLES = [
@@ -60,9 +60,9 @@ function UserModal({
     email: user?.email ?? '',
     role: user?.role ?? 'FIELD_OFFICER',
     district_id: user?.district_id ?? '',
-    badge_number: user?.badge_number ?? '',
+    employee_id: user?.employee_id ?? '',
     password: '',
-    is_active: user?.is_active ?? true,
+    status: user?.status ?? 'ACTIVE',
   })
 
   const needsDistrict = ['GWL_MANAGER', 'FIELD_SUPERVISOR', 'FIELD_OFFICER'].includes(form.role)
@@ -115,17 +115,17 @@ function UserModal({
                 >
                   <option value="">— Select District —</option>
                   {districts.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
+                    <option key={d.id} value={d.id}>{d.district_name}</option>
                   ))}
                 </select>
               </div>
             )}
             {form.role === 'FIELD_OFFICER' && (
               <div className="form-group">
-                <label>Badge Number</label>
+                <label>Employee ID</label>
                 <input
-                  value={form.badge_number}
-                  onChange={e => setForm(f => ({ ...f, badge_number: e.target.value }))}
+                  value={form.employee_id}
+                  onChange={e => setForm(f => ({ ...f, employee_id: e.target.value }))}
                   placeholder="e.g. FO-2026-001"
                 />
               </div>
@@ -142,15 +142,17 @@ function UserModal({
               </div>
             )}
             {user && (
-              <div className="form-group form-group--checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={form.is_active}
-                    onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))}
-                  />
-                  &nbsp; Account Active
-                </label>
+              <div className="form-group">
+                <label>Account Status</label>
+                <select
+                  value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                >
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="SUSPENDED">Suspended</option>
+                  <option value="PENDING">Pending</option>
+                </select>
               </div>
             )}
           </div>
@@ -216,7 +218,7 @@ export default function UserManagementPage() {
   })
 
   const deactivateUser = useMutation({
-    mutationFn: (id: string) => apiClient.patch(`/admin/users/${id}`, { is_active: false }),
+    mutationFn: (id: string) => apiClient.patch(`/admin/users/${id}`, { status: 'INACTIVE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 
@@ -312,12 +314,13 @@ export default function UserManagementPage() {
             <tbody>
               {users.map(user => {
                 const badge = roleBadge(user.role)
+                const isActive = user.status === 'ACTIVE'
                 return (
                   <tr key={user.id}>
                     <td>
                       <div className="user-name">{user.full_name}</div>
-                      {user.badge_number && (
-                        <div className="user-badge">🪪 {user.badge_number}</div>
+                      {user.employee_id && (
+                        <div className="user-badge">🪪 {user.employee_id}</div>
                       )}
                     </td>
                     <td className="email-cell">{user.email}</td>
@@ -331,8 +334,8 @@ export default function UserManagementPage() {
                     </td>
                     <td>{user.district_name ?? '—'}</td>
                     <td>
-                      <span className={`status-badge ${user.is_active ? 'status-active' : 'status-inactive'}`}>
-                        {user.is_active ? 'Active' : 'Inactive'}
+                      <span className={`status-badge ${isActive ? 'status-active' : 'status-inactive'}`}>
+                        {user.status}
                       </span>
                     </td>
                     <td className="date-cell">
@@ -352,7 +355,7 @@ export default function UserManagementPage() {
                           title="Reset Password"
                           onClick={() => resetPassword.mutate(user.id)}
                         >🔑</button>
-                        {user.is_active && (
+                        {isActive && (
                           <button
                             className="btn-icon btn-icon--deactivate"
                             title="Deactivate"
@@ -499,5 +502,4 @@ const pageStyles = `
     border-color: #2e7d32; box-shadow: 0 0 0 3px rgba(46,125,50,0.1);
   }
   .form-group input:disabled { background: #f9fafb; color: #9ca3af; }
-  .form-group--checkbox { flex-direction: row; align-items: center; grid-column: span 2; }
 `

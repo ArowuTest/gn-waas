@@ -220,7 +220,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.
 
 func (r *UserRepository) GetFieldOfficers(ctx context.Context, districtID *uuid.UUID) ([]*domain.User, error) {
 	args := []interface{}{"FIELD_OFFICER"}
-	where := "role = $1 AND status = 'ACTIVE'"
+	where := "role = $1::user_role AND status = 'ACTIVE'::user_status"
 	if districtID != nil {
 		where += " AND district_id = $2"
 		args = append(args, *districtID)
@@ -627,11 +627,18 @@ func (r *DistrictRepository) UpdateFields(ctx context.Context, id uuid.UUID, fie
 	if len(fields) == 0 {
 		return 0, nil
 	}
+	// enumCasts maps column names that require explicit PostgreSQL enum casts.
+	// Without these casts, pgx will reject string values for enum-typed columns.
+	enumCasts := map[string]string{
+		"supply_status": "::supply_status",
+		"zone_type":     "::district_zone_type",
+	}
 	setClauses := []string{"updated_at = NOW()"}
 	args := []interface{}{}
 	idx := 1
 	for col, val := range fields {
-		setClauses = append(setClauses, fmt.Sprintf("%s=$%d", col, idx))
+		cast := enumCasts[col] // empty string if not an enum column
+		setClauses = append(setClauses, fmt.Sprintf("%s=$%d%s", col, idx, cast))
 		args = append(args, val)
 		idx++
 	}

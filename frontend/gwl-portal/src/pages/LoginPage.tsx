@@ -7,7 +7,7 @@ const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 
 const DEV_ACCOUNTS = [
   { label: 'GWL Manager',    email: 'manager@gwl.gov.gh',    role: 'GWL_MANAGER' },
-  { label: 'GWL Supervisor', email: 'supervisor@gwl.gov.gh', role: 'GWL_SUPERVISOR' },
+  { label: 'GWL Analyst',    email: 'analyst@gwl.gov.gh',    role: 'GWL_ANALYST' },
 ];
 
 export default function LoginPage() {
