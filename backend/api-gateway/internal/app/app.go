@@ -384,7 +384,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	audits := api.Group("/audits")
 	audits.Get("/dashboard", auditHandler.GetDashboardStats)
 	audits.Post("/",
-		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_OFFICER", "FIELD_SUPERVISOR", "GWL_MANAGER"),
 		auditHandler.CreateAuditEvent,
 	)
 	audits.Get("/", auditHandler.ListAuditEvents)
@@ -452,7 +452,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── Sentinel routes (admin portal compatibility) ───────────────────────────
 	// The admin portal hooks use /sentinel/* paths — proxy to anomaly-flags handler
 	sentinel := api.Group("/sentinel",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_OFFICER", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
 	)
 	sentinel.Get("/anomalies", flagHandler.ListAnomalyFlags)
 	sentinel.Post("/anomalies", flagHandler.CreateAnomalyFlag)

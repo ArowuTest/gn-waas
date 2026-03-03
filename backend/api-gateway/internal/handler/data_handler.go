@@ -326,12 +326,22 @@ func (h *DataHandler) ListWaterBalance(c *fiber.Ctx) error {
 		SELECT
 			wb.id, wb.district_id, wb.period_start, wb.period_end,
 			wb.system_input_volume_m3,
+			wb.billed_metered_m3,
+			wb.billed_unmetered_m3,
+			wb.unbilled_metered_m3,
+			wb.unbilled_unmetered_m3,
 			wb.total_authorised_m3,
+			wb.unauthorised_consumption_m3,
+			wb.metering_inaccuracies_m3,
+			wb.data_handling_errors_m3,
 			wb.total_apparent_losses_m3,
+			wb.main_leakage_m3,
+			wb.storage_overflow_m3,
+			wb.service_conn_leakage_m3,
 			wb.total_real_losses_m3,
 			wb.total_nrw_m3,
 			wb.nrw_pct,
-			wb.total_nrw_value_ghs,
+			wb.apparent_loss_value_ghs,
 			wb.ili_value,
 			wb.data_confidence_grade,
 			wb.calculated_at,
@@ -351,43 +361,86 @@ func (h *DataHandler) ListWaterBalance(c *fiber.Ctx) error {
 	defer rows.Close()
 
 	type WBRecord struct {
-		ID                   string    `json:"id"`
-		DistrictID           string    `json:"district_id"`
-		PeriodStart          time.Time `json:"period_start"`
-		PeriodEnd            time.Time `json:"period_end"`
-		SystemInputVolumeM3  float64   `json:"system_input_volume_m3"`
-		TotalAuthorisedM3    float64   `json:"total_authorised_m3"`
-		TotalApparentLossM3  float64   `json:"total_apparent_losses_m3"`
-		TotalRealLossM3      float64   `json:"total_real_losses_m3"`
-		TotalNRWM3           float64   `json:"total_nrw_m3"`
-		NRWPct               *float64  `json:"nrw_pct"`
-		TotalNRWValueGHS     float64   `json:"total_nrw_value_ghs"`
-		ILIValue             *float64  `json:"ili_value"`
-		DataConfidenceGrade  *int      `json:"data_confidence_grade"`
-		CalculatedAt         time.Time `json:"calculated_at"`
-		DistrictName         string    `json:"district_name"`
-		DistrictCode         string    `json:"district_code"`
+		ID                        string    `json:"id"`
+		DistrictID                string    `json:"district_id"`
+		PeriodStart               time.Time `json:"period_start"`
+		PeriodEnd                 time.Time `json:"period_end"`
+		// Frontend-aligned field names (system_input_m3, nrw_percent, ili, etc.)
+		SystemInputM3             float64   `json:"system_input_m3"`
+		BilledMeteredM3           float64   `json:"billed_metered_m3"`
+		BilledUnmeteredM3         float64   `json:"billed_unmetered_m3"`
+		UnbilledMeteredM3         float64   `json:"unbilled_metered_m3"`
+		UnbilledUnmeteredM3       float64   `json:"unbilled_unmetered_m3"`
+		TotalAuthorisedM3         float64   `json:"total_authorised_m3"`
+		UnauthorisedConsumptionM3 float64   `json:"unauthorised_consumption_m3"`
+		MeteringInaccuraciesM3    float64   `json:"metering_inaccuracies_m3"`
+		DataHandlingErrorsM3      float64   `json:"data_handling_errors_m3"`
+		TotalApparentLossesM3     float64   `json:"total_apparent_losses_m3"`
+		MainLeakageM3             float64   `json:"main_leakage_m3"`
+		StorageOverflowM3         float64   `json:"storage_overflow_m3"`
+		ServiceConnectionLeakM3   float64   `json:"service_connection_leak_m3"`
+		TotalRealLossesM3         float64   `json:"total_real_losses_m3"`
+		TotalWaterLossesM3        float64   `json:"total_water_losses_m3"`   // computed: apparent + real
+		NRWM3                     float64   `json:"nrw_m3"`
+		NRWPercent                *float64  `json:"nrw_percent"`
+		EstimatedRevenueRecovery  float64   `json:"estimated_revenue_recovery_ghs"`
+		ILI                       *float64  `json:"ili"`
+		IWAGrade                  string    `json:"iwa_grade"`               // computed from ILI
+		DataConfidenceScore       *int      `json:"data_confidence_score"`
+		ComputedAt                time.Time `json:"computed_at"`
+		DistrictName              string    `json:"district_name"`
+		DistrictCode              string    `json:"district_code"`
 	}
 
 	var records []WBRecord
 	for rows.Next() {
 		var r WBRecord
+		var serviceConnLeakM3 float64
+		var dcGrade *int
 		if err := rows.Scan(
 			&r.ID, &r.DistrictID, &r.PeriodStart, &r.PeriodEnd,
-			&r.SystemInputVolumeM3,
+			&r.SystemInputM3,
+			&r.BilledMeteredM3,
+			&r.BilledUnmeteredM3,
+			&r.UnbilledMeteredM3,
+			&r.UnbilledUnmeteredM3,
 			&r.TotalAuthorisedM3,
-			&r.TotalApparentLossM3,
-			&r.TotalRealLossM3,
-			&r.TotalNRWM3,
-			&r.NRWPct,
-			&r.TotalNRWValueGHS,
-			&r.ILIValue,
-			&r.DataConfidenceGrade,
-			&r.CalculatedAt,
+			&r.UnauthorisedConsumptionM3,
+			&r.MeteringInaccuraciesM3,
+			&r.DataHandlingErrorsM3,
+			&r.TotalApparentLossesM3,
+			&r.MainLeakageM3,
+			&r.StorageOverflowM3,
+			&serviceConnLeakM3,
+			&r.TotalRealLossesM3,
+			&r.NRWM3,
+			&r.NRWPercent,
+			&r.EstimatedRevenueRecovery,
+			&r.ILI,
+			&dcGrade,
+			&r.ComputedAt,
 			&r.DistrictName, &r.DistrictCode,
 		); err != nil {
 			h.logger.Error("scan water balance record", zap.Error(err))
 			continue
+		}
+		r.ServiceConnectionLeakM3 = serviceConnLeakM3
+		r.TotalWaterLossesM3 = r.TotalApparentLossesM3 + r.TotalRealLossesM3
+		r.DataConfidenceScore = dcGrade
+		// Compute IWA grade from ILI
+		if r.ILI != nil {
+			switch {
+			case *r.ILI < 1.5:
+				r.IWAGrade = "A"
+			case *r.ILI < 2.5:
+				r.IWAGrade = "B"
+			case *r.ILI < 4.0:
+				r.IWAGrade = "C"
+			default:
+				r.IWAGrade = "D"
+			}
+		} else {
+			r.IWAGrade = "N/A"
 		}
 		records = append(records, r)
 	}

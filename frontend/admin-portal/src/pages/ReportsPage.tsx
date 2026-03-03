@@ -8,7 +8,6 @@
  * No hardcoded data. No stubs. All downloads are real server-generated files.
  */
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../lib/api-client'
 import {
   FileText, Download, BarChart2, Shield,
@@ -27,12 +26,13 @@ interface ReportMeta {
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 function useAvailablePeriods() {
-  return useQuery<{ data: string[] }>({
-    queryKey: ['report-periods'],
-    queryFn: () => apiClient.get('/gwl/reports/monthly', { params: { list_periods: true } })
-      .catch(() => ({ data: [] })),
-    staleTime: 300_000,
+  // Generate last 12 months client-side — no dedicated endpoint needed
+  const now = new Date()
+  const periods = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
+  return { data: { data: periods }, isLoading: false }
 }
 
 // ─── Report Card ──────────────────────────────────────────────────────────────

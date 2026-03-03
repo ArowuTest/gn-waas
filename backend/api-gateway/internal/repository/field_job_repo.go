@@ -351,7 +351,7 @@ func (r *SystemConfigRepository) GetByKey(ctx context.Context, key string) (*dom
 func (r *SystemConfigRepository) GetByCategory(ctx context.Context, category string) ([]*domain.SystemConfig, error) {
 	rows, err := r.q(ctx).Query(ctx, `
 		SELECT id, config_key, config_value, config_type, description, category, updated_at
-		FROM system_config WHERE category = $1 ORDER BY config_key`, category)
+		FROM system_config WHERE UPPER(category) = UPPER($1) ORDER BY config_key`, category)
 	if err != nil {
 		return nil, err
 	}

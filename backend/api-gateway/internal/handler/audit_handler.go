@@ -879,8 +879,13 @@ func (h *AnomalyFlagHandler) CreateAnomalyFlag(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
 	}
+	// If district_id not provided, fall back to the authenticated user's district
 	if req.DistrictID == "" {
-		return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id is required")
+		if rlsDistrict, ok := c.Locals("rls_district_id").(string); ok && rlsDistrict != "" && rlsDistrict != "00000000-0000-0000-0000-000000000000" {
+			req.DistrictID = rlsDistrict
+		} else {
+			return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id is required")
+		}
 	}
 	if req.AnomalyType == "" {
 		return response.BadRequest(c, "MISSING_ANOMALY_TYPE", "anomaly_type is required")

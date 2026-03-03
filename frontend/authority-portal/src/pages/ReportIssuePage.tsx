@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import { AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
 import apiClient from '../lib/api-client'
 
@@ -26,6 +27,7 @@ const ISSUE_TYPE_MAP: Record<string, string> = {
 }
 
 export default function ReportIssuePage() {
+  const { user } = useAuth()
   const [submitted, setSubmitted] = useState(false)
   const [trackingId, setTrackingId] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -43,6 +45,7 @@ export default function ReportIssuePage() {
     setSubmitError('')
     try {
       const res = await apiClient.post('/sentinel/anomalies', {
+        district_id:     user?.district_id || undefined,
         account_number:  form.accountNum || undefined,
         anomaly_type:    ISSUE_TYPE_MAP[form.issueType] ?? 'OTHER',
         alert_level:     form.priority,

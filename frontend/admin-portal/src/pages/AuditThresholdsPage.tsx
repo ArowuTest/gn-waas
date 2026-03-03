@@ -136,7 +136,7 @@ function ConfigRow({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const CATEGORIES = ['sentinel', 'nrw', 'audit', 'gra', 'cdc']
+const CATEGORIES = ['sentinel', 'field', 'mobile', 'gra', 'cdc']
 
 export default function AuditThresholdsPage() {
   const queryClient = useQueryClient()
