@@ -28,8 +28,8 @@ const REGIONS = [
   'Oti', 'Bono East', 'Ahafo', 'Savannah', 'North East', 'Western North',
 ]
 
-const SUPPLY_STATUSES = ['ACTIVE', 'INTERMITTENT', 'SUSPENDED', 'PLANNED']
-const ZONE_TYPES = ['URBAN', 'PERI_URBAN', 'RURAL', 'INDUSTRIAL']
+const SUPPLY_STATUSES = ['NORMAL', 'REDUCED', 'OUTAGE', 'MAINTENANCE', 'UNKNOWN']
+const ZONE_TYPES = ['RED', 'YELLOW', 'GREEN', 'GREY']
 
 function gradeBadge(grade?: number) {
   if (!grade) return { label: 'N/A', cls: 'badge-gray' }
@@ -64,8 +64,8 @@ function DistrictModal({
     region: district?.region ?? 'Greater Accra',
     population_estimate: district?.population_estimate ?? 0,
     total_connections: district?.total_connections ?? 0,
-    supply_status: district?.supply_status ?? 'ACTIVE',
-    zone_type: district?.zone_type ?? 'URBAN',
+    supply_status: district?.supply_status ?? 'NORMAL',
+    zone_type: district?.zone_type ?? 'GREEN',
     is_pilot_district: district?.is_pilot_district ?? false,
     is_active: district?.is_active ?? true,
   })
@@ -276,7 +276,7 @@ export default function DistrictConfigPage() {
                     </td>
                     <td><span className={`badge ${grade.cls}`}>{grade.label}</span></td>
                     <td>
-                      <span className={`status-badge ${d.supply_status === 'ACTIVE' ? 'status-active' : 'status-warn'}`}>
+                      <span className={`status-badge ${d.supply_status === 'NORMAL' ? 'status-active' : 'status-warn'}`}>
                         {d.supply_status}
                       </span>
                     </td>

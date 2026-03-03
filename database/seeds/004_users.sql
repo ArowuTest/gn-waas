@@ -37,6 +37,7 @@ INSERT INTO users (id, email, full_name, phone_number, role, status, organisatio
 ('a0000001-0000-0000-0000-000000000022', 'manager.tema@gwl.com.gh',       'Tema District Manager',      '+233200000022', 'GWL_MANAGER',      'ACTIVE', 'Ghana Water Limited', 'GWL-MGR-001'),
 ('a0000001-0000-0000-0000-000000000023', 'manager.accrawest@gwl.com.gh',  'Accra West District Manager','+233200000023', 'GWL_MANAGER',      'ACTIVE', 'Ghana Water Limited', 'GWL-MGR-002'),
 ('a0000001-0000-0000-0000-000000000024', 'analyst1@gwl.com.gh',           'GWL Data Analyst',           '+233200000024', 'GWL_ANALYST',      'ACTIVE', 'Ghana Water Limited', 'GWL-ANA-001'),
+('a0000001-0000-0000-0000-000000000025', 'supervisor@gwl.com.gh',         'GWL Billing Supervisor',     '+233200000025', 'GWL_SUPERVISOR',   'ACTIVE', 'Ghana Water Limited', 'GWL-SUP-001'),
 
 -- ============================================================
 -- FIELD OPERATIONS

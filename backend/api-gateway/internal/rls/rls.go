@@ -294,6 +294,7 @@ var knownRoles = map[string]struct{}{
 	"MOF_AUDITOR":        {},
 	"GWL_EXECUTIVE":      {},
 	"GWL_MANAGER":        {},
+	"GWL_SUPERVISOR":     {},
 	"GWL_ANALYST":        {},
 	"FIELD_SUPERVISOR":   {},
 	"FIELD_OFFICER":      {},

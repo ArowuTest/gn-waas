@@ -524,7 +524,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── GWL Case Management Portal ───────────────────────────────────────────
 	// All GWL routes require GWL_SUPERVISOR, GWL_BILLING_OFFICER, or GWL_MANAGER role
-	gwlRoles := middleware.RequireRoles("SUPER_ADMIN", "GWL_MANAGER", "GWL_ANALYST", "GWL_EXECUTIVE", "SYSTEM_ADMIN")
+	gwlRoles := middleware.RequireRoles("SUPER_ADMIN", "GWL_MANAGER", "GWL_SUPERVISOR", "GWL_ANALYST", "GWL_EXECUTIVE", "SYSTEM_ADMIN")
 	gwl := api.Group("/gwl", gwlRoles)
 
 	// Case queue and summary
@@ -555,7 +555,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// Accessible by SUPER_ADMIN, SYSTEM_ADMIN, MOF_AUDITOR, GWL roles.
 	dataRoles := middleware.RequireRoles(
 		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR",
-		"GWL_EXECUTIVE", "GWL_MANAGER", "GWL_ANALYST",
+		"GWL_EXECUTIVE", "GWL_MANAGER", "GWL_SUPERVISOR", "GWL_ANALYST",
 	)
 	api.Get("/production-records", dataRoles, dataHandler.ListProductionRecords)
 	api.Get("/meter-readings",     dataRoles, dataHandler.ListMeterReadings)
