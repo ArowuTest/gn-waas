@@ -473,7 +473,7 @@ services:
       retries: 3
     networks:
       gnwaas-network:
-        ipv4_address: 172.20.0.32
+        ipv4_address: 172.20.0.34  # CF-M01 fix: was .32 (collision with gwl-portal)
 
   # ============================================================
   # Demo Seed Runner (one-shot container to populate demo data)

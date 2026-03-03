@@ -225,13 +225,17 @@ func (s *CDCSyncService) syncAccounts(ctx context.Context, gwlDB *pgxpool.Pool, 
 			tin = &mapped.AccountHolderTIN
 		}
 
+		// BE-M02 fix: add explicit enum casts for category and status.
+		// pgx cannot reliably infer custom enum types from plain strings;
+		// without the cast, the INSERT fails with "column is of type account_category
+		// but expression is of type text" on some pgx driver versions.
 		_, err = s.gnwaasDB.Exec(ctx, `
 			INSERT INTO water_accounts (
 				gwl_account_number, account_holder_name, account_holder_tin,
 				category, status, district_id, meter_number,
 				address_line1, gps_latitude, gps_longitude,
 				is_active, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6::uuid,$7,$8,$9,$10,$11,NOW())
+			) VALUES ($1,$2,$3,$4::account_category,$5::account_status,$6::uuid,$7,$8,$9,$10,$11,NOW())
 			ON CONFLICT (gwl_account_number) DO UPDATE SET
 				account_holder_name = EXCLUDED.account_holder_name,
 				account_holder_tin  = EXCLUDED.account_holder_tin,

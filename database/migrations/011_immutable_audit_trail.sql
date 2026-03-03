@@ -9,23 +9,17 @@
 -- protections since they are also compliance-critical records.
 
 -- ─────────────────────────────────────────────────────────────
--- 1. Create the audit_trail table if it doesn't exist
---    (it may have been created by the logAdminAction helper)
+-- 1. audit_trail table — defined in migration 004
 -- ─────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS audit_trail (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    entity_type     VARCHAR(100) NOT NULL,
-    entity_id       TEXT         NOT NULL,
-    action          VARCHAR(50)  NOT NULL,  -- CREATE, UPDATE, DELETE
-    changed_by      UUID         REFERENCES users(id) ON DELETE SET NULL,
-    old_values      JSONB,
-    new_values      JSONB,
-    ip_address      INET,
-    user_agent      TEXT,
-    changed_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
+-- DB-H01 fix: The audit_trail table is created with the correct schema
+-- (UUID primary key, entity_id TEXT) in migration 004_sentinel_and_audit.sql.
+-- The CREATE TABLE IF NOT EXISTS block that was here previously conflicted
+-- with 004's definition (BIGSERIAL PK vs UUID PK, entity_id UUID vs TEXT),
+-- causing schema inconsistency. Since 004 always runs first and creates the
+-- table, this block is removed. The indexes below are kept with IF NOT EXISTS
+-- guards so they are safe to run even if 004 already created them.
 
--- Indexes for fast lookups
+-- Indexes for fast lookups (IF NOT EXISTS guards prevent duplicate-index errors)
 CREATE INDEX IF NOT EXISTS idx_audit_trail_entity
     ON audit_trail (entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_trail_actor

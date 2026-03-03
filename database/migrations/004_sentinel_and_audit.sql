@@ -217,18 +217,24 @@ COMMENT ON TABLE gra_compliance_log IS 'Immutable GRA VSDC API interaction log. 
 -- ============================================================
 -- AUDIT TRAIL (Immutable append-only log for all changes)
 -- ============================================================
+-- DB-H01 fix: Use UUID primary key and entity_id TEXT so that:
+--   (a) audit_trail.id is a UUID (consistent with all other tables)
+--   (b) entity_id accepts any string identifier, not just UUIDs
+--       (LogAdminAction passes entity IDs as plain strings)
+--   (c) Migration 011 (immutability triggers) assumes this schema;
+--       removing the BIGSERIAL/UUID mismatch prevents type errors.
+-- request_id removed — not used by any backend code.
 CREATE TABLE audit_trail (
-    id              BIGSERIAL PRIMARY KEY,
-    entity_type     VARCHAR(50) NOT NULL,
-    entity_id       UUID NOT NULL,
-    action          VARCHAR(20) NOT NULL,                 -- CREATE, UPDATE, DELETE, VIEW
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entity_type     VARCHAR(100) NOT NULL,
+    entity_id       TEXT NOT NULL,
+    action          VARCHAR(50) NOT NULL,                 -- CREATE, UPDATE, DELETE, VIEW
     changed_by      UUID REFERENCES users(id),
     changed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     old_values      JSONB,
     new_values      JSONB,
     ip_address      INET,
-    user_agent      TEXT,
-    request_id      VARCHAR(100)
+    user_agent      TEXT
 );
 
 -- DB-H01 fix: wrap in DO block so migration succeeds even without TimescaleDB

@@ -31,6 +31,10 @@ func (r *AnomalyFlagRepository) Create(ctx context.Context, flag *entities.Anoma
 		return nil, fmt.Errorf("marshal evidence failed: %w", err)
 	}
 
+	// BE-M02 fix: add explicit enum casts for anomaly_type and alert_level.
+	// pgx cannot reliably infer custom enum types from plain strings;
+	// without the cast, the INSERT fails with "column is of type anomaly_type
+	// but expression is of type text" on some pgx driver versions.
 	query := `
 		INSERT INTO anomaly_flags (
 			account_id, district_id, anomaly_type, alert_level,
@@ -38,7 +42,7 @@ func (r *AnomalyFlagRepository) Create(ctx context.Context, flag *entities.Anoma
 			billing_period_start, billing_period_end,
 			shadow_bill_id, gwl_bill_id, evidence_data,
 			status, sentinel_version, detection_hash
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+		) VALUES ($1,$2,$3::anomaly_type,$4::alert_level,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 		RETURNING id, created_at`
 
 	err = r.db.QueryRow(ctx, query,

@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -15,6 +17,12 @@ import (
 // It exposes the revenue_recovery_events table which tracks every GHS amount
 // recovered as a direct result of a GN-WAAS audit flag, and calculates the
 // 3% success fee owed to the managed-service operator.
+//
+// BE-M01 fix: All database queries now go through q(ctx) which retrieves the
+// RLS-activated transaction from the request context (set by rls.Middleware).
+// This ensures district-level Row-Level Security is enforced on every query.
+// Using h.db directly would bypass RLS because the raw pool connection does
+// not have the SET LOCAL app.district_id / app.user_role session variables set.
 type RevenueRecoveryHandler struct {
 	db     *pgxpool.Pool
 	logger *zap.Logger
@@ -24,11 +32,23 @@ func NewRevenueRecoveryHandler(db *pgxpool.Pool, logger *zap.Logger) *RevenueRec
 	return &RevenueRecoveryHandler{db: db, logger: logger}
 }
 
+// qCtx returns the RLS-activated transaction from the Fiber context if one
+// exists (placed there by rls.Middleware), otherwise falls back to the raw
+// connection pool. All handler methods MUST use h.qCtx(c) instead of h.db.
+func (h *RevenueRecoveryHandler) qCtx(c *fiber.Ctx) repository.Querier {
+	ctx := c.UserContext()
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return h.db
+}
+
 // GetSummary godoc
 // GET /api/v1/revenue/summary?district_id=&period=
 // Returns aggregate recovery stats: total recovered, total success fee, count by type.
 func (h *RevenueRecoveryHandler) GetSummary(c *fiber.Ctx) error {
 	ctx := c.UserContext()
+	q := h.qCtx(c)
 
 	districtFilter := c.Query("district_id")
 	period := c.Query("period") // e.g. "2026-03"
@@ -51,24 +71,24 @@ func (h *RevenueRecoveryHandler) GetSummary(c *fiber.Ctx) error {
 	}
 
 	type Summary struct {
-		TotalEvents       int     `json:"total_events"`
-		TotalVarianceGHS  float64 `json:"total_variance_ghs"`
-		TotalRecoveredGHS float64 `json:"total_recovered_ghs"`
+		TotalEvents        int     `json:"total_events"`
+		TotalVarianceGHS   float64 `json:"total_variance_ghs"`
+		TotalRecoveredGHS  float64 `json:"total_recovered_ghs"`
 		TotalSuccessFeeGHS float64 `json:"total_success_fee_ghs"`
-		PendingCount      int     `json:"pending_count"`
-		ConfirmedCount    int     `json:"confirmed_count"`
-		CollectedCount    int     `json:"collected_count"`
-		ByType            []struct {
-			RecoveryType   string  `json:"recovery_type"`
-			Count          int     `json:"count"`
-			RecoveredGHS   float64 `json:"recovered_ghs"`
-			SuccessFeeGHS  float64 `json:"success_fee_ghs"`
+		PendingCount       int     `json:"pending_count"`
+		ConfirmedCount     int     `json:"confirmed_count"`
+		CollectedCount     int     `json:"collected_count"`
+		ByType             []struct {
+			RecoveryType  string  `json:"recovery_type"`
+			Count         int     `json:"count"`
+			RecoveredGHS  float64 `json:"recovered_ghs"`
+			SuccessFeeGHS float64 `json:"success_fee_ghs"`
 		} `json:"by_type"`
 	}
 
 	var s Summary
 
-	row := h.db.QueryRow(ctx, `
+	row := q.QueryRow(ctx, `
 		SELECT
 			COUNT(*)::int,
 			COALESCE(SUM(variance_ghs), 0),
@@ -89,7 +109,7 @@ func (h *RevenueRecoveryHandler) GetSummary(c *fiber.Ctx) error {
 	}
 
 	// By-type breakdown
-	rows, err := h.db.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT recovery_type,
 		       COUNT(*)::int,
 		       COALESCE(SUM(recovered_ghs), 0),
@@ -121,6 +141,7 @@ func (h *RevenueRecoveryHandler) GetSummary(c *fiber.Ctx) error {
 // GET /api/v1/revenue/events?district_id=&status=&limit=&offset=
 func (h *RevenueRecoveryHandler) ListEvents(c *fiber.Ctx) error {
 	ctx := c.UserContext()
+	q := h.qCtx(c)
 	limit := c.QueryInt("limit", 20)
 	offset := c.QueryInt("offset", 0)
 	if limit > 100 {
@@ -145,29 +166,27 @@ func (h *RevenueRecoveryHandler) ListEvents(c *fiber.Ctx) error {
 	}
 
 	type Event struct {
-		ID             uuid.UUID  `json:"id"`
-		AuditEventID   uuid.UUID  `json:"audit_event_id"`
-		DistrictName   string     `json:"district_name"`
-		AccountNumber  string     `json:"account_number"`
-		AccountHolder  string     `json:"account_holder"`
-		VarianceGHS    float64    `json:"variance_ghs"`
-		RecoveredGHS   float64    `json:"recovered_ghs"`
-		SuccessFeeGHS  float64    `json:"success_fee_ghs"`
-		RecoveryType   string     `json:"recovery_type"`
-		Status         string     `json:"status"`
-		ConfirmedAt    *time.Time `json:"confirmed_at,omitempty"`
-		CollectedAt    *time.Time `json:"collected_at,omitempty"`
-		CreatedAt      time.Time  `json:"created_at"`
+		ID            uuid.UUID  `json:"id"`
+		AuditEventID  uuid.UUID  `json:"audit_event_id"`
+		DistrictName  string     `json:"district_name"`
+		AccountNumber string     `json:"account_number"`
+		AccountHolder string     `json:"account_holder"`
+		VarianceGHS   float64    `json:"variance_ghs"`
+		RecoveredGHS  float64    `json:"recovered_ghs"`
+		SuccessFeeGHS float64    `json:"success_fee_ghs"`
+		RecoveryType  string     `json:"recovery_type"`
+		Status        string     `json:"status"`
+		ConfirmedAt   *time.Time `json:"confirmed_at,omitempty"`
+		CollectedAt   *time.Time `json:"collected_at,omitempty"`
+		CreatedAt     time.Time  `json:"created_at"`
 	}
 
 	var total int
-	h.db.QueryRow(ctx, `SELECT COUNT(*) FROM revenue_recovery_events rr WHERE `+where, args...).Scan(&total)
+	q.QueryRow(ctx, `SELECT COUNT(*) FROM revenue_recovery_events rr WHERE `+where, args...).Scan(&total)
 
-	countArgs := make([]interface{}, len(args))
-	copy(countArgs, args)
 	args = append(args, limit, offset)
 
-	rows, err := h.db.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT rr.id, rr.audit_event_id,
 		       d.district_name, wa.gwl_account_number, wa.account_holder_name,
 		       rr.variance_ghs, rr.recovered_ghs, rr.success_fee_ghs,
@@ -207,6 +226,7 @@ func (h *RevenueRecoveryHandler) ListEvents(c *fiber.Ctx) error {
 // Marks a recovery event as CONFIRMED with the actual recovered amount.
 func (h *RevenueRecoveryHandler) ConfirmRecovery(c *fiber.Ctx) error {
 	ctx := c.UserContext()
+	q := h.qCtx(c)
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.BadRequest(c, "INVALID_ID", "Invalid event ID")
@@ -225,7 +245,7 @@ func (h *RevenueRecoveryHandler) ConfirmRecovery(c *fiber.Ctx) error {
 
 	confirmedBy, _ := c.Locals("user_id").(string)
 
-	_, err = h.db.Exec(ctx, `
+	_, err = q.Exec(ctx, `
 		UPDATE revenue_recovery_events
 		SET status        = 'CONFIRMED',
 		    recovered_ghs = $1,

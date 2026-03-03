@@ -3,6 +3,8 @@ package handler
 import (
 	"time"
 
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -14,6 +16,10 @@ import (
 // Field officers submit their location via the mobile app; the Admin Portal
 // "Workforce Oversight" view uses this data to verify officers are physically
 // visiting flagged properties (anti-desk-audit control).
+//
+// BE-M01 fix: All database queries now go through qCtx(c) which retrieves the
+// RLS-activated transaction from the request context (set by rls.Middleware).
+// This ensures district-level Row-Level Security is enforced on every query.
 type WorkforceHandler struct {
 	db     *pgxpool.Pool
 	logger *zap.Logger
@@ -23,16 +29,31 @@ func NewWorkforceHandler(db *pgxpool.Pool, logger *zap.Logger) *WorkforceHandler
 	return &WorkforceHandler{db: db, logger: logger}
 }
 
+// qCtx returns the RLS-activated transaction from the Fiber context if one
+// exists (placed there by rls.Middleware), otherwise falls back to the raw
+// connection pool. All handler methods MUST use h.qCtx(c) instead of h.db.
+func (h *WorkforceHandler) qCtx(c *fiber.Ctx) repository.Querier {
+	if tx, ok := rls.TxFromContext(c.UserContext()); ok {
+		return tx
+	}
+	return h.db
+}
+
 // RecordLocation godoc
 // POST /api/v1/workforce/location
 // Called by the mobile app every 5 minutes while a field job is active.
 func (h *WorkforceHandler) RecordLocation(c *fiber.Ctx) error {
 	ctx := c.UserContext()
+	q := h.qCtx(c)
 
 	officerID, ok := c.Locals("user_id").(string)
 	if !ok || officerID == "" {
 		return response.Unauthorized(c, "Officer ID not found in token")
 	}
+
+	// BE-M01 fix: capture district_id from RLS locals so it can be stored
+	// in officer_gps_tracks.district_id (required for the RLS policy on that table).
+	districtID, _ := c.Locals("rls_district_id").(string)
 
 	var req struct {
 		FieldJobID *string  `json:"field_job_id"`
@@ -55,11 +76,19 @@ func (h *WorkforceHandler) RecordLocation(c *fiber.Ctx) error {
 		}
 	}
 
-	_, err := h.db.Exec(ctx, `
+	// Normalise districtID: nil if empty/invalid UUID
+	var districtUUID *uuid.UUID
+	if districtID != "" {
+		if id, err := uuid.Parse(districtID); err == nil {
+			districtUUID = &id
+		}
+	}
+
+	_, err := q.Exec(ctx, `
 		INSERT INTO officer_gps_tracks
-		    (officer_id, field_job_id, latitude, longitude, accuracy_m, device_id)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6)`,
-		officerID, jobID, req.Latitude, req.Longitude, req.AccuracyM, req.DeviceID,
+		    (officer_id, field_job_id, district_id, latitude, longitude, accuracy_m, device_id)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)`,
+		officerID, jobID, districtUUID, req.Latitude, req.Longitude, req.AccuracyM, req.DeviceID,
 	)
 	if err != nil {
 		h.logger.Error("RecordLocation failed", zap.Error(err))
@@ -73,6 +102,7 @@ func (h *WorkforceHandler) RecordLocation(c *fiber.Ctx) error {
 // Returns GPS breadcrumbs for a specific officer in a time window.
 func (h *WorkforceHandler) GetOfficerTrack(c *fiber.Ctx) error {
 	ctx := c.UserContext()
+	q := h.qCtx(c)
 	officerID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.BadRequest(c, "INVALID_ID", "Invalid officer ID")
@@ -99,7 +129,7 @@ func (h *WorkforceHandler) GetOfficerTrack(c *fiber.Ctx) error {
 		RecordedAt time.Time  `json:"recorded_at"`
 	}
 
-	rows, err := h.db.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT latitude, longitude, accuracy_m, field_job_id, recorded_at
 		FROM officer_gps_tracks
 		WHERE officer_id = $1
@@ -129,35 +159,36 @@ func (h *WorkforceHandler) GetOfficerTrack(c *fiber.Ctx) error {
 // Returns all officers who have submitted a GPS ping in the last 30 minutes.
 func (h *WorkforceHandler) GetActiveOfficers(c *fiber.Ctx) error {
 	ctx := c.UserContext()
+	q := h.qCtx(c)
 
 	districtFilter := c.Query("district_id")
 	args := []interface{}{time.Now().Add(-30 * time.Minute)}
-	districtJoin := ""
 	districtWhere := ""
 	if districtFilter != "" {
 		if _, err := uuid.Parse(districtFilter); err == nil {
-			districtJoin = " JOIN field_jobs fj ON t.field_job_id = fj.id"
-			districtWhere = " AND fj.district_id = $2::uuid"
+			// BE-M01 fix: filter by officer_gps_tracks.district_id (added in migration 018)
+			// instead of joining through field_jobs (which was fragile and missed idle officers)
+			districtWhere = " AND t.district_id = $2::uuid"
 			args = append(args, districtFilter)
 		}
 	}
 
 	type ActiveOfficer struct {
-		OfficerID    uuid.UUID  `json:"officer_id"`
-		FullName     string     `json:"full_name"`
-		EmployeeID   string     `json:"employee_id"`
-		Latitude     float64    `json:"latitude"`
-		Longitude    float64    `json:"longitude"`
-		FieldJobID   *uuid.UUID `json:"field_job_id,omitempty"`
-		LastSeenAt   time.Time  `json:"last_seen_at"`
+		OfficerID  uuid.UUID  `json:"officer_id"`
+		FullName   string     `json:"full_name"`
+		EmployeeID string     `json:"employee_id"`
+		Latitude   float64    `json:"latitude"`
+		Longitude  float64    `json:"longitude"`
+		FieldJobID *uuid.UUID `json:"field_job_id,omitempty"`
+		LastSeenAt time.Time  `json:"last_seen_at"`
 	}
 
-	rows, err := h.db.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT DISTINCT ON (t.officer_id)
 		       t.officer_id, u.full_name, u.employee_id,
 		       t.latitude, t.longitude, t.field_job_id, t.recorded_at
 		FROM officer_gps_tracks t
-		JOIN users u ON t.officer_id = u.id`+districtJoin+`
+		JOIN users u ON t.officer_id = u.id
 		WHERE t.recorded_at >= $1`+districtWhere+`
 		ORDER BY t.officer_id, t.recorded_at DESC`,
 		args...,
@@ -186,37 +217,38 @@ func (h *WorkforceHandler) GetActiveOfficers(c *fiber.Ctx) error {
 // Returns aggregate workforce stats for the Admin Dashboard.
 func (h *WorkforceHandler) GetWorkforceSummary(c *fiber.Ctx) error {
 	ctx := c.UserContext()
+	q := h.qCtx(c)
 
 	type Summary struct {
-		TotalFieldOfficers  int `json:"total_field_officers"`
-		ActiveNow           int `json:"active_now"`           // GPS ping < 30 min
-		OnActiveJob         int `json:"on_active_job"`         // has open field_job
-		IdleOfficers        int `json:"idle_officers"`
-		JobsCompletedToday  int `json:"jobs_completed_today"`
+		TotalFieldOfficers int `json:"total_field_officers"`
+		ActiveNow          int `json:"active_now"`          // GPS ping < 30 min
+		OnActiveJob        int `json:"on_active_job"`        // has open field_job
+		IdleOfficers       int `json:"idle_officers"`
+		JobsCompletedToday int `json:"jobs_completed_today"`
 	}
 
 	var s Summary
 
 	// Total field officers
-	h.db.QueryRow(ctx, `
+	q.QueryRow(ctx, `
 		SELECT COUNT(*) FROM users
 		WHERE role = 'FIELD_OFFICER'::user_role AND status = 'ACTIVE'::user_status`,
 	).Scan(&s.TotalFieldOfficers)
 
 	// Active now (GPS ping in last 30 min)
-	h.db.QueryRow(ctx, `
+	q.QueryRow(ctx, `
 		SELECT COUNT(DISTINCT officer_id) FROM officer_gps_tracks
 		WHERE recorded_at >= NOW() - INTERVAL '30 minutes'`,
 	).Scan(&s.ActiveNow)
 
 	// On active job
-	h.db.QueryRow(ctx, `
+	q.QueryRow(ctx, `
 		SELECT COUNT(DISTINCT assigned_officer_id) FROM field_jobs
 		WHERE status IN ('ASSIGNED','IN_PROGRESS') AND assigned_officer_id IS NOT NULL`,
 	).Scan(&s.OnActiveJob)
 
 	// Jobs completed today
-	h.db.QueryRow(ctx, `
+	q.QueryRow(ctx, `
 		SELECT COUNT(*) FROM field_jobs
 		WHERE status = 'COMPLETED' AND DATE(updated_at) = CURRENT_DATE`,
 	).Scan(&s.JobsCompletedToday)

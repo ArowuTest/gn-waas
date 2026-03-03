@@ -16,8 +16,11 @@ EOSQL
 echo "✓ Keycloak database created"
 
 # Run migrations in order
+# CF-L01 fix: use `sort -V` (version sort) instead of relying on glob expansion.
+# Plain glob expansion is alphabetical and can mis-order files like 010a_ vs 010_.
+# sort -V handles numeric components correctly: 001 < 002 < ... < 009 < 010 < 011.
 echo "Running migrations..."
-for f in /docker-entrypoint-initdb.d/migrations/*.sql; do
+for f in $(ls -1 /docker-entrypoint-initdb.d/migrations/*.sql | sort -V); do
     echo "  → Applying: $(basename $f)"
     psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f "$f"
 done
@@ -37,7 +40,7 @@ EOSQL
 # Run seeds in order as gnwaas_admin (BYPASSRLS) so RLS does not block inserts
 # In production (APP_ENV=production), skip demo timeseries data (006_demo_timeseries.sql)
 echo "Running seeds..."
-for f in /docker-entrypoint-initdb.d/seeds/*.sql; do
+for f in $(ls -1 /docker-entrypoint-initdb.d/seeds/*.sql | sort -V); do
     basename_f=$(basename "$f")
     if [ "${APP_ENV:-development}" = "production" ] && echo "$basename_f" | grep -q "demo"; then
         echo "  ⏭  Skipping demo seed in production: $basename_f"
