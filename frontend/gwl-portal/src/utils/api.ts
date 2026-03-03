@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+// V19-FE-01 fix: fallback to '/api/v1' (relative URL) so production Nginx proxy works
+// without VITE_API_URL set. In dev, .env.development sets VITE_API_URL=http://localhost:3000
+const BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : '/api/v1';
 
 export const api = axios.create({
   baseURL: BASE_URL,

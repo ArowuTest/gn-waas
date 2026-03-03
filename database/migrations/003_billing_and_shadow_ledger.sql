@@ -7,7 +7,7 @@
 -- ============================================================
 -- GWL BILLING RECORDS (Mirrored from CDC)
 -- ============================================================
-CREATE TABLE gwl_billing_records (
+CREATE TABLE IF NOT EXISTS gwl_billing_records (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     gwl_bill_id         VARCHAR(100) NOT NULL UNIQUE,     -- GWL's own bill reference
     account_id          UUID NOT NULL REFERENCES water_accounts(id),
@@ -32,16 +32,16 @@ CREATE TABLE gwl_billing_records (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_gwl_billing_account ON gwl_billing_records(account_id);
-CREATE INDEX idx_gwl_billing_period ON gwl_billing_records(billing_period_start, billing_period_end);
-CREATE INDEX idx_gwl_billing_sync ON gwl_billing_records(gwl_sync_at);
+CREATE INDEX IF NOT EXISTS idx_gwl_billing_account ON gwl_billing_records(account_id);
+CREATE INDEX IF NOT EXISTS idx_gwl_billing_period ON gwl_billing_records(billing_period_start, billing_period_end);
+CREATE INDEX IF NOT EXISTS idx_gwl_billing_sync ON gwl_billing_records(gwl_sync_at);
 
 COMMENT ON TABLE gwl_billing_records IS 'GWL actual billing records mirrored via CDC. Immutable after sync.';
 
 -- ============================================================
 -- SHADOW BILLS (GN-WAAS calculated correct bills)
 -- ============================================================
-CREATE TABLE shadow_bills (
+CREATE TABLE IF NOT EXISTS shadow_bills (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     gwl_bill_id             UUID NOT NULL REFERENCES gwl_billing_records(id),
     account_id              UUID NOT NULL REFERENCES water_accounts(id),
@@ -79,17 +79,17 @@ CREATE TABLE shadow_bills (
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_shadow_bills_account ON shadow_bills(account_id);
-CREATE INDEX idx_shadow_bills_period ON shadow_bills(billing_period_start);
-CREATE INDEX idx_shadow_bills_flagged ON shadow_bills(is_flagged) WHERE is_flagged = TRUE;
-CREATE INDEX idx_shadow_bills_variance ON shadow_bills(variance_pct);
+CREATE INDEX IF NOT EXISTS idx_shadow_bills_account ON shadow_bills(account_id);
+CREATE INDEX IF NOT EXISTS idx_shadow_bills_period ON shadow_bills(billing_period_start);
+CREATE INDEX IF NOT EXISTS idx_shadow_bills_flagged ON shadow_bills(is_flagged) WHERE is_flagged = TRUE;
+CREATE INDEX IF NOT EXISTS idx_shadow_bills_variance ON shadow_bills(variance_pct);
 
 COMMENT ON TABLE shadow_bills IS 'GN-WAAS calculated shadow bills using PURC 2026 tariffs. Compared against GWL actuals.';
 
 -- ============================================================
 -- IWA/AWWA WATER BALANCE (District-level monthly)
 -- ============================================================
-CREATE TABLE water_balance_records (
+CREATE TABLE IF NOT EXISTS water_balance_records (
     id                          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     district_id                 UUID NOT NULL REFERENCES districts(id),
     period_start                DATE NOT NULL,
@@ -152,9 +152,9 @@ CREATE TABLE water_balance_records (
     created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_water_balance_district ON water_balance_records(district_id);
-CREATE INDEX idx_water_balance_period ON water_balance_records(period_start, period_end);
-CREATE UNIQUE INDEX idx_water_balance_district_period
+CREATE INDEX IF NOT EXISTS idx_water_balance_district ON water_balance_records(district_id);
+CREATE INDEX IF NOT EXISTS idx_water_balance_period ON water_balance_records(period_start, period_end);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_water_balance_district_period
     ON water_balance_records(district_id, period_start, period_end);
 
 COMMENT ON TABLE water_balance_records IS 'IWA/AWWA Water Balance records per district per period. Core reconciliation output.';
@@ -162,7 +162,7 @@ COMMENT ON TABLE water_balance_records IS 'IWA/AWWA Water Balance records per di
 -- ============================================================
 -- PRODUCTION RECORDS (GWL water pumped/treated)
 -- ============================================================
-CREATE TABLE production_records (
+CREATE TABLE IF NOT EXISTS production_records (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     district_id         UUID NOT NULL REFERENCES districts(id),
     recorded_at         TIMESTAMPTZ NOT NULL,
@@ -185,6 +185,6 @@ EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'TimescaleDB not available — production_records will be a plain table: %', SQLERRM;
 END $hyper$;
 
-CREATE INDEX idx_production_district_time ON production_records(district_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_production_district_time ON production_records(district_id, recorded_at DESC);
 
 COMMENT ON TABLE production_records IS 'GWL water production records. Used for district-level balance checks.';

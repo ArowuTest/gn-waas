@@ -7,7 +7,7 @@
 -- ============================================================
 -- DATA CONFIDENCE SCORES (AWWA Grading Matrix implementation)
 -- ============================================================
-CREATE TABLE data_confidence_scores (
+CREATE TABLE IF NOT EXISTS data_confidence_scores (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     district_id             UUID NOT NULL REFERENCES districts(id),
     period_start            DATE NOT NULL,
@@ -36,15 +36,15 @@ CREATE TABLE data_confidence_scores (
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_confidence_district ON data_confidence_scores(district_id);
-CREATE INDEX idx_confidence_period ON data_confidence_scores(period_start);
+CREATE INDEX IF NOT EXISTS idx_confidence_district ON data_confidence_scores(district_id);
+CREATE INDEX IF NOT EXISTS idx_confidence_period ON data_confidence_scores(period_start);
 
 COMMENT ON TABLE data_confidence_scores IS 'AWWA Grading Matrix implementation. Scores data reliability 1-10 per dimension.';
 
 -- ============================================================
 -- RECOVERY TRACKING (3% success fee model)
 -- ============================================================
-CREATE TABLE recovery_records (
+CREATE TABLE IF NOT EXISTS recovery_records (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     audit_event_id          UUID NOT NULL REFERENCES audit_events(id),
     account_id              UUID NOT NULL REFERENCES water_accounts(id),
@@ -72,16 +72,16 @@ CREATE TABLE recovery_records (
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_recovery_audit ON recovery_records(audit_event_id);
-CREATE INDEX idx_recovery_district ON recovery_records(district_id);
-CREATE INDEX idx_recovery_date ON recovery_records(recovery_date DESC);
+CREATE INDEX IF NOT EXISTS idx_recovery_audit ON recovery_records(audit_event_id);
+CREATE INDEX IF NOT EXISTS idx_recovery_district ON recovery_records(district_id);
+CREATE INDEX IF NOT EXISTS idx_recovery_date ON recovery_records(recovery_date DESC);
 
 COMMENT ON TABLE recovery_records IS 'Revenue recovery tracking. Basis for 3% success fee calculation.';
 
 -- ============================================================
 -- NOTIFICATIONS
 -- ============================================================
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id         UUID REFERENCES users(id),
     role_target     user_role,                            -- Broadcast to role
@@ -100,14 +100,14 @@ CREATE TABLE notifications (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_notifications_user ON notifications(user_id, is_read);
-CREATE INDEX idx_notifications_role ON notifications(role_target);
-CREATE INDEX idx_notifications_created ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_role ON notifications(role_target);
+CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
 
 -- ============================================================
 -- SYSTEM HEALTH METRICS (TimescaleDB)
 -- ============================================================
-CREATE TABLE system_health_metrics (
+CREATE TABLE IF NOT EXISTS system_health_metrics (
     time            TIMESTAMPTZ NOT NULL,
     service_name    VARCHAR(50) NOT NULL,
     metric_name     VARCHAR(100) NOT NULL,
@@ -126,12 +126,12 @@ EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'TimescaleDB not available — system_health_metrics will be a plain table: %', SQLERRM;
 END $hyper$;
 
-CREATE INDEX idx_health_service_time ON system_health_metrics(service_name, time DESC);
+CREATE INDEX IF NOT EXISTS idx_health_service_time ON system_health_metrics(service_name, time DESC);
 
 -- ============================================================
 -- CDC SYNC LOG (Track GWL database synchronisation)
 -- ============================================================
-CREATE TABLE cdc_sync_log (
+CREATE TABLE IF NOT EXISTS cdc_sync_log (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     sync_type       VARCHAR(50) NOT NULL,                 -- BILLING, ACCOUNTS, PRODUCTION
     started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -7,7 +7,7 @@
 -- ============================================================
 -- SENTINEL ANOMALY FLAGS
 -- ============================================================
-CREATE TABLE anomaly_flags (
+CREATE TABLE IF NOT EXISTS anomaly_flags (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     account_id          UUID REFERENCES water_accounts(id),
     district_id         UUID NOT NULL REFERENCES districts(id),
@@ -43,19 +43,19 @@ CREATE TABLE anomaly_flags (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_anomaly_account ON anomaly_flags(account_id);
-CREATE INDEX idx_anomaly_district ON anomaly_flags(district_id);
-CREATE INDEX idx_anomaly_type ON anomaly_flags(anomaly_type);
-CREATE INDEX idx_anomaly_level ON anomaly_flags(alert_level);
-CREATE INDEX idx_anomaly_status ON anomaly_flags(status);
-CREATE INDEX idx_anomaly_created ON anomaly_flags(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_anomaly_account ON anomaly_flags(account_id);
+CREATE INDEX IF NOT EXISTS idx_anomaly_district ON anomaly_flags(district_id);
+CREATE INDEX IF NOT EXISTS idx_anomaly_type ON anomaly_flags(anomaly_type);
+CREATE INDEX IF NOT EXISTS idx_anomaly_level ON anomaly_flags(alert_level);
+CREATE INDEX IF NOT EXISTS idx_anomaly_status ON anomaly_flags(status);
+CREATE INDEX IF NOT EXISTS idx_anomaly_created ON anomaly_flags(created_at DESC);
 
 COMMENT ON TABLE anomaly_flags IS 'Sentinel-detected anomalies. Immutable once created (append-only updates via audit_log).';
 
 -- ============================================================
 -- AUDIT EVENTS (Full audit lifecycle)
 -- ============================================================
-CREATE TABLE audit_events (
+CREATE TABLE IF NOT EXISTS audit_events (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     audit_reference         VARCHAR(50) NOT NULL UNIQUE,  -- Human-readable: AUD-2026-001234
     account_id              UUID NOT NULL REFERENCES water_accounts(id),
@@ -110,20 +110,20 @@ CREATE TABLE audit_events (
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_audit_events_account ON audit_events(account_id);
-CREATE INDEX idx_audit_events_district ON audit_events(district_id);
-CREATE INDEX idx_audit_events_status ON audit_events(status);
-CREATE INDEX idx_audit_events_officer ON audit_events(assigned_officer_id);
-CREATE INDEX idx_audit_events_gra ON audit_events(gra_status);
-CREATE INDEX idx_audit_events_created ON audit_events(created_at DESC);
-CREATE INDEX idx_audit_events_reference ON audit_events(audit_reference);
+CREATE INDEX IF NOT EXISTS idx_audit_events_account ON audit_events(account_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_district ON audit_events(district_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_status ON audit_events(status);
+CREATE INDEX IF NOT EXISTS idx_audit_events_officer ON audit_events(assigned_officer_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_gra ON audit_events(gra_status);
+CREATE INDEX IF NOT EXISTS idx_audit_events_created ON audit_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_events_reference ON audit_events(audit_reference);
 
 COMMENT ON TABLE audit_events IS 'Full audit event lifecycle. Locked after GRA signing - immutable.';
 
 -- ============================================================
 -- FIELD JOBS (Mobile app dispatch)
 -- ============================================================
-CREATE TABLE field_jobs (
+CREATE TABLE IF NOT EXISTS field_jobs (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     job_reference           VARCHAR(50) NOT NULL UNIQUE,  -- JOB-2026-001234
     audit_event_id          UUID REFERENCES audit_events(id),
@@ -169,17 +169,17 @@ CREATE TABLE field_jobs (
 ALTER TABLE audit_events ADD CONSTRAINT fk_audit_field_job
     FOREIGN KEY (field_job_id) REFERENCES field_jobs(id);
 
-CREATE INDEX idx_field_jobs_officer ON field_jobs(assigned_officer_id);
-CREATE INDEX idx_field_jobs_district ON field_jobs(district_id);
-CREATE INDEX idx_field_jobs_status ON field_jobs(status);
-CREATE INDEX idx_field_jobs_created ON field_jobs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_field_jobs_officer ON field_jobs(assigned_officer_id);
+CREATE INDEX IF NOT EXISTS idx_field_jobs_district ON field_jobs(district_id);
+CREATE INDEX IF NOT EXISTS idx_field_jobs_status ON field_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_field_jobs_created ON field_jobs(created_at DESC);
 
 COMMENT ON TABLE field_jobs IS 'Field officer dispatch jobs. Blind audit by default - officer sees GPS only.';
 
 -- ============================================================
 -- GRA VSDC COMPLIANCE LOG (Immutable)
 -- ============================================================
-CREATE TABLE gra_compliance_log (
+CREATE TABLE IF NOT EXISTS gra_compliance_log (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     audit_event_id      UUID NOT NULL REFERENCES audit_events(id),
     account_id          UUID NOT NULL REFERENCES water_accounts(id),
@@ -208,9 +208,9 @@ CREATE TABLE gra_compliance_log (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_gra_log_audit ON gra_compliance_log(audit_event_id);
-CREATE INDEX idx_gra_log_status ON gra_compliance_log(status);
-CREATE INDEX idx_gra_log_tin ON gra_compliance_log(business_tin);
+CREATE INDEX IF NOT EXISTS idx_gra_log_audit ON gra_compliance_log(audit_event_id);
+CREATE INDEX IF NOT EXISTS idx_gra_log_status ON gra_compliance_log(status);
+CREATE INDEX IF NOT EXISTS idx_gra_log_tin ON gra_compliance_log(business_tin);
 
 COMMENT ON TABLE gra_compliance_log IS 'Immutable GRA VSDC API interaction log. Every attempt recorded.';
 
@@ -224,7 +224,7 @@ COMMENT ON TABLE gra_compliance_log IS 'Immutable GRA VSDC API interaction log. 
 --   (c) Migration 011 (immutability triggers) assumes this schema;
 --       removing the BIGSERIAL/UUID mismatch prevents type errors.
 -- request_id removed — not used by any backend code.
-CREATE TABLE audit_trail (
+CREATE TABLE IF NOT EXISTS audit_trail (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     entity_type     VARCHAR(100) NOT NULL,
     entity_id       TEXT NOT NULL,
@@ -247,8 +247,8 @@ EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'TimescaleDB not available — audit_trail will be a plain table: %', SQLERRM;
 END $hyper$;
 
-CREATE INDEX idx_audit_trail_entity ON audit_trail(entity_type, entity_id);
-CREATE INDEX idx_audit_trail_user ON audit_trail(changed_by);
-CREATE INDEX idx_audit_trail_time ON audit_trail(changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_entity ON audit_trail(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_user ON audit_trail(changed_by);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_time ON audit_trail(changed_at DESC);
 
 COMMENT ON TABLE audit_trail IS 'Immutable append-only audit trail. No records can be deleted. TimescaleDB hypertable.';

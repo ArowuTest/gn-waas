@@ -457,7 +457,7 @@ services:
       DB_PORT: "5432"
       DB_NAME: gnwaas
       DB_USER: gnwaas_user
-      DB_PASSWORD: ${DB_PASSWORD:-gnwaas_dev_password}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}  # V19-CF-01 fix: was ${DB_PASSWORD:-gnwaas_dev_password}
       DB_SSL_MODE: disable
       NATS_URL: nats://nats:4222
       LOG_LEVEL: info
@@ -485,7 +485,7 @@ services:
     profiles:
       - seed
     environment:
-      PGPASSWORD: ${DB_PASSWORD:-gnwaas_dev_password}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}  # V19-CF-02 fix: was ${DB_PASSWORD:-gnwaas_dev_password}
     volumes:
       - ./database/migrations:/migrations
       - ./database/seeds:/seeds

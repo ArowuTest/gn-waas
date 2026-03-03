@@ -319,15 +319,15 @@ func (s *CDCSyncService) syncBillingRecords(ctx context.Context, gwlDB *pgxpool.
 		_, err = s.gnwaasDB.Exec(ctx, `
 			INSERT INTO gwl_bills (
 				gwl_bill_id, account_id, billing_period_start, billing_period_end,
-				consumption_m3, billed_amount_ghs, vat_amount_ghs, total_amount_ghs,
+				consumption_m3, gwl_amount_ghs, vat_amount_ghs, total_amount_ghs,
 				bill_date, payment_status, raw_gwl_data
 			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 			ON CONFLICT (gwl_bill_id) DO UPDATE SET
-				consumption_m3    = EXCLUDED.consumption_m3,
-				billed_amount_ghs = EXCLUDED.billed_amount_ghs,
-				vat_amount_ghs    = EXCLUDED.vat_amount_ghs,
-				total_amount_ghs  = EXCLUDED.total_amount_ghs,
-				payment_status    = EXCLUDED.payment_status`,
+				consumption_m3 = EXCLUDED.consumption_m3,
+				gwl_amount_ghs = EXCLUDED.gwl_amount_ghs,
+				vat_amount_ghs = EXCLUDED.vat_amount_ghs,
+				total_amount_ghs = EXCLUDED.total_amount_ghs,
+				payment_status = EXCLUDED.payment_status`,  -- V19-DB-02 fix: was billed_amount_ghs
 			mapped.GWLBillID, accountID,
 			mapped.BillingPeriodStart, mapped.BillingPeriodEnd,
 			mapped.ConsumptionM3, mapped.GWLAmountGHS, mapped.GWLVatGHS, mapped.GWLTotalGHS,
@@ -395,22 +395,23 @@ func (s *CDCSyncService) syncMeterReadings(ctx context.Context, gwlDB *pgxpool.P
 
 		readingDate := toTime(rawRow["reading_date"])
 		readingValue := toFloat64(rawRow["current_reading"])
-		readingType := toString(rawRow["reading_type"])
-		if readingType == "" {
-			readingType = "MANUAL"
+		// V19-DB-01: GN-WAAS schema uses read_method (not reading_type)
+		readMethod := toString(rawRow["reading_type"])
+		if readMethod == "" {
+			readMethod = "MANUAL"
 		}
 
 		rawJSON, _ := json.Marshal(rawRow)
 
 		_, err = s.gnwaasDB.Exec(ctx, `
 			INSERT INTO meter_readings (
-				account_id, reading_date, reading_value_m3,
-				reading_type, raw_gwl_data
+				account_id, reading_date, reading_m3,
+				read_method, raw_gwl_data
 			) VALUES ($1::uuid,$2,$3,$4,$5)
 			ON CONFLICT (account_id, reading_date) DO UPDATE SET
-				reading_value_m3 = EXCLUDED.reading_value_m3,
-				reading_type     = EXCLUDED.reading_type`,
-			accountID, readingDate, readingValue, readingType, string(rawJSON),
+				reading_m3  = EXCLUDED.reading_m3,
+				read_method = EXCLUDED.read_method`,  -- V19-DB-01 fix: was reading_value_m3/reading_type
+			accountID, readingDate, readingValue, readMethod, string(rawJSON),
 		)
 		if err != nil {
 			failed++

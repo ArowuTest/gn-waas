@@ -7,7 +7,7 @@
 -- ============================================================
 -- SYSTEM CONFIGURATION (Admin-configurable values)
 -- ============================================================
-CREATE TABLE system_config (
+CREATE TABLE IF NOT EXISTS system_config (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     config_key      VARCHAR(100) NOT NULL UNIQUE,
     config_value    TEXT NOT NULL,
@@ -25,7 +25,7 @@ COMMENT ON TABLE system_config IS 'Admin-configurable system parameters. No hard
 -- ============================================================
 -- TARIFF RATES (Admin-configurable, versioned)
 -- ============================================================
-CREATE TABLE tariff_rates (
+CREATE TABLE IF NOT EXISTS tariff_rates (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     category            account_category NOT NULL,
     tier_name           VARCHAR(50) NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE tariff_rates (
 COMMENT ON TABLE tariff_rates IS 'PURC-approved tariff rates. Admin-configurable. Versioned by effective_from date.';
 
 -- VAT configuration (separate for flexibility)
-CREATE TABLE vat_config (
+CREATE TABLE IF NOT EXISTS vat_config (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     rate_percentage NUMERIC(5,2) NOT NULL,
     components      JSONB NOT NULL DEFAULT '{}', -- e.g. {"VAT": 12.5, "NHIL": 2.5, "GETFund": 2.5, "COVID": 1.0}
@@ -63,7 +63,7 @@ COMMENT ON TABLE vat_config IS 'VAT rate configuration. Currently 20% effective 
 -- ============================================================
 -- DISTRICTS / DMA (District Metered Areas)
 -- ============================================================
-CREATE TABLE districts (
+CREATE TABLE IF NOT EXISTS districts (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     district_code           VARCHAR(20) NOT NULL UNIQUE,
     district_name           VARCHAR(100) NOT NULL,
@@ -84,17 +84,17 @@ CREATE TABLE districts (
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_districts_region ON districts(region);
-CREATE INDEX idx_districts_zone_type ON districts(zone_type);
-CREATE INDEX idx_districts_pilot ON districts(is_pilot_district) WHERE is_pilot_district = TRUE;
-CREATE INDEX idx_districts_boundary ON districts USING GIST(boundary_geom);
+CREATE INDEX IF NOT EXISTS idx_districts_region ON districts(region);
+CREATE INDEX IF NOT EXISTS idx_districts_zone_type ON districts(zone_type);
+CREATE INDEX IF NOT EXISTS idx_districts_pilot ON districts(is_pilot_district) WHERE is_pilot_district = TRUE;
+CREATE INDEX IF NOT EXISTS idx_districts_boundary ON districts USING GIST(boundary_geom);
 
 COMMENT ON TABLE districts IS 'GWL District Metered Areas (DMAs). Boundaries from ArcGIS.';
 
 -- ============================================================
 -- WATER ACCOUNTS (Mirrored from GWL CDC)
 -- ============================================================
-CREATE TABLE water_accounts (
+CREATE TABLE IF NOT EXISTS water_accounts (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     gwl_account_number      VARCHAR(50) NOT NULL UNIQUE,  -- GWL's own account ID
     account_holder_name     VARCHAR(200) NOT NULL,
@@ -125,20 +125,20 @@ CREATE TABLE water_accounts (
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_accounts_gwl_number ON water_accounts(gwl_account_number);
-CREATE INDEX idx_accounts_district ON water_accounts(district_id);
-CREATE INDEX idx_accounts_category ON water_accounts(category);
-CREATE INDEX idx_accounts_status ON water_accounts(status);
-CREATE INDEX idx_accounts_phantom ON water_accounts(is_phantom_flagged) WHERE is_phantom_flagged = TRUE;
-CREATE INDEX idx_accounts_network ON water_accounts(is_within_network) WHERE is_within_network = FALSE;
-CREATE INDEX idx_accounts_name_trgm ON water_accounts USING GIN(account_holder_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_accounts_gwl_number ON water_accounts(gwl_account_number);
+CREATE INDEX IF NOT EXISTS idx_accounts_district ON water_accounts(district_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_category ON water_accounts(category);
+CREATE INDEX IF NOT EXISTS idx_accounts_status ON water_accounts(status);
+CREATE INDEX IF NOT EXISTS idx_accounts_phantom ON water_accounts(is_phantom_flagged) WHERE is_phantom_flagged = TRUE;
+CREATE INDEX IF NOT EXISTS idx_accounts_network ON water_accounts(is_within_network) WHERE is_within_network = FALSE;
+CREATE INDEX IF NOT EXISTS idx_accounts_name_trgm ON water_accounts USING GIN(account_holder_name gin_trgm_ops);
 
 COMMENT ON TABLE water_accounts IS 'Water accounts mirrored from GWL e-billing via CDC. Source of truth for audit.';
 
 -- ============================================================
 -- USERS (GN-WAAS system users)
 -- ============================================================
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     keycloak_id         VARCHAR(100) UNIQUE,              -- Keycloak subject ID
     email               VARCHAR(200) NOT NULL UNIQUE,
@@ -159,17 +159,17 @@ CREATE TABLE users (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_users_role ON users(role);
-CREATE INDEX idx_users_district ON users(district_id);
-CREATE INDEX idx_users_keycloak ON users(keycloak_id);
-CREATE INDEX idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_district ON users(district_id);
+CREATE INDEX IF NOT EXISTS idx_users_keycloak ON users(keycloak_id);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
 COMMENT ON TABLE users IS 'GN-WAAS system users. Keycloak is the IdP; this table stores profile and RBAC data.';
 
 -- ============================================================
 -- AUDIT THRESHOLDS (Admin-configurable per district)
 -- ============================================================
-CREATE TABLE audit_thresholds (
+CREATE TABLE IF NOT EXISTS audit_thresholds (
     id                          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     district_id                 UUID REFERENCES districts(id), -- NULL = global default
     threshold_name              VARCHAR(100) NOT NULL,
@@ -194,7 +194,7 @@ COMMENT ON TABLE audit_thresholds IS 'Admin-configurable anomaly detection thres
 -- ============================================================
 -- SUPPLY SCHEDULES (For outage consumption detection)
 -- ============================================================
-CREATE TABLE supply_schedules (
+CREATE TABLE IF NOT EXISTS supply_schedules (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     district_id     UUID NOT NULL REFERENCES districts(id),
     supply_status   supply_status NOT NULL,
@@ -207,7 +207,7 @@ CREATE TABLE supply_schedules (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_supply_schedules_district ON supply_schedules(district_id);
-CREATE INDEX idx_supply_schedules_time ON supply_schedules(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_supply_schedules_district ON supply_schedules(district_id);
+CREATE INDEX IF NOT EXISTS idx_supply_schedules_time ON supply_schedules(start_time, end_time);
 
 COMMENT ON TABLE supply_schedules IS 'GWL supply schedule records. Used to detect consumption during outages.';
