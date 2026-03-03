@@ -108,7 +108,7 @@ func TestAdminUserHandler_ListUsers_RequiresSystemAdmin(t *testing.T) {
 
 	// Inject a non-admin role via locals middleware
 	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("user_role", "DISTRICT_MANAGER")
+		c.Locals("rls_user_role", "DISTRICT_MANAGER")
 		c.Locals("user_id", "00000000-0000-0000-0000-000000000001")
 		return c.Next()
 	})
@@ -125,7 +125,7 @@ func TestAdminUserHandler_CreateUser_RequiresSystemAdmin(t *testing.T) {
 	h := handler.NewAdminUserHandler(nil, zap.NewNop())
 
 	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("user_role", "FIELD_OFFICER")
+		c.Locals("rls_user_role", "FIELD_OFFICER")
 		c.Locals("user_id", "00000000-0000-0000-0000-000000000001")
 		return c.Next()
 	})
@@ -144,7 +144,7 @@ func TestAdminUserHandler_UpdateUser_InvalidUUID(t *testing.T) {
 	h := handler.NewAdminUserHandler(nil, zap.NewNop())
 
 	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("user_role", "SYSTEM_ADMIN")
+		c.Locals("rls_user_role", "SYSTEM_ADMIN")
 		c.Locals("user_id", "00000000-0000-0000-0000-000000000001")
 		return c.Next()
 	})
@@ -161,7 +161,7 @@ func TestAdminUserHandler_ResetPassword_RequiresSystemAdmin(t *testing.T) {
 	h := handler.NewAdminUserHandler(nil, zap.NewNop())
 
 	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("user_role", "AUDIT_MANAGER")
+		c.Locals("rls_user_role", "AUDIT_MANAGER")
 		c.Locals("user_id", "00000000-0000-0000-0000-000000000001")
 		return c.Next()
 	})
@@ -181,7 +181,7 @@ func TestDistrictHandler_CreateDistrict_RequiresSystemAdmin(t *testing.T) {
 	h := handler.NewDistrictHandler(nil, zap.NewNop())
 
 	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("user_role", "READONLY_VIEWER")
+		c.Locals("rls_user_role", "READONLY_VIEWER")
 		c.Locals("user_id", "00000000-0000-0000-0000-000000000001")
 		return c.Next()
 	})
@@ -200,7 +200,7 @@ func TestDistrictHandler_UpdateDistrict_InvalidUUID(t *testing.T) {
 	h := handler.NewDistrictHandler(nil, zap.NewNop())
 
 	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("user_role", "SYSTEM_ADMIN")
+		c.Locals("rls_user_role", "SYSTEM_ADMIN")
 		c.Locals("user_id", "00000000-0000-0000-0000-000000000001")
 		return c.Next()
 	})

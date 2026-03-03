@@ -14,7 +14,7 @@ SELECT
   gen_random_uuid(),
   d.id,
   gs.month_start,
-  d.avg_daily_prod * days_in_month * (1 + variation),
+  dp.avg_daily_prod * days_in_month * (1 + variation),
   'SURFACE_WATER',
   NOW()
 FROM (
@@ -136,7 +136,7 @@ BEGIN
         WHEN 'COMMERCIAL'  THEN monthly_consumption * 7.80
         WHEN 'INDUSTRIAL'  THEN monthly_consumption * 9.20
         WHEN 'PUBLIC_GOVT' THEN monthly_consumption * 5.40
-        WHEN 'STANDPIPE'   THEN monthly_consumption * 1.80
+        WHEN 'UNKNOWN'     THEN monthly_consumption * 1.80
         ELSE monthly_consumption * 3.50
       END;
       bill_vat   := ROUND((bill_amount * 0.20)::numeric, 2);
@@ -190,52 +190,62 @@ END $$;
 -- ── 3. Water Balance Records (IWA/AWWA M36) ────────────────────────────────
 INSERT INTO water_balance_records (
   id, district_id, period_start, period_end,
-  system_input_volume_m3, authorised_consumption_m3,
-  billed_authorised_m3, unbilled_authorised_m3,
-  apparent_losses_m3, real_losses_m3,
-  nrw_volume_m3, nrw_percentage,
-  infrastructure_leakage_index,
-  iwa_grade, data_confidence_score,
-  revenue_water_m3, non_revenue_water_m3,
-  computed_at, created_at
+  system_input_volume_m3,
+  billed_metered_m3, billed_unmetered_m3,
+  unbilled_metered_m3, unbilled_unmetered_m3,
+  unauthorised_consumption_m3, metering_inaccuracies_m3, data_handling_errors_m3,
+  main_leakage_m3, storage_overflow_m3, service_conn_leakage_m3,
+  nrw_pct,
+  apparent_loss_value_ghs, real_loss_value_ghs, total_nrw_value_ghs,
+  ili_value, data_confidence_grade,
+  calculated_at, created_at
 )
 SELECT
   gen_random_uuid(),
   d.id,
   gs.month_start,
   gs.month_start + INTERVAL '1 month' - INTERVAL '1 day',
-  -- System input = production for the month
+  -- System input volume
   COALESCE(pr.volume_m3, dp.avg_daily_prod * 30),
-  -- Authorised consumption = SIV * (1 - NRW%)
-  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0),
-  -- Billed authorised = 95% of authorised
-  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.95,
-  -- Unbilled authorised = 5% of authorised (fire fighting, flushing)
+  -- Billed metered = 90% of authorised consumption
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.90,
+  -- Billed unmetered = 5% of authorised
   COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.05,
-  -- Apparent losses = 30% of NRW (meter errors, theft)
-  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.30,
-  -- Real losses = 70% of NRW (physical leakage)
-  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.70,
-  -- NRW volume
-  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0),
-  -- NRW percentage
-  dp.nrw_pct + (random()-0.5)*3,
+  -- Unbilled metered = 3% of authorised
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.03,
+  -- Unbilled unmetered = 2% of authorised
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.02,
+  -- Unauthorised consumption = 50% of apparent losses (30% of NRW)
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.30 * 0.50,
+  -- Metering inaccuracies = 35% of apparent losses
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.30 * 0.35,
+  -- Data handling errors = 15% of apparent losses
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.30 * 0.15,
+  -- Main leakage = 60% of real losses (70% of NRW)
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.70 * 0.60,
+  -- Storage overflow = 20% of real losses
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.70 * 0.20,
+  -- Service connection leakage = 20% of real losses
+  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.70 * 0.20,
+  -- NRW percentage (with small random variation)
+  ROUND((dp.nrw_pct + (random()-0.5)*3)::numeric, 2),
+  -- Apparent loss value (GHS 2.50/m3 average tariff)
+  ROUND((COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.30 * 2.50)::numeric, 2),
+  -- Real loss value
+  ROUND((COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 0.70 * 2.50)::numeric, 2),
+  -- Total NRW value
+  ROUND((COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0) * 2.50)::numeric, 2),
   -- ILI (Infrastructure Leakage Index)
-  CASE WHEN dp.nrw_pct > 60 THEN 8.5 + random()*3
-       WHEN dp.nrw_pct > 45 THEN 5.0 + random()*3
-       WHEN dp.nrw_pct > 30 THEN 2.5 + random()*2
-       ELSE 1.0 + random()*1.5 END,
-  -- IWA Grade
-  CASE WHEN dp.nrw_pct > 60 THEN 'F'
-       WHEN dp.nrw_pct > 45 THEN 'D'
-       WHEN dp.nrw_pct > 30 THEN 'C'
-       WHEN dp.nrw_pct > 20 THEN 'B'
-       ELSE 'A' END,
-  0.75 + random()*0.20,
-  -- Revenue water
-  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (1 - dp.nrw_pct/100.0) * 0.95,
-  -- Non-revenue water
-  COALESCE(pr.volume_m3, dp.avg_daily_prod * 30) * (dp.nrw_pct/100.0),
+  CASE WHEN dp.nrw_pct > 60 THEN ROUND((8.5 + random()*3)::numeric, 2)
+       WHEN dp.nrw_pct > 45 THEN ROUND((5.0 + random()*3)::numeric, 2)
+       WHEN dp.nrw_pct > 30 THEN ROUND((2.5 + random()*2)::numeric, 2)
+       ELSE ROUND((1.0 + random()*1.5)::numeric, 2) END,
+  -- Data confidence grade (0=unknown,1=A,2=B,3=C,4=D,5=F)
+  CASE WHEN dp.nrw_pct > 60 THEN 5
+       WHEN dp.nrw_pct > 45 THEN 4
+       WHEN dp.nrw_pct > 30 THEN 3
+       WHEN dp.nrw_pct > 20 THEN 2
+       ELSE 1 END,
   NOW(), NOW()
 FROM (
   VALUES
@@ -258,22 +268,18 @@ FROM (
     ('TAMALE-SOUTH', 6600.0, 68.1),
     ('TAKORADI', 13500.0, 49.6),
     ('SEKONDI', 8400.0, 44.8),
-    ('KOFORIDUA', 9600.0, 51.2),
-    ('HO', 5400.0, 46.3),
-    ('CAPE-COAST', 10500.0, 53.7),
-    ('SUNYANI', 6600.0, 48.9),
-    ('BOLGATANGA', 4500.0, 63.2),
-    ('WA', 3600.0, 58.7),
-    ('DAMBAI', 2400.0, 71.3),
-    ('DAMONGO', 1800.0, 74.8),
-    ('NALERIGU', 1500.0, 69.4),
-    ('GOASO', 2700.0, 52.1),
-    ('SEFWI-WIAWSO', 3300.0, 55.8)
+    ('CAPE-COAST', 9800.0, 46.3),
+    ('SUNYANI', 7200.0, 39.7),
+    ('KOFORIDUA', 8600.0, 42.1),
+    ('HO', 6100.0, 37.8),
+    ('BOLGATANGA', 5400.0, 63.2),
+    ('WA', 4800.0, 58.9)
 ) AS dp(district_code, avg_daily_prod, nrw_pct)
 JOIN districts d ON d.district_code = dp.district_code
 CROSS JOIN (
-  SELECT date_trunc('month', gs)::date AS month_start
-  FROM generate_series('2025-02-02'::date, '2026-02-02'::date, '1 month'::interval) gs
+  SELECT
+    date_trunc('month', gs) AS month_start
+  FROM generate_series('2025-02-01'::date, '2026-02-01'::date, '1 month'::interval) gs
 ) AS gs
 LEFT JOIN production_records pr
   ON pr.district_id = d.id AND date_trunc('month', pr.recorded_at) = gs.month_start
@@ -295,8 +301,8 @@ BEGIN
     LIMIT 15
   LOOP
     INSERT INTO anomaly_flags (
-      id, account_id, district_id, flag_type, severity,
-      title, description, evidence,
+      id, account_id, district_id, anomaly_type, alert_level,
+      title, description, evidence_data,
       estimated_loss_ghs, status, created_at
     ) VALUES (
       gen_random_uuid(), acc.id, acc.district_id,
@@ -325,8 +331,8 @@ BEGIN
     LIMIT 8
   LOOP
     INSERT INTO anomaly_flags (
-      id, account_id, district_id, flag_type, severity,
-      title, description, evidence, estimated_loss_ghs, status, created_at
+      id, account_id, district_id, anomaly_type, alert_level,
+      title, description, evidence_data, estimated_loss_ghs, status, created_at
     ) VALUES (
       gen_random_uuid(), acc.id, acc.district_id,
       'PHANTOM_METER', 'CRITICAL',
@@ -351,8 +357,8 @@ BEGIN
     WHERE d.district_code IN ('ASHAIMAN','TAMALE-CENTRAL','DAMONGO','NALERIGU','DAMBAI')
   LOOP
     INSERT INTO anomaly_flags (
-      id, account_id, district_id, flag_type, severity,
-      title, description, evidence, estimated_loss_ghs, status, created_at
+      id, account_id, district_id, anomaly_type, alert_level,
+      title, description, evidence_data, estimated_loss_ghs, status, created_at
     ) VALUES (
       gen_random_uuid(), acc.account_id, acc.district_id,
       'NRW_SPIKE', 'CRITICAL',
@@ -425,13 +431,13 @@ BEGIN
           ELSE 'BILLING_VERIFICATION'
         END,
         CASE FLOOR(random()*3)::int
-          WHEN 0 THEN 'HIGH'
-          WHEN 1 THEN 'MEDIUM'
-          ELSE 'LOW'
+          WHEN 0 THEN 2
+          WHEN 1 THEN 5
+          ELSE 8
         END,
         CASE FLOOR(random()*3)::int
           WHEN 0 THEN 'ASSIGNED'
-          WHEN 1 THEN 'IN_PROGRESS'
+          WHEN 1 THEN 'DISPATCHED'
           ELSE 'ASSIGNED'
         END,
         'Anomaly Investigation — Meter Audit Required',

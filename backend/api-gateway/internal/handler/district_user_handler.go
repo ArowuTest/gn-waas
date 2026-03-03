@@ -206,7 +206,7 @@ func (h *HealthHandler) ReadinessCheck(c *fiber.Ctx) error {
 // CreateDistrict godoc
 // POST /api/v1/admin/districts
 func (h *DistrictHandler) CreateDistrict(c *fiber.Ctx) error {
-	role, _ := c.Locals("user_role").(string)
+	role, _ := c.Locals("rls_user_role").(string)
 	if role != "SYSTEM_ADMIN" {
 		return response.Unauthorized(c, "Only SYSTEM_ADMIN can create districts")
 	}
@@ -254,7 +254,7 @@ func (h *DistrictHandler) CreateDistrict(c *fiber.Ctx) error {
 // UpdateDistrict godoc
 // PATCH /api/v1/admin/districts/:id
 func (h *DistrictHandler) UpdateDistrict(c *fiber.Ctx) error {
-	role, _ := c.Locals("user_role").(string)
+	role, _ := c.Locals("rls_user_role").(string)
 	if role != "SYSTEM_ADMIN" {
 		return response.Unauthorized(c, "Only SYSTEM_ADMIN can update districts")
 	}

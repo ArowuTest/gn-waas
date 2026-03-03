@@ -95,6 +95,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	configHandler   := handler.NewSystemConfigHandler(configRepo, logger)
 	accountHandler  := handler.NewAccountHandler(accountRepo, logger)
 	nrwHandler      := handler.NewNRWHandler(nrwRepo, logger)
+	dataHandler     := handler.NewDataHandler(db, logger)
 	flagRepo        := repository.NewAnomalyFlagRepository(db, logger)
 	flagHandler     := handler.NewAnomalyFlagHandler(flagRepo, logger)
 	gwlCaseRepo     := repository.NewGWLCaseRepository(db, logger)
@@ -547,6 +548,18 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── Report export endpoints (server-generated PDF + CSV) ──────────────────
 	reports.Get("/monthly/pdf", reportHandler.GetMonthlyReportPDF)
 	reports.Get("/monthly/csv", reportHandler.GetMonthlyReportCSV)
+
+	// ── Core Data Endpoints (BE-7) ───────────────────────────────────────────
+	// Read-only access to production, meter-reading, water-balance, billing data.
+	// Accessible by SUPER_ADMIN, SYSTEM_ADMIN, MOF_AUDITOR, GWL roles.
+	dataRoles := middleware.RequireRoles(
+		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR",
+		"GWL_EXECUTIVE", "GWL_MANAGER", "GWL_ANALYST",
+	)
+	api.Get("/production-records", dataRoles, dataHandler.ListProductionRecords)
+	api.Get("/meter-readings",     dataRoles, dataHandler.ListMeterReadings)
+	api.Get("/water-balance",      dataRoles, dataHandler.ListWaterBalance)
+	api.Get("/billing-records",    dataRoles, dataHandler.ListBillingRecords)
 
 	return &App{
 		fiber:  app,

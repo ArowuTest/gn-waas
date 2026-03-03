@@ -35,12 +35,13 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickLogin = async (devEmail: string) => {
+  const handleQuickLogin = async (devEmail: string, role: string) => {
     if (!DEV_MODE) return;
     setLoading(true);
     setError('');
     try {
-      const res = await apiClient.post('/auth/login', { email: devEmail, password: 'password123' });
+      // Use /auth/dev-login so the backend returns a role-specific token
+      const res = await apiClient.post('/auth/dev-login', { email: devEmail, role });
       const token = res.data?.data?.access_token || res.data?.access_token;
       if (!token) throw new Error('No token received');
       localStorage.setItem('gwl_token', token);
@@ -189,7 +190,7 @@ export default function LoginPage() {
                       <button
                         key={acc.role}
                         type="button"
-                        onClick={() => handleQuickLogin(acc.email)}
+                        onClick={() => handleQuickLogin(acc.email, acc.role)}
                         disabled={loading}
                         className="text-left px-3 py-2 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors group"
                       >

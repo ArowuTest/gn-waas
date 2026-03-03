@@ -104,7 +104,7 @@ func (r *NRWReportRepository) GetNRWSummary(ctx context.Context, districtID *uui
 			       COUNT(*)                                               AS total_accounts,
 			       COUNT(*) FILTER (WHERE is_phantom_flagged = TRUE)     AS flagged_accounts
 			FROM water_accounts
-			WHERE is_active = TRUE
+			WHERE status = 'ACTIVE'
 			GROUP BY district_id
 		) acc_stats ON acc_stats.district_id = d.id
 		LEFT JOIN (

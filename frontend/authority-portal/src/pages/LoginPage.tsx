@@ -80,7 +80,7 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await apiClient.post('/auth/login', { email: devEmail, password: 'password123' })
+      const res = await apiClient.post('/auth/dev-login', { email: devEmail, role })
       await login(res.data.data.access_token)
       navigate('/district')
     } catch {

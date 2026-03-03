@@ -48,7 +48,7 @@ export function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/v1/auth/dev-token', {
+      const res = await fetch('/api/v1/auth/dev-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Dev-Role': role },
         body: JSON.stringify({ email: devEmail, role }),
