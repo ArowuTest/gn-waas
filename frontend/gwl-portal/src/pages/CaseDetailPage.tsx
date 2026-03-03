@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, UserPlus, CheckCircle, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useCase, useCaseActions, useAssignFieldOfficer, useUpdateCaseStatus, useRequestReclassification, useRequestCredit, useFieldOfficers } from '../hooks/useQueries';
@@ -10,9 +10,27 @@ import {
 } from '../utils/helpers';
 import type { GWLStatus, FlagType, Severity } from '../types';
 
+// GAP-FIX-05: parse the logged-in user from the stored JWT so performed_by/role
+// are real values instead of hardcoded 'GWL Supervisor' / 'GWL_SUPERVISOR'.
+function parseStoredUser(): { name: string; role: string } {
+  try {
+    const raw = localStorage.getItem('gwl_user');
+    if (raw) {
+      const u = JSON.parse(raw) as { full_name?: string; name?: string; role?: string };
+      return {
+        name: u.full_name ?? u.name ?? 'GWL User',
+        role: u.role ?? 'GWL_SUPERVISOR',
+      };
+    }
+  } catch { /* ignore */ }
+  return { name: 'GWL User', role: 'GWL_SUPERVISOR' };
+}
+
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const currentUser = useMemo(() => parseStoredUser(), []);
 
   const { data, isLoading, refetch } = useCase(id!);
   const { data: actions } = useCaseActions(id!);
@@ -68,8 +86,8 @@ export default function CaseDetailPage() {
         due_date: assignForm.dueDate,
         title: `Field Verification: ${gwlCase.title}`,
         description: gwlCase.description,
-        performed_by: 'GWL Supervisor',
-        role: 'GWL_SUPERVISOR',
+        performed_by: currentUser.name,
+        role: currentUser.role,
       },
     });
     setAssignModal(false);
@@ -84,8 +102,8 @@ export default function CaseDetailPage() {
         status: statusForm.status,
         notes: statusForm.notes || undefined,
         resolution: statusForm.resolution || undefined,
-        performed_by: 'GWL Supervisor',
-        role: 'GWL_SUPERVISOR',
+        performed_by: currentUser.name,
+        role: currentUser.role,
         action_type: statusForm.status,
         action_notes: statusForm.notes,
       },
@@ -105,7 +123,7 @@ export default function CaseDetailPage() {
         recommended_category: reclassifyForm.recommendedCategory,
         justification: reclassifyForm.justification,
         monthly_revenue_impact_ghs: gwlCase.estimated_loss_ghs,
-        requested_by_name: 'GWL Supervisor',
+        requested_by_name: currentUser.name,
       },
     });
     setReclassifyModal(false);
@@ -123,7 +141,7 @@ export default function CaseDetailPage() {
         credit_amount_ghs: parseFloat(creditForm.creditAmount) || gwlCase.estimated_loss_ghs,
         reason: creditForm.reason,
         notes: creditForm.notes || undefined,
-        requested_by_name: 'GWL Supervisor',
+        requested_by_name: currentUser.name,
       },
     });
     setCreditModal(false);

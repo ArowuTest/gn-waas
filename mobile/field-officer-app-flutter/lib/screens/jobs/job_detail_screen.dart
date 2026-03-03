@@ -214,6 +214,29 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 10),
+            // GAP-FIX-02: Report Illegal Connection — was imported but unreachable
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const Key('report_illegal_button'),
+                onPressed: () => context.push(
+                  '/report-illegal?job_id=${job.id}',
+                ),
+                icon: const Icon(Icons.warning_amber_rounded, color: Color(0xFFB45309)),
+                label: const Text(
+                  'Report Illegal Connection',
+                  style: TextStyle(color: Color(0xFFB45309)),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFB45309)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

@@ -25,9 +25,12 @@ export default function LoginPage() {
     setError('');
     try {
       const res = await apiClient.post('/auth/login', { email, password });
-      const token = res.data?.data?.access_token || res.data?.access_token;
+      const data = res.data?.data ?? res.data;
+      const token = data?.access_token || data?.token;
       if (!token) throw new Error('No token received');
       localStorage.setItem('gwl_token', token);
+      // GAP-FIX-06: persist user object so CaseDetailPage can read performed_by/role
+      if (data?.user) localStorage.setItem('gwl_user', JSON.stringify(data.user));
       navigate('/');
     } catch {
       setError('Invalid credentials. Please try again.');
@@ -43,9 +46,12 @@ export default function LoginPage() {
     try {
       // Use /auth/dev-login so the backend returns a role-specific token
       const res = await apiClient.post('/auth/dev-login', { email: devEmail, role });
-      const token = res.data?.data?.access_token || res.data?.access_token;
+      const data = res.data?.data ?? res.data;
+      const token = data?.access_token || data?.token;
       if (!token) throw new Error('No token received');
       localStorage.setItem('gwl_token', token);
+      // GAP-FIX-06: persist user object so CaseDetailPage can read performed_by/role
+      if (data?.user) localStorage.setItem('gwl_user', JSON.stringify(data.user));
       navigate('/');
     } catch {
       setEmail(devEmail);

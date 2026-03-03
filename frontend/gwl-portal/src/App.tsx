@@ -11,6 +11,7 @@ import OverbillingPage from './pages/OverbillingPage';
 import MisclassificationPage from './pages/MisclassificationPage';
 import FieldAssignmentsPage from './pages/FieldAssignmentsPage';
 import MonthlyReportPage from './pages/MonthlyReportPage';
+import CreditRequestsPage from './pages/CreditRequestsPage'; // GAP-FIX-01: dedicated credit requests page
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,7 +48,7 @@ export default function App() {
                     <Route path="/overbilling" element={<OverbillingPage />} />
                     <Route path="/misclassification" element={<MisclassificationPage />} />
                     <Route path="/field-assignments" element={<FieldAssignmentsPage />} />
-                    <Route path="/credits" element={<OverbillingPage />} />
+                    <Route path="/credits" element={<CreditRequestsPage />} /> {/* GAP-FIX-01: was incorrectly rendering OverbillingPage */}
                     <Route path="/reports" element={<MonthlyReportPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>

@@ -10,6 +10,7 @@ import '../screens/jobs/job_detail_screen.dart';
 import '../screens/capture/meter_capture_screen.dart';
 import '../screens/sos/sos_screen.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/reports/illegal_connection_screen.dart'; // GAP-FIX-02
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -56,6 +57,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile',
         name: 'profile',
         builder: (context, state) => const ProfileScreen(),
+      ),
+      // GAP-FIX-02: IllegalConnectionScreen was imported but had no route
+      GoRoute(
+        path: '/report-illegal',
+        name: 'report-illegal',
+        builder: (context, state) {
+          final jobId = state.uri.queryParameters['job_id'];
+          return IllegalConnectionScreen(jobId: jobId);
+        },
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

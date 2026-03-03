@@ -31,6 +31,7 @@ const ROLES = [
   { value: 'MOF_AUDITOR',      label: 'MOF Auditor',        color: '#0369a1' },
   { value: 'GWL_EXECUTIVE',    label: 'GWL Executive',      color: '#0f766e' },
   { value: 'GWL_MANAGER',      label: 'GWL Manager',        color: '#047857' },
+  { value: 'GWL_SUPERVISOR',   label: 'GWL Supervisor',     color: '#059669' }, // GAP-FIX-03
   { value: 'GWL_ANALYST',      label: 'GWL Analyst',        color: '#15803d' },
   { value: 'FIELD_SUPERVISOR', label: 'Field Supervisor',   color: '#b45309' },
   { value: 'FIELD_OFFICER',    label: 'Field Officer',      color: '#d97706' },
@@ -65,7 +66,7 @@ function UserModal({
     status: user?.status ?? 'ACTIVE',
   })
 
-  const needsDistrict = ['GWL_MANAGER', 'FIELD_SUPERVISOR', 'FIELD_OFFICER'].includes(form.role)
+  const needsDistrict = ['GWL_MANAGER', 'GWL_SUPERVISOR', 'GWL_ANALYST', 'FIELD_SUPERVISOR', 'FIELD_OFFICER'].includes(form.role) // GAP-FIX-04
 
   return (
     <div className="modal-overlay" onClick={onClose}>
