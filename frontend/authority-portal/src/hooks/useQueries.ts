@@ -72,6 +72,7 @@ interface NRWSummaryRow {
   data_confidence_grade?: number
   is_pilot_district: boolean
   grade: string
+  zone_type?: string
 }
 
 interface NRWTrendPoint {
@@ -447,3 +448,45 @@ export function useSentinelSummary(districtId: string) {
 // EXPORT TYPES for use in pages
 // ============================================================
 export type { NRWSummaryRow, NRWTrendPoint, DashboardStats, MyDistrictResponse }
+
+// ── Water Balance (IWA/AWWA M36) ──────────────────────────────────────────────
+export function useWaterBalance(districtId?: string) {
+  return useQuery({
+    queryKey: ['water-balance', districtId],
+    queryFn: async () => {
+      const params = districtId ? `?district_id=${districtId}` : ''
+      const { data } = await apiClient.get(`/water-balance${params}`)
+      return data.data as WaterBalanceRecord[]
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: !!districtId,
+  })
+}
+
+export interface WaterBalanceRecord {
+  district_id: string
+  period_start: string
+  period_end: string
+  system_input_m3: number
+  billed_metered_m3: number
+  billed_unmetered_m3: number
+  unbilled_metered_m3: number
+  unbilled_unmetered_m3: number
+  total_authorised_m3: number
+  unauthorised_consumption_m3: number
+  metering_inaccuracies_m3: number
+  data_handling_errors_m3: number
+  total_apparent_losses_m3: number
+  main_leakage_m3: number
+  storage_overflow_m3: number
+  service_connection_leak_m3: number
+  total_real_losses_m3: number
+  total_water_losses_m3: number
+  nrw_m3: number
+  nrw_percent: number
+  ili: number
+  iwa_grade: string
+  estimated_revenue_recovery_ghs: number
+  data_confidence_score: number
+  computed_at: string
+}

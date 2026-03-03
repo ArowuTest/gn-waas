@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, TrendingDown, TrendingUp, Users,
-  CheckCircle, Clock, RefreshCw, Download
+  CheckCircle, Clock, RefreshCw, Download, DollarSign, Award
 } from 'lucide-react';
-import { useCaseSummary, useCases, useDistricts } from '../hooks/useQueries';
+import { useCaseSummary, useCases, useDistricts, useGWLRevenueSummary } from '../hooks/useQueries';
 import { KPICard, Badge, Button, Select, Spinner, EmptyState, Table } from '../components/ui';
 import {
   formatGHS, formatDate,
@@ -26,6 +26,7 @@ export default function DashboardPage() {
     sort_by: 'estimated_loss_ghs',
   });
   const { data: districts } = useDistricts();
+  const { data: revenue } = useGWLRevenueSummary(districtId || undefined);
 
   const cases: GWLCase[] = casesData?.cases || [];
 
@@ -235,6 +236,36 @@ export default function DashboardPage() {
           />
         )}
       </div>
+
+      {/* Revenue Recovery Strip */}
+      {revenue && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-emerald-50 rounded-xl border border-emerald-100 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className="w-4 h-4 text-emerald-600" />
+              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Revenue Recovered</p>
+            </div>
+            <p className="text-2xl font-black text-emerald-800">{formatGHS(revenue.total_recovered_ghs)}</p>
+            <p className="text-xs text-emerald-600 mt-0.5">{revenue.collected_count} events collected</p>
+          </div>
+          <div className="bg-blue-50 rounded-xl border border-blue-100 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Award className="w-4 h-4 text-blue-600" />
+              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Success Fee (3%)</p>
+            </div>
+            <p className="text-2xl font-black text-blue-800">{formatGHS(revenue.total_success_fee_ghs)}</p>
+            <p className="text-xs text-blue-600 mt-0.5">{revenue.confirmed_count} confirmed</p>
+          </div>
+          <div className="bg-amber-50 rounded-xl border border-amber-100 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingDown className="w-4 h-4 text-amber-600" />
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Variance Identified</p>
+            </div>
+            <p className="text-2xl font-black text-amber-800">{formatGHS(revenue.total_variance_ghs)}</p>
+            <p className="text-xs text-amber-600 mt-0.5">{revenue.pending_count} pending confirmation</p>
+          </div>
+        </div>
+      )}
 
       {/* Quick Stats Row */}
       {summary && (

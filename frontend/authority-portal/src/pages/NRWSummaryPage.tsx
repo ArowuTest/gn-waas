@@ -275,7 +275,7 @@ export default function NRWSummaryPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {['District', 'NRW %', 'Open Flags', 'Est. Loss (GHS)', 'Grade', 'Status'].map(h => (
+                {['District', 'Zone', 'NRW %', 'Open Flags', 'Est. Loss (GHS)', 'Grade', 'Status'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -286,6 +286,16 @@ export default function NRWSummaryPage() {
                   <td className="px-4 py-3">
                     <div className="font-semibold text-gray-900">{row.district_name}</div>
                     <div className="text-xs text-gray-400">{row.region}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {row.zone_type ? (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        row.zone_type === 'RED'    ? 'bg-red-100 text-red-700' :
+                        row.zone_type === 'YELLOW' ? 'bg-amber-100 text-amber-700' :
+                        row.zone_type === 'GREEN'  ? 'bg-emerald-100 text-emerald-700' :
+                        'bg-gray-100 text-gray-500'
+                      }`}>{row.zone_type}</span>
+                    ) : <span className="text-gray-400 text-xs">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`font-bold ${

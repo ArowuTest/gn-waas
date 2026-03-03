@@ -199,6 +199,13 @@ func (o *SentinelOrchestrator) RunDistrictScan(ctx context.Context, districtID u
 		zap.String("duration", result.Duration),
 	)
 
+
+	// ── Post-scan: update district zone_type and loss_ratio_pct ──────────────
+	// After all flags are persisted, compute the NRW % for this district and
+	// update the heatmap classification (RED/YELLOW/GREEN/GREY) and loss_ratio_pct.
+	// This is what drives the DMA map colours in the Admin Portal.
+	o.updateDistrictNRWClassification(ctx, districtID)
+
 	return result, nil
 }
 
@@ -438,4 +445,71 @@ func (o *SentinelOrchestrator) runSupplyScheduleValidation(
 	}
 
 	return flags, nil
+}
+
+// updateDistrictNRWClassification computes the current NRW % for a district
+// and updates zone_type + loss_ratio_pct accordingly.
+//
+// Zone classification (per GN-WAAS requirements doc Section 8.2):
+//   GREEN  = NRW < 20%  — IWA target, audit-verified low-loss
+//   YELLOW = NRW 20-40% — physical leaks likely, recommend engineering review
+//   RED    = NRW > 40%  — high apparent loss / commercial theft, security-led audit
+//   GREY   = no production data available for this period
+func (o *SentinelOrchestrator) updateDistrictNRWClassification(ctx context.Context, districtID uuid.UUID) {
+	// Use the last 30 days as the reference period
+	to := time.Now().UTC()
+	from := to.AddDate(0, -1, 0)
+
+	production, err := o.districtRepo.GetProductionTotal(ctx, districtID, from, to)
+	if err != nil || production <= 0 {
+		// No production data — set GREY (unknown)
+		_ = o.districtRepo.UpdateNRWClassification(ctx, interfaces.DistrictNRWUpdate{
+			DistrictID:   districtID,
+			ZoneType:     "GREY",
+			LossRatioPct: 0,
+		})
+		return
+	}
+
+	billed, err := o.billingRepo.GetDistrictBillingTotal(ctx, districtID, from, to)
+	if err != nil {
+		o.logger.Warn("Could not get billing total for NRW classification",
+			zap.String("district_id", districtID.String()),
+			zap.Error(err),
+		)
+		return
+	}
+
+	nrwM3 := production - billed
+	if nrwM3 < 0 {
+		nrwM3 = 0
+	}
+	nrwPct := (nrwM3 / production) * 100
+
+	// Classify zone
+	zoneType := "GREEN"
+	switch {
+	case nrwPct >= 40:
+		zoneType = "RED"
+	case nrwPct >= 20:
+		zoneType = "YELLOW"
+	}
+
+	if err := o.districtRepo.UpdateNRWClassification(ctx, interfaces.DistrictNRWUpdate{
+		DistrictID:   districtID,
+		ZoneType:     zoneType,
+		LossRatioPct: nrwPct,
+	}); err != nil {
+		o.logger.Error("Failed to update district NRW classification",
+			zap.String("district_id", districtID.String()),
+			zap.Error(err),
+		)
+		return
+	}
+
+	o.logger.Info("District NRW classification updated",
+		zap.String("district_id", districtID.String()),
+		zap.Float64("nrw_pct", nrwPct),
+		zap.String("zone_type", zoneType),
+	)
 }

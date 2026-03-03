@@ -322,3 +322,24 @@ func (r *DistrictRepository) scanDistrictRows(rows interface {
 	}
 	return districts, rows.Err()
 }
+
+// UpdateNRWClassification updates zone_type and loss_ratio_pct on a district
+// after a sentinel scan. Implements the RED/YELLOW/GREEN/GREY heatmap logic:
+//   GREEN  = NRW < 20%  (IWA target)
+//   YELLOW = NRW 20-40% (warning — physical leaks likely)
+//   RED    = NRW > 40%  (critical — commercial theft likely)
+//   GREY   = no data / scan not yet run
+func (r *DistrictRepository) UpdateNRWClassification(
+	ctx context.Context,
+	update interfaces.DistrictNRWUpdate,
+) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE districts
+		SET zone_type      = $1::district_zone_type,
+		    loss_ratio_pct = $2,
+		    updated_at     = NOW()
+		WHERE id = $3`,
+		update.ZoneType, update.LossRatioPct, update.DistrictID,
+	)
+	return err
+}

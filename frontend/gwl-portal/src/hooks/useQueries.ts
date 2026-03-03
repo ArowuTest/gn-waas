@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { gwlApi, districtApi, userApi } from '../utils/api';
+import { api, gwlApi, districtApi, userApi } from '../utils/api';
 
 export const QUERY_KEYS = {
   summary: (districtId?: string) => ['gwl', 'summary', districtId],
@@ -135,4 +135,26 @@ export function useFieldOfficers() {
     queryFn: () => userApi.fieldOfficers().then((r) => r.data.data),
     staleTime: 5 * 60_000,
   });
+}
+
+// ── Revenue Recovery (GWL view) ───────────────────────────────────────────────
+export function useGWLRevenueSummary(districtId?: string) {
+  return useQuery({
+    queryKey: ['gwl-revenue-summary', districtId],
+    queryFn: async () => {
+      const params = districtId ? `?district_id=${districtId}` : ''
+      const res = await api.get(`/revenue/summary${params}`)
+      return res.data.data as {
+        total_events: number
+        total_variance_ghs: number
+        total_recovered_ghs: number
+        total_success_fee_ghs: number
+        pending_count: number
+        confirmed_count: number
+        collected_count: number
+        by_type: Array<{ recovery_type: string; count: number; recovered_ghs: number; success_fee_ghs: number }>
+      }
+    },
+    staleTime: 2 * 60 * 1000,
+  })
 }

@@ -59,6 +59,7 @@ export interface District {
   total_connections: number
   supply_status: string
   zone_type: string
+  geographic_zone?: string
   loss_ratio_pct?: number
   data_confidence_grade?: number
   is_pilot_district: boolean

@@ -1,20 +1,271 @@
 import { useState } from 'react'
 import {
   AlertTriangle, TrendingDown, DollarSign, CheckCircle,
-  Activity, RefreshCw, Droplets, ArrowUpRight, Zap
+  Activity, RefreshCw, Droplets, ArrowUpRight, Zap,
+  Users, MapPin, BarChart2, Shield, TrendingUp, Clock,
+  Award, Target, Layers
 } from 'lucide-react'
 import { StatCard, Card } from '../components/ui/Card'
-import { AlertLevelBadge, StatusBadge, GRAStatusBadge } from '../components/ui/Badge'
-import { useDashboardStats, useAnomalies, useDistricts } from '../hooks/useQueries'
+import { AlertLevelBadge, StatusBadge } from '../components/ui/Badge'
+import {
+  useDashboardStats, useAnomalies, useDistricts,
+  useWaterBalance, useRevenueSummary, useWorkforceSummary,
+  useActiveOfficers,
+} from '../hooks/useQueries'
 import { formatCurrency, formatRelativeTime, formatNumber } from '../lib/utils'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts'
 
-const SEVERITY_COLORS = ['#dc2626', '#ea580c', '#d97706', '#2563eb']
-const SEVERITY_LABELS = ['Critical', 'High', 'Medium', 'Low']
+// ── Colour constants ──────────────────────────────────────────────────────────
+const ZONE_COLORS: Record<string, string> = {
+  GREEN:  '#10b981',
+  YELLOW: '#f59e0b',
+  RED:    '#ef4444',
+  GREY:   '#9ca3af',
+}
 
+const IWA_GRADE_COLORS: Record<string, string> = {
+  A: '#10b981',
+  B: '#3b82f6',
+  C: '#f59e0b',
+  D: '#ef4444',
+}
+
+// ── ILI Grade badge ───────────────────────────────────────────────────────────
+function ILIGradeBadge({ grade }: { grade: string }) {
+  const color = IWA_GRADE_COLORS[grade] ?? '#9ca3af'
+  const labels: Record<string, string> = {
+    A: 'Excellent (ILI < 1)',
+    B: 'Good (ILI 1–2)',
+    C: 'Fair (ILI 2–4)',
+    D: 'Poor (ILI > 4)',
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold text-white"
+      style={{ backgroundColor: color }}
+    >
+      Grade {grade} — {labels[grade] ?? 'Unknown'}
+    </span>
+  )
+}
+
+// ── AWWA Water Balance bar ────────────────────────────────────────────────────
+function WaterBalanceBar({ wb }: { wb: ReturnType<typeof useWaterBalance>['data'] }) {
+  if (!wb || wb.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-24 text-gray-400 text-sm">
+        No water balance data — run a sentinel scan to populate
+      </div>
+    )
+  }
+  const latest = wb[0]
+  const total = latest.system_input_m3 || 1
+  const billedPct   = (latest.billed_metered_m3 / total) * 100
+  const unbilledPct = ((latest.unbilled_metered_m3 + latest.unbilled_unmetered_m3) / total) * 100
+  const apparentPct = (latest.total_apparent_losses_m3 / total) * 100
+  const realPct     = (latest.total_real_losses_m3 / total) * 100
+
+  const segments = [
+    { label: 'Billed Metered',    pct: billedPct,   color: '#10b981', m3: latest.billed_metered_m3 },
+    { label: 'Unbilled Auth.',    pct: unbilledPct,  color: '#3b82f6', m3: latest.unbilled_metered_m3 + latest.unbilled_unmetered_m3 },
+    { label: 'Apparent Losses',   pct: apparentPct,  color: '#f59e0b', m3: latest.total_apparent_losses_m3 },
+    { label: 'Real Losses',       pct: realPct,      color: '#ef4444', m3: latest.total_real_losses_m3 },
+  ]
+
+  return (
+    <div className="space-y-3">
+      {/* Stacked bar */}
+      <div className="flex h-8 rounded-lg overflow-hidden w-full">
+        {segments.map(s => (
+          <div
+            key={s.label}
+            style={{ width: `${Math.max(s.pct, 0.5)}%`, backgroundColor: s.color }}
+            title={`${s.label}: ${s.pct.toFixed(1)}%`}
+          />
+        ))}
+      </div>
+      {/* Legend */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+        {segments.map(s => (
+          <div key={s.label} className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: s.color }} />
+            <span className="text-xs text-gray-600 flex-1">{s.label}</span>
+            <span className="text-xs font-mono font-semibold text-gray-800">
+              {s.pct.toFixed(1)}%
+            </span>
+          </div>
+        ))}
+      </div>
+      {/* ILI + NRW */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+        <div className="flex items-center gap-3">
+          <div>
+            <p className="text-xs text-gray-500">NRW</p>
+            <p className="text-lg font-black text-gray-900">{latest.nrw_percent.toFixed(1)}%</p>
+          </div>
+          <div className="w-px h-8 bg-gray-200" />
+          <div>
+            <p className="text-xs text-gray-500">ILI Score</p>
+            <p className="text-lg font-black text-gray-900">{latest.ili.toFixed(2)}</p>
+          </div>
+          <div className="w-px h-8 bg-gray-200" />
+          <div>
+            <p className="text-xs text-gray-500">System Input</p>
+            <p className="text-lg font-black text-gray-900">{formatNumber(Math.round(latest.system_input_m3))} m³</p>
+          </div>
+        </div>
+        <ILIGradeBadge grade={latest.iwa_grade} />
+      </div>
+    </div>
+  )
+}
+
+// ── Revenue Recovery panel ────────────────────────────────────────────────────
+function RevenuePanel({ districtId }: { districtId?: string }) {
+  const { data: rev } = useRevenueSummary(districtId)
+
+  const byTypeData = (rev?.by_type ?? []).map(t => ({
+    name: t.recovery_type.replace(/_/g, ' '),
+    recovered: t.recovered_ghs,
+    fee: t.success_fee_ghs,
+  }))
+
+  return (
+    <div className="space-y-4">
+      {/* KPI row */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-emerald-50 rounded-xl p-3 text-center">
+          <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wide">Recovered</p>
+          <p className="text-xl font-black text-emerald-700 mt-0.5">
+            {formatCurrency(rev?.total_recovered_ghs ?? 0)}
+          </p>
+          <p className="text-xs text-emerald-500 mt-0.5">{rev?.collected_count ?? 0} collected</p>
+        </div>
+        <div className="bg-blue-50 rounded-xl p-3 text-center">
+          <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide">Success Fee (3%)</p>
+          <p className="text-xl font-black text-blue-700 mt-0.5">
+            {formatCurrency(rev?.total_success_fee_ghs ?? 0)}
+          </p>
+          <p className="text-xs text-blue-500 mt-0.5">{rev?.confirmed_count ?? 0} confirmed</p>
+        </div>
+        <div className="bg-amber-50 rounded-xl p-3 text-center">
+          <p className="text-xs text-amber-600 font-semibold uppercase tracking-wide">Variance Found</p>
+          <p className="text-xl font-black text-amber-700 mt-0.5">
+            {formatCurrency(rev?.total_variance_ghs ?? 0)}
+          </p>
+          <p className="text-xs text-amber-500 mt-0.5">{rev?.pending_count ?? 0} pending</p>
+        </div>
+      </div>
+
+      {/* By-type chart */}
+      {byTypeData.length > 0 ? (
+        <ResponsiveContainer width="100%" height={140}>
+          <BarChart data={byTypeData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Tooltip formatter={(v: number) => formatCurrency(v)} />
+            <Bar dataKey="recovered" name="Recovered" fill="#10b981" radius={[3,3,0,0]} />
+            <Bar dataKey="fee" name="Success Fee" fill="#3b82f6" radius={[3,3,0,0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="flex items-center justify-center h-20 text-gray-400 text-sm">
+          No recovery events yet — confirm audit findings to track revenue
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Workforce panel ───────────────────────────────────────────────────────────
+function WorkforcePanel({ districtId }: { districtId?: string }) {
+  const { data: wf } = useWorkforceSummary()
+  const { data: officers } = useActiveOfficers(districtId)
+
+  const activeOfficers = officers ?? []
+
+  return (
+    <div className="space-y-4">
+      {/* KPI row */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { label: 'Total Officers', value: wf?.total_field_officers ?? 0, color: 'text-gray-900' },
+          { label: 'Active Now',     value: wf?.active_now ?? 0,           color: 'text-emerald-600' },
+          { label: 'On Active Job',  value: wf?.on_active_job ?? 0,        color: 'text-blue-600' },
+          { label: 'Done Today',     value: wf?.jobs_completed_today ?? 0, color: 'text-purple-600' },
+        ].map(k => (
+          <div key={k.label} className="bg-gray-50 rounded-xl p-2.5 text-center">
+            <p className={`text-xl font-black ${k.color}`}>{k.value}</p>
+            <p className="text-xs text-gray-500 mt-0.5 leading-tight">{k.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Active officers list */}
+      {activeOfficers.length > 0 ? (
+        <div className="space-y-1.5 max-h-40 overflow-y-auto">
+          {activeOfficers.slice(0, 6).map(o => (
+            <div key={o.officer_id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+              <div className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-gray-900 truncate">{o.full_name}</p>
+                <p className="text-xs text-gray-400">{o.employee_id}</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-xs text-gray-400">{formatRelativeTime(o.last_seen_at)}</p>
+                {o.field_job_id && (
+                  <span className="text-xs text-blue-600 font-semibold">On job</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-16 text-gray-400 text-sm">
+          No officers active in the last 30 minutes
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── District NRW heatmap summary ──────────────────────────────────────────────
+function DistrictHeatmapSummary({ districts }: { districts: any[] }) {
+  const counts = { RED: 0, YELLOW: 0, GREEN: 0, GREY: 0 }
+  districts.forEach(d => {
+    const z = (d.zone_type ?? 'GREY') as keyof typeof counts
+    if (z in counts) counts[z]++
+  })
+
+  const items = [
+    { zone: 'RED',    label: 'Critical (>40% NRW)',  count: counts.RED,    bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-500' },
+    { zone: 'YELLOW', label: 'Warning (20–40% NRW)', count: counts.YELLOW, bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
+    { zone: 'GREEN',  label: 'Good (<20% NRW)',       count: counts.GREEN,  bg: 'bg-emerald-50',text: 'text-emerald-700',dot: 'bg-emerald-500' },
+    { zone: 'GREY',   label: 'No data',               count: counts.GREY,   bg: 'bg-gray-50',   text: 'text-gray-600',   dot: 'bg-gray-400' },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {items.map(i => (
+        <div key={i.zone} className={`${i.bg} rounded-xl p-3 flex items-center gap-3`}>
+          <div className={`w-3 h-3 rounded-full ${i.dot} flex-shrink-0`} />
+          <div>
+            <p className={`text-lg font-black ${i.text}`}>{i.count}</p>
+            <p className="text-xs text-gray-500 leading-tight">{i.label}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Main Dashboard ────────────────────────────────────────────────────────────
 export function DashboardPage() {
   const [selectedDistrict, setSelectedDistrict] = useState<string>('')
   const { data: districts } = useDistricts()
@@ -24,6 +275,7 @@ export function DashboardPage() {
     limit: 8,
     status: 'OPEN',
   })
+  const { data: waterBalance } = useWaterBalance(selectedDistrict || undefined)
 
   const anomalies = anomaliesData?.data || []
 
@@ -34,11 +286,9 @@ export function DashboardPage() {
     { name: 'Low',      value: anomalies.filter(a => a.alert_level === 'LOW').length,      color: '#2563eb' },
   ].filter(d => d.value > 0)
 
-  const totalAnomalies = anomalyBreakdown.reduce((s, d) => s + d.value, 0)
-
   return (
     <div className="space-y-6">
-      {/* Page Header */}
+      {/* ── Page Header ─────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -49,7 +299,7 @@ export function DashboardPage() {
           </div>
           <h1 className="text-2xl font-black text-gray-900">Operations Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Real-time water audit overview — Ghana National Water Audit & Assurance System
+            Real-time water audit overview — Ghana National Water Audit &amp; Assurance System
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -70,7 +320,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* KPI Cards — Row 1 */}
+      {/* ── KPI Row 1 — Audit Operations ────────────────────────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           title="Open Anomalies"
@@ -94,92 +344,141 @@ export function DashboardPage() {
           variant="danger"
         />
         <StatCard
-          title="Success Fees Earned"
-          value={statsLoading ? '—' : formatCurrency(stats?.total_success_fees_ghs ?? 0)}
-          subtitle="3% of recovered revenue"
-          icon={<DollarSign size={18} />}
+          title="GRA Signed Audits"
+          value={statsLoading ? '—' : formatNumber(stats?.gra_signed ?? 0)}
+          subtitle="Legally binding"
+          icon={<Shield size={18} />}
           variant="success"
         />
       </div>
 
-      {/* KPI Cards — Row 2 */}
+      {/* ── KPI Row 2 — Revenue Recovery ────────────────────────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
-          title="GRA Signed Audits"
-          value={statsLoading ? '—' : formatNumber(stats?.gra_signed ?? 0)}
-          subtitle="Legally compliant"
-          icon={<CheckCircle size={18} />}
+          title="Success Fees Earned"
+          value={statsLoading ? '—' : formatCurrency(stats?.success_fees_earned_ghs ?? 0)}
+          subtitle="3% of recovered revenue"
+          icon={<DollarSign size={18} />}
           variant="success"
         />
         <StatCard
           title="Completed Audits"
           value={statsLoading ? '—' : formatNumber(stats?.completed ?? 0)}
-          subtitle="Closed this period"
+          subtitle="All time"
           icon={<CheckCircle size={18} />}
-          variant="brand"
-        />
-        <StatCard
-          title="Total Recovered"
-          value={statsLoading ? '—' : formatCurrency(stats?.total_recovered_ghs ?? 0)}
-          subtitle="Revenue recovered"
-          icon={<DollarSign size={18} />}
           variant="success"
         />
         <StatCard
+          title="Total Audits"
+          value={statsLoading ? '—' : formatNumber(stats?.total ?? 0)}
+          subtitle="All statuses"
+          icon={<BarChart2 size={18} />}
+          variant="default"
+        />
+        <StatCard
           title="Pending Assignment"
-          value={statsLoading ? '—' : formatNumber(stats?.pending ?? 0)}
+          value={statsLoading ? '—' : formatNumber(stats?.pending_assignment ?? 0)}
           subtitle="Awaiting field officer"
-          icon={<AlertTriangle size={18} />}
+          icon={<Clock size={18} />}
           variant="warning"
         />
       </div>
 
-      {/* Charts + Recent Anomalies */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Anomaly breakdown */}
+      {/* ── IWA/AWWA Water Balance + District Heatmap ───────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card
-          title="Anomaly Severity"
-          subtitle={`${totalAnomalies} open flags`}
-          className="xl:col-span-1"
+          title="IWA/AWWA M36 Water Balance"
+          subtitle="System Input Volume decomposition"
+          className="xl:col-span-2"
+          action={
+            <a href="/nrw" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+              Full analysis <ArrowUpRight size={12} />
+            </a>
+          }
         >
+          <WaterBalanceBar wb={waterBalance} />
+        </Card>
+
+        <Card
+          title="District NRW Heatmap"
+          subtitle="Zone classification by NRW %"
+          action={
+            <a href="/dma-map" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+              View map <ArrowUpRight size={12} />
+            </a>
+          }
+        >
+          <DistrictHeatmapSummary districts={districts ?? []} />
+          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+            <span>{districts?.length ?? 0} total districts</span>
+            <span className="font-semibold text-gray-700">
+              {districts?.filter(d => d.is_active).length ?? 0} active
+            </span>
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Revenue Recovery + Workforce ────────────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card
+          title="Revenue Recovery"
+          subtitle="Managed-service monetisation — 3% success fee model"
+          action={
+            <a href="/reports" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+              Full report <ArrowUpRight size={12} />
+            </a>
+          }
+        >
+          <RevenuePanel districtId={selectedDistrict || undefined} />
+        </Card>
+
+        <Card
+          title="Workforce Oversight"
+          subtitle="Field officer GPS tracking — last 30 minutes"
+          action={
+            <a href="/field-jobs" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+              Field jobs <ArrowUpRight size={12} />
+            </a>
+          }
+        >
+          <WorkforcePanel districtId={selectedDistrict || undefined} />
+        </Card>
+      </div>
+
+      {/* ── Anomaly Breakdown + Recent Anomalies ────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* Pie chart */}
+        <Card title="Anomaly Severity" subtitle="Open flags by alert level">
           {anomalyBreakdown.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={anomalyBreakdown}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={3}
-                    dataKey="value"
-                    strokeWidth={0}
-                  >
-                    {anomalyBreakdown.map((entry, index) => (
-                      <Cell key={index} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value, name) => [`${value} flags`, name]}
-                    contentStyle={{ borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                {anomalyBreakdown.map(d => (
-                  <div key={d.name} className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
-                    <span className="text-xs text-gray-600">{d.name}</span>
-                    <span className="text-xs font-bold text-gray-900 ml-auto">{d.value}</span>
-                  </div>
-                ))}
-              </div>
-            </>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={anomalyBreakdown}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={80}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {anomalyBreakdown.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Legend
+                  formatter={(value, entry: any) => (
+                    <span className="text-xs text-gray-600">
+                      {value} ({entry.payload.value})
+                    </span>
+                  )}
+                />
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
           ) : (
-            <div className="h-[200px] flex flex-col items-center justify-center text-gray-400">
+            <div className="flex flex-col items-center justify-center h-40 text-center">
               <CheckCircle size={32} className="text-emerald-400 mb-2" />
-              <p className="text-sm font-medium text-gray-500">No open anomalies</p>
+              <p className="text-sm text-gray-500">No open anomalies</p>
               <p className="text-xs text-gray-400 mt-0.5">System is operating normally</p>
             </div>
           )}
@@ -242,7 +541,7 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* IWA Water Balance Banner */}
+      {/* ── IWA Framework Banner ─────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl bg-gray-900 p-6">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500 rounded-full translate-x-1/3 -translate-y-1/3" />
@@ -254,17 +553,22 @@ export function DashboardPage() {
               <Zap size={18} className="text-white" />
             </div>
             <div>
-              <h3 className="text-white font-bold text-base">IWA/AWWA Water Balance Framework</h3>
+              <h3 className="text-white font-bold text-base">IWA/AWWA M36 Water Balance Framework</h3>
               <p className="text-gray-400 text-sm mt-1 max-w-lg">
-                GN-WAAS aligns with international water audit standards.
-                System Input Volume → Authorised Consumption + Water Losses (Real + Apparent).
+                GN-WAAS implements the international water audit standard.
+                System Input Volume = Authorised Consumption + Water Losses (Real + Apparent).
+                ILI (Infrastructure Leakage Index) grades performance A–D.
               </p>
             </div>
           </div>
-          <div className="text-right flex-shrink-0">
-            <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Target NRW</p>
-            <p className="text-white text-3xl font-black mt-0.5">≤ 20%</p>
-            <p className="text-gray-500 text-xs mt-0.5">Ghana avg: 51.6%</p>
+          <div className="text-right flex-shrink-0 space-y-1">
+            <div>
+              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">IWA Target NRW</p>
+              <p className="text-white text-3xl font-black">≤ 20%</p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Ghana avg: 51.6%</p>
+            </div>
           </div>
         </div>
       </div>

@@ -116,6 +116,9 @@ type DistrictRepository interface {
 	// GetPilotDistricts returns districts marked as pilot
 	GetPilotDistricts(ctx context.Context) ([]*entities.District, error)
 
+	// UpdateNRWClassification updates zone_type and loss_ratio_pct after a scan
+	UpdateNRWClassification(ctx context.Context, update DistrictNRWUpdate) error
+
 	// GetProductionTotal returns total production volume for a district/period
 	GetProductionTotal(ctx context.Context, districtID uuid.UUID, from, to time.Time) (float64, error)
 }
@@ -124,4 +127,12 @@ type DistrictRepository interface {
 type SupplyScheduleRepository interface {
 	// GetActiveSchedule returns the active supply schedule for a district
 	GetActiveSchedule(ctx context.Context, districtID uuid.UUID, asOf time.Time) (*entities.SupplySchedule, error)
+}
+
+// UpdateNRWClassification updates zone_type and loss_ratio_pct on a district
+// after a sentinel scan completes. This is how RED/YELLOW/GREEN/GREY is set.
+type DistrictNRWUpdate struct {
+	DistrictID   uuid.UUID
+	ZoneType     string  // RED | YELLOW | GREEN | GREY
+	LossRatioPct float64 // NRW %
 }

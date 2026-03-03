@@ -13,6 +13,7 @@ interface District {
   total_connections: number
   supply_status: string
   zone_type: string
+  geographic_zone: string
   loss_ratio_pct?: number
   data_confidence_grade?: number
   is_pilot_district: boolean
@@ -30,6 +31,7 @@ const REGIONS = [
 
 const SUPPLY_STATUSES = ['NORMAL', 'REDUCED', 'OUTAGE', 'MAINTENANCE', 'UNKNOWN']
 const ZONE_TYPES = ['RED', 'YELLOW', 'GREEN', 'GREY']
+const GEOGRAPHIC_ZONES = ['URBAN', 'PERI_URBAN', 'RURAL', 'INDUSTRIAL']
 
 function gradeBadge(grade?: number) {
   if (!grade) return { label: 'N/A', cls: 'badge-gray' }
@@ -66,6 +68,7 @@ function DistrictModal({
     total_connections: district?.total_connections ?? 0,
     supply_status: district?.supply_status ?? 'NORMAL',
     zone_type: district?.zone_type ?? 'GREEN',
+    geographic_zone: district?.geographic_zone ?? 'URBAN',
     is_pilot_district: district?.is_pilot_district ?? false,
     is_active: district?.is_active ?? true,
   })
@@ -108,6 +111,12 @@ function DistrictModal({
               <label>Zone Type</label>
               <select value={form.zone_type} onChange={e => set('zone_type', e.target.value)}>
                 {ZONE_TYPES.map(z => <option key={z}>{z}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Geographic Zone</label>
+              <select value={form.geographic_zone} onChange={e => set('geographic_zone', e.target.value)}>
+                {GEOGRAPHIC_ZONES.map(z => <option key={z}>{z}</option>)}
               </select>
             </div>
             <div className="form-group">
@@ -266,6 +275,7 @@ export default function DistrictConfigPage() {
                     <td className="district-name">{d.district_name}</td>
                     <td className="text-sm text-gray">{d.region}</td>
                     <td><span className="zone-badge">{d.zone_type}</span></td>
+                      <td className="text-xs text-gray-500">{d.geographic_zone ?? '—'}</td>
                     <td className="text-right">{d.total_connections.toLocaleString()}</td>
                     <td>
                       {d.loss_ratio_pct != null ? (

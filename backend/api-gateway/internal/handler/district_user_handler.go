@@ -219,6 +219,7 @@ func (h *DistrictHandler) CreateDistrict(c *fiber.Ctx) error {
 		TotalConnections   int     `json:"total_connections"`
 		SupplyStatus       string  `json:"supply_status"`
 		ZoneType           string  `json:"zone_type"`
+		GeographicZone     string  `json:"geographic_zone"`
 		IsPilotDistrict    bool    `json:"is_pilot_district"`
 		IsActive           bool    `json:"is_active"`
 	}
@@ -271,6 +272,7 @@ func (h *DistrictHandler) UpdateDistrict(c *fiber.Ctx) error {
 		TotalConnections   *int    `json:"total_connections"`
 		SupplyStatus       *string `json:"supply_status"`
 		ZoneType           *string `json:"zone_type"`
+		GeographicZone     *string `json:"geographic_zone"`
 		IsPilotDistrict    *bool   `json:"is_pilot_district"`
 		IsActive           *bool   `json:"is_active"`
 	}
@@ -288,6 +290,7 @@ func (h *DistrictHandler) UpdateDistrict(c *fiber.Ctx) error {
 	if req.TotalConnections != nil { fields["total_connections"]   = *req.TotalConnections }
 	if req.SupplyStatus != nil    { fields["supply_status"]        = *req.SupplyStatus }
 	if req.ZoneType != nil        { fields["zone_type"]            = *req.ZoneType }
+	if req.GeographicZone != nil  { fields["geographic_zone"]      = *req.GeographicZone }
 	if req.IsPilotDistrict != nil { fields["is_pilot_district"]    = *req.IsPilotDistrict }
 	if req.IsActive != nil        { fields["is_active"]            = *req.IsActive }
 

@@ -143,3 +143,140 @@ export function useNRWSummary(districtId?: string) {
     staleTime: 5 * 60 * 1000,
   })
 }
+
+// ============================================================
+// WATER BALANCE (IWA/AWWA M36)
+// ============================================================
+export function useWaterBalance(districtId?: string) {
+  return useQuery({
+    queryKey: ['water-balance', districtId],
+    queryFn: async () => {
+      const params = districtId ? `?district_id=${districtId}` : ''
+      const res = await apiClient.get(`/water-balance${params}`)
+      return res.data.data as WaterBalanceRecord[]
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// ============================================================
+// REVENUE RECOVERY (3% success fee)
+// ============================================================
+export function useRevenueSummary(districtId?: string, period?: string) {
+  return useQuery({
+    queryKey: ['revenue-summary', districtId, period],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (districtId) params.set('district_id', districtId)
+      if (period) params.set('period', period)
+      const res = await apiClient.get(`/revenue/summary?${params.toString()}`)
+      return res.data.data as RevenueSummary
+    },
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
+export function useRevenueEvents(filters: { district_id?: string; status?: string; limit?: number } = {}) {
+  return useQuery({
+    queryKey: ['revenue-events', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v !== undefined && v !== '') params.set(k, String(v))
+      })
+      const res = await apiClient.get(`/revenue/events?${params.toString()}`)
+      return res.data
+    },
+  })
+}
+
+// ============================================================
+// WORKFORCE OVERSIGHT
+// ============================================================
+export function useWorkforceSummary() {
+  return useQuery({
+    queryKey: ['workforce-summary'],
+    queryFn: async () => {
+      const res = await apiClient.get('/workforce/summary')
+      return res.data.data as WorkforceSummary
+    },
+    refetchInterval: 30 * 1000, // refresh every 30s
+  })
+}
+
+export function useActiveOfficers(districtId?: string) {
+  return useQuery({
+    queryKey: ['active-officers', districtId],
+    queryFn: async () => {
+      const params = districtId ? `?district_id=${districtId}` : ''
+      const res = await apiClient.get(`/workforce/active${params}`)
+      return res.data.data as ActiveOfficer[]
+    },
+    refetchInterval: 30 * 1000,
+  })
+}
+
+// ============================================================
+// TYPE DEFINITIONS (local to this file)
+// ============================================================
+export interface WaterBalanceRecord {
+  district_id: string
+  period_start: string
+  period_end: string
+  system_input_m3: number
+  billed_metered_m3: number
+  billed_unmetered_m3: number
+  unbilled_metered_m3: number
+  unbilled_unmetered_m3: number
+  total_authorised_m3: number
+  unauthorised_consumption_m3: number
+  metering_inaccuracies_m3: number
+  data_handling_errors_m3: number
+  total_apparent_losses_m3: number
+  main_leakage_m3: number
+  storage_overflow_m3: number
+  service_connection_leak_m3: number
+  total_real_losses_m3: number
+  total_water_losses_m3: number
+  nrw_m3: number
+  nrw_percent: number
+  ili: number
+  iwa_grade: string
+  estimated_revenue_recovery_ghs: number
+  data_confidence_score: number
+  computed_at: string
+}
+
+export interface RevenueSummary {
+  total_events: number
+  total_variance_ghs: number
+  total_recovered_ghs: number
+  total_success_fee_ghs: number
+  pending_count: number
+  confirmed_count: number
+  collected_count: number
+  by_type: Array<{
+    recovery_type: string
+    count: number
+    recovered_ghs: number
+    success_fee_ghs: number
+  }>
+}
+
+export interface WorkforceSummary {
+  total_field_officers: number
+  active_now: number
+  on_active_job: number
+  idle_officers: number
+  jobs_completed_today: number
+}
+
+export interface ActiveOfficer {
+  officer_id: string
+  full_name: string
+  employee_id: string
+  latitude: number
+  longitude: number
+  field_job_id?: string
+  last_seen_at: string
+}

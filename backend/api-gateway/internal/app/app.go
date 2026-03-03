@@ -104,7 +104,9 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	adminUserHandler := handler.NewAdminUserHandler(db, logger)
 	healthHandler   := handler.NewHealthHandler(db)
 
-	evidenceHandler := handler.NewEvidenceHandler(evidenceStorage, logger)
+	evidenceHandler    := handler.NewEvidenceHandler(evidenceStorage, logger)
+	revenueHandler    := handler.NewRevenueRecoveryHandler(db, logger)
+	workforceHandler  := handler.NewWorkforceHandler(db, logger)
 
 	// ── Fiber app ─────────────────────────────────────────────────────────────
 	app := fiber.New(fiber.Config{
@@ -561,6 +563,34 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	api.Get("/meter-readings",     dataRoles, dataHandler.ListMeterReadings)
 	api.Get("/water-balance",      dataRoles, dataHandler.ListWaterBalance)
 	api.Get("/billing-records",    dataRoles, dataHandler.ListBillingRecords)
+
+
+	// ── Revenue Recovery (managed-service monetisation) ──────────────────────
+	// Tracks recovered GHS and 3% success fees from audit-driven recoveries.
+	revenueRoles := middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GWL_MANAGER", "GWL_EXECUTIVE")
+	revenue := api.Group("/revenue", revenueRoles)
+	revenue.Get("/summary",          revenueHandler.GetSummary)
+	revenue.Get("/events",           revenueHandler.ListEvents)
+	revenue.Patch("/events/:id/confirm", revenueHandler.ConfirmRecovery)
+
+	// ── Workforce Oversight (GPS breadcrumbs + active officer tracking) ───────
+	workforce := api.Group("/workforce")
+	workforce.Post("/location",
+		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR"),
+		workforceHandler.RecordLocation,
+	)
+	workforce.Get("/active",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
+		workforceHandler.GetActiveOfficers,
+	)
+	workforce.Get("/summary",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
+		workforceHandler.GetWorkforceSummary,
+	)
+	workforce.Get("/officers/:id/track",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR"),
+		workforceHandler.GetOfficerTrack,
+	)
 
 	return &App{
 		fiber:  app,

@@ -1,7 +1,7 @@
 import { useAuth } from '../contexts/AuthContext'
-import { TrendingDown, Users, AlertTriangle, CheckCircle, Clock, Droplets, Loader2, RefreshCw } from 'lucide-react'
-import { useMyDistrict, useNRWTrend } from '../hooks/useQueries'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { TrendingDown, Users, AlertTriangle, CheckCircle, Clock, Droplets, Loader2, RefreshCw, Award, Target, BarChart2 } from 'lucide-react'
+import { useMyDistrict, useNRWTrend, useWaterBalance } from '../hooks/useQueries'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts'
 
 export default function MyDistrictPage() {
   const { user } = useAuth()
@@ -11,6 +11,7 @@ export default function MyDistrictPage() {
   const summary = data?.summary
 
   const { data: trend } = useNRWTrend(district?.id ?? '')
+  const { data: waterBalance } = useWaterBalance(district?.id)
 
   if (isLoading) {
     return (
@@ -37,6 +38,7 @@ export default function MyDistrictPage() {
     )
   }
 
+  const latestWB = waterBalance?.[0]
   const nrwPct = district.loss_ratio_pct ?? 0
   const dataGrade = summary?.grade ?? 'N/A'
   const totalAccounts = summary?.total_accounts ?? district.total_connections
@@ -173,6 +175,87 @@ export default function MyDistrictPage() {
               <Line type="monotone" dataKey="resolved_flags" stroke="#16a34a" strokeWidth={2} dot={false} name="Resolved" />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+
+      {/* IWA/AWWA Water Balance */}
+      {latestWB && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-bold text-gray-900">IWA/AWWA M36 Water Balance</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Period: {new Date(latestWB.period_start).toLocaleDateString()} – {new Date(latestWB.period_end).toLocaleDateString()}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-xs text-gray-500">ILI Score</p>
+                <p className="text-xl font-black text-gray-900">{latestWB.ili.toFixed(2)}</p>
+              </div>
+              <div className={`px-3 py-1.5 rounded-full text-sm font-bold text-white ${
+                latestWB.iwa_grade === 'A' ? 'bg-emerald-500' :
+                latestWB.iwa_grade === 'B' ? 'bg-blue-500' :
+                latestWB.iwa_grade === 'C' ? 'bg-amber-500' : 'bg-red-500'
+              }`}>
+                Grade {latestWB.iwa_grade}
+              </div>
+            </div>
+          </div>
+
+          {/* Stacked bar */}
+          <div className="flex h-6 rounded-lg overflow-hidden w-full mb-3">
+            {[
+              { pct: (latestWB.billed_metered_m3 / (latestWB.system_input_m3 || 1)) * 100, color: '#10b981', label: 'Billed Metered' },
+              { pct: ((latestWB.unbilled_metered_m3 + latestWB.unbilled_unmetered_m3) / (latestWB.system_input_m3 || 1)) * 100, color: '#3b82f6', label: 'Unbilled Auth.' },
+              { pct: (latestWB.total_apparent_losses_m3 / (latestWB.system_input_m3 || 1)) * 100, color: '#f59e0b', label: 'Apparent Losses' },
+              { pct: (latestWB.total_real_losses_m3 / (latestWB.system_input_m3 || 1)) * 100, color: '#ef4444', label: 'Real Losses' },
+            ].map(s => (
+              <div
+                key={s.label}
+                style={{ width: `${Math.max(s.pct, 0.5)}%`, backgroundColor: s.color }}
+                title={`${s.label}: ${s.pct.toFixed(1)}%`}
+              />
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 mb-4">
+            {[
+              { label: 'Billed Metered',   m3: latestWB.billed_metered_m3,         color: '#10b981' },
+              { label: 'Unbilled Auth.',   m3: latestWB.unbilled_metered_m3 + latestWB.unbilled_unmetered_m3, color: '#3b82f6' },
+              { label: 'Apparent Losses',  m3: latestWB.total_apparent_losses_m3,   color: '#f59e0b' },
+              { label: 'Real Losses',      m3: latestWB.total_real_losses_m3,       color: '#ef4444' },
+            ].map(s => (
+              <div key={s.label} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: s.color }} />
+                <span className="text-xs text-gray-600 flex-1">{s.label}</span>
+                <span className="text-xs font-mono font-semibold text-gray-800">
+                  {Math.round(s.m3).toLocaleString()} m³
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Totals */}
+          <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
+            <div className="text-center">
+              <p className="text-xs text-gray-500">System Input</p>
+              <p className="text-base font-black text-gray-900">{Math.round(latestWB.system_input_m3).toLocaleString()} m³</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-500">NRW Volume</p>
+              <p className="text-base font-black text-red-700">{Math.round(latestWB.nrw_m3).toLocaleString()} m³</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-500">NRW %</p>
+              <p className={`text-base font-black ${
+                latestWB.nrw_percent > 40 ? 'text-red-700' :
+                latestWB.nrw_percent > 20 ? 'text-amber-700' : 'text-emerald-700'
+              }`}>{latestWB.nrw_percent.toFixed(1)}%</p>
+            </div>
+          </div>
         </div>
       )}
 
