@@ -34,6 +34,10 @@ services:
       POSTGRES_USER: gnwaas_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+      # SEC-01 fix: application services connect as gnwaas_app (RLS-enforced), not superuser.
+      # INFRA-01 fix: admin password sourced from env var, not hardcoded.
+      GNWAAS_APP_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
+      GNWAAS_ADMIN_PASSWORD: ${GNWAAS_ADMIN_PASSWORD:-gnwaas_admin_dev_2026}
     ports:
       - "5432:5432"
     volumes:
@@ -148,8 +152,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: gnwaas
-      DB_USER: gnwaas_user
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
+      # SEC-01 fix: connect as gnwaas_app (unprivileged, RLS-enforced) not superuser.
+      DB_USER: gnwaas_app
+      DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: gnwaas_redis_2026
@@ -179,6 +184,10 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_started
+      # INFRA-02 fix: wait for seed-runner to complete before starting api-gateway.
+      # Prevents race condition where api-gateway starts before seed data is loaded.
+      seed-runner:
+        condition: service_completed_successfully
     networks:
       gnwaas-network:
         ipv4_address: 172.20.0.20
@@ -198,8 +207,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: gnwaas
-      DB_USER: gnwaas_user
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
+      # SEC-01 fix: connect as gnwaas_app (unprivileged, RLS-enforced) not superuser.
+      DB_USER: gnwaas_app
+      DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: gnwaas_redis_2026
@@ -233,8 +243,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: gnwaas
-      DB_USER: gnwaas_user
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
+      # SEC-01 fix: connect as gnwaas_app (unprivileged, RLS-enforced) not superuser.
+      DB_USER: gnwaas_app
+      DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
     ports:
       - "3003:3003"
     healthcheck:
@@ -265,8 +276,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: gnwaas
-      DB_USER: gnwaas_user
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
+      # SEC-01 fix: connect as gnwaas_app (unprivileged, RLS-enforced) not superuser.
+      DB_USER: gnwaas_app
+      DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
       GRA_API_BASE_URL: https://vsdc.gra.gov.gh/api/v8.1
       GRA_API_KEY: ""
       GRA_BUSINESS_TIN: ""
@@ -301,8 +313,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: gnwaas
-      DB_USER: gnwaas_user
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
+      # SEC-01 fix: connect as gnwaas_app (unprivileged, RLS-enforced) not superuser.
+      DB_USER: gnwaas_app
+      DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-gnwaas_minio}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-gnwaas_minio_2026}
@@ -332,8 +345,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: gnwaas
-      DB_USER: gnwaas_user
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
+      # SEC-01 fix: connect as gnwaas_app (unprivileged, RLS-enforced) not superuser.
+      DB_USER: gnwaas_app
+      DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
       GWL_DB_HOST: ""
       GWL_DB_PORT: "5432"
       GWL_DB_NAME: ""
@@ -456,8 +470,9 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: gnwaas
-      DB_USER: gnwaas_user
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}  # V19-CF-01 fix: was ${DB_PASSWORD:-gnwaas_dev_password}
+      # SEC-01 fix: connect as gnwaas_app (unprivileged, RLS-enforced) not superuser.
+      DB_USER: gnwaas_app
+      DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}  # V19-CF-01 fix: was ${DB_PASSWORD:-gnwaas_dev_password}
       DB_SSL_MODE: disable
       NATS_URL: nats://nats:4222
       LOG_LEVEL: info
@@ -482,16 +497,11 @@ services:
   seed-runner:
     image: postgres:16-alpine
     container_name: gnwaas-seed-runner
-    profiles:
-      - seed
     environment:
       # Password for gnwaas_user (used to run migrations)
       PGPASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
-      # V19-CF-02 fix: gnwaas_admin has a separate password set in init-db.sh.
-      # The previous config used PGPASSWORD (gnwaas_user's password) for both
-      # migrations AND seeds, causing authentication failure when running seeds
-      # as gnwaas_admin. PGPASSWORD_ADMIN carries the correct admin password.
-      PGPASSWORD_ADMIN: ${ADMIN_DB_PASSWORD:-gnwaas_admin_dev_2026}
+      # INFRA-01 fix: admin password sourced from GNWAAS_ADMIN_PASSWORD env var.
+      PGPASSWORD_ADMIN: ${GNWAAS_ADMIN_PASSWORD:-gnwaas_admin_dev_2026}
     volumes:
       - ./database/migrations:/migrations
       - ./database/seeds:/seeds

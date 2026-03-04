@@ -399,11 +399,11 @@ func (r *GWLCaseRepository) UpdateCaseStatus(ctx context.Context,
 	flagID uuid.UUID, status string, assignedToID *uuid.UUID,
 	resolution, notes *string, performedByName, performedByRole, actionType, actionNotes string,
 ) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
+	// SEC-02 fix: use r.q(ctx) so all writes run inside the RLS-activated
+	// transaction provided by rls.Middleware. Previously r.db.Begin(ctx) created
+	// a raw transaction that bypassed RLS session variables entirely.
+	// Atomicity is guaranteed by the outer middleware transaction.
+	q := r.q(ctx)
 
 	now := time.Now()
 	var resolvedAt *time.Time
@@ -416,7 +416,7 @@ func (r *GWLCaseRepository) UpdateCaseStatus(ctx context.Context,
 		assignedAt = &now
 	}
 
-	_, err = tx.Exec(ctx, `
+	_, err := q.Exec(ctx, `
 		UPDATE anomaly_flags SET
 			gwl_status         = $2,
 			gwl_assigned_to_id = COALESCE($3, gwl_assigned_to_id),
@@ -432,7 +432,7 @@ func (r *GWLCaseRepository) UpdateCaseStatus(ctx context.Context,
 
 	// DB-H02 fix: include account_id (NOT NULL after migration 007).
 	// Fetch it from anomaly_flags using the flagID already in scope.
-	_, err = tx.Exec(ctx, `
+	_, err = q.Exec(ctx, `
 		INSERT INTO gwl_case_actions (
 			anomaly_flag_id, account_id, performed_by_name, performed_by_role,
 			action_type, action_notes
@@ -442,7 +442,7 @@ func (r *GWLCaseRepository) UpdateCaseStatus(ctx context.Context,
 		return fmt.Errorf("insert case action: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
 
 // ── AssignToFieldOfficer assigns a case to a field officer and creates a job ─
@@ -452,16 +452,14 @@ func (r *GWLCaseRepository) AssignToFieldOfficer(ctx context.Context,
 	dueDate time.Time,
 	performedByName, performedByRole string,
 ) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
+	// SEC-02 fix: use r.q(ctx) so all writes run inside the RLS-activated
+	// transaction provided by rls.Middleware.
+	q := r.q(ctx)
 
 	now := time.Now()
 
 	// Update the anomaly flag
-	_, err = tx.Exec(ctx, `
+	_, err := q.Exec(ctx, `
 		UPDATE anomaly_flags SET
 			gwl_status         = 'FIELD_ASSIGNED',
 			gwl_assigned_to_id = $2,
@@ -475,7 +473,7 @@ func (r *GWLCaseRepository) AssignToFieldOfficer(ctx context.Context,
 	// BE-C01 fix: fetch the real district_id from anomaly_flags.
 	// Previously flagID was incorrectly passed as district_id, corrupting RLS.
 	var districtID uuid.UUID
-	err = tx.QueryRow(ctx, `SELECT district_id FROM anomaly_flags WHERE id = $1`, flagID).Scan(&districtID)
+	err = q.QueryRow(ctx, `SELECT district_id FROM anomaly_flags WHERE id = $1`, flagID).Scan(&districtID)
 	if err != nil {
 		return fmt.Errorf("fetch district_id for field job: %w", err)
 	}
@@ -492,7 +490,7 @@ func (r *GWLCaseRepository) AssignToFieldOfficer(ctx context.Context,
 	case "LOW":      priorityInt = 8
 	}
 	jobNotes := fmt.Sprintf("[%s] %s — %s", jobType, title, description)
-	_, err = tx.Exec(ctx, `
+	_, err = q.Exec(ctx, `
 		INSERT INTO field_jobs (
 			job_reference, account_id, district_id, assigned_officer_id,
 			status, is_blind_audit,
@@ -510,7 +508,7 @@ func (r *GWLCaseRepository) AssignToFieldOfficer(ctx context.Context,
 	}
 
 	// DB-H02 fix: include account_id (NOT NULL after migration 007).
-	_, err = tx.Exec(ctx, `
+	_, err = q.Exec(ctx, `
 		INSERT INTO gwl_case_actions (
 			anomaly_flag_id, account_id, performed_by_name, performed_by_role,
 			action_type, action_notes,
@@ -526,18 +524,15 @@ func (r *GWLCaseRepository) AssignToFieldOfficer(ctx context.Context,
 		return fmt.Errorf("insert assignment action: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
 
 // ── CreateReclassificationRequest creates a category change request ──────────
 func (r *GWLCaseRepository) CreateReclassificationRequest(ctx context.Context, req *ReclassificationRequest) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
+	// SEC-02 fix: use r.q(ctx) for RLS-aware writes.
+	q := r.q(ctx)
 
-	_, err = tx.Exec(ctx, `
+	_, err := q.Exec(ctx, `
 		INSERT INTO reclassification_requests (
 			id, anomaly_flag_id, account_id, district_id,
 			current_category, recommended_category, justification,
@@ -560,7 +555,7 @@ func (r *GWLCaseRepository) CreateReclassificationRequest(ctx context.Context, r
 	}
 
 	// Update case status
-	_, err = tx.Exec(ctx, `
+	_, err = q.Exec(ctx, `
 		UPDATE anomaly_flags SET gwl_status = 'APPROVED_FOR_CORRECTION'
 		WHERE id = $1
 	`, req.AnomalyFlagID)
@@ -570,7 +565,7 @@ func (r *GWLCaseRepository) CreateReclassificationRequest(ctx context.Context, r
 
 	// Record action
 	// DB-H02 fix: include account_id (NOT NULL after migration 007).
-	_, err = tx.Exec(ctx, `
+	_, err = q.Exec(ctx, `
 		INSERT INTO gwl_case_actions (
 			anomaly_flag_id, account_id, performed_by_name, performed_by_role,
 			action_type, action_notes
@@ -582,7 +577,7 @@ func (r *GWLCaseRepository) CreateReclassificationRequest(ctx context.Context, r
 		return fmt.Errorf("insert reclassification action: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
 
 // ── ListReclassificationRequests returns reclassification requests ────────────
@@ -650,13 +645,10 @@ func (r *GWLCaseRepository) ListReclassificationRequests(ctx context.Context, st
 
 // ── CreateCreditRequest creates an overbilling credit request ────────────────
 func (r *GWLCaseRepository) CreateCreditRequest(ctx context.Context, req *CreditRequest) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
+	// SEC-02 fix: use r.q(ctx) for RLS-aware writes.
+	q := r.q(ctx)
 
-	_, err = tx.Exec(ctx, `
+	_, err := q.Exec(ctx, `
 		INSERT INTO credit_requests (
 			id, anomaly_flag_id, account_id, district_id,
 			gwl_bill_id, billing_period_start, billing_period_end,
@@ -678,7 +670,7 @@ func (r *GWLCaseRepository) CreateCreditRequest(ctx context.Context, req *Credit
 		return fmt.Errorf("create credit request: %w", err)
 	}
 
-	_, err = tx.Exec(ctx, `
+	_, err = q.Exec(ctx, `
 		UPDATE anomaly_flags SET gwl_status = 'APPROVED_FOR_CORRECTION' WHERE id = $1
 	`, req.AnomalyFlagID)
 	if err != nil {
@@ -686,7 +678,7 @@ func (r *GWLCaseRepository) CreateCreditRequest(ctx context.Context, req *Credit
 	}
 
 	// DB-H02 fix: include account_id (NOT NULL after migration 007).
-	_, err = tx.Exec(ctx, `
+	_, err = q.Exec(ctx, `
 		INSERT INTO gwl_case_actions (
 			anomaly_flag_id, account_id, performed_by_name, performed_by_role,
 			action_type, action_notes
@@ -698,7 +690,7 @@ func (r *GWLCaseRepository) CreateCreditRequest(ctx context.Context, req *Credit
 		return fmt.Errorf("insert credit action: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
 
 // ── ListCreditRequests returns credit requests ────────────────────────────────
