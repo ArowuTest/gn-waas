@@ -17,6 +17,7 @@ const (
 	// GWL operational roles
 	UserRoleGWLExecutive    UserRole = "GWL_EXECUTIVE"      // GWL management - district dashboards
 	UserRoleGWLManager      UserRole = "GWL_MANAGER"        // GWL district manager
+	UserRoleGWLSupervisor   UserRole = "GWL_SUPERVISOR"     // GWL billing supervisor
 	UserRoleGWLAnalyst      UserRole = "GWL_ANALYST"        // GWL data analyst
 
 	// Field roles
@@ -31,8 +32,8 @@ func (u UserRole) IsValid() bool {
 	switch u {
 	case UserRoleSuperAdmin, UserRoleSystemAdmin, UserRoleMinisterView,
 		UserRoleGRAOfficer, UserRoleMOFAuditor, UserRoleGWLExecutive,
-		UserRoleGWLManager, UserRoleGWLAnalyst, UserRoleFieldSupervisor,
-		UserRoleFieldOfficer, UserRoleMDAUser:
+		UserRoleGWLManager, UserRoleGWLSupervisor, UserRoleGWLAnalyst,
+		UserRoleFieldSupervisor, UserRoleFieldOfficer, UserRoleMDAUser:
 		return true
 	}
 	return false
