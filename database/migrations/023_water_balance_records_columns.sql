@@ -61,9 +61,22 @@ COMMENT ON COLUMN water_balance_records.computed_at IS
 -- The sentinel INSERT uses ON CONFLICT (district_id, period_start, period_end)
 -- DO UPDATE SET ... which requires a UNIQUE constraint on these three columns.
 -- Without it, PostgreSQL raises SQLSTATE 42P10 at runtime.
-ALTER TABLE water_balance_records
-    ADD CONSTRAINT IF NOT EXISTS water_balance_records_district_period_unique
-    UNIQUE (district_id, period_start, period_end);
+--
+-- DB-C01 fix: PostgreSQL does NOT support ADD CONSTRAINT IF NOT EXISTS syntax.
+-- The idiomatic idempotent pattern is a DO block that checks pg_constraint first.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'water_balance_records'::regclass
+          AND conname   = 'water_balance_records_district_period_unique'
+    ) THEN
+        ALTER TABLE water_balance_records
+            ADD CONSTRAINT water_balance_records_district_period_unique
+            UNIQUE (district_id, period_start, period_end);
+    END IF;
+END;
+$$;
 
 -- ─── Index for fast period-range queries ─────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_water_balance_district_period
