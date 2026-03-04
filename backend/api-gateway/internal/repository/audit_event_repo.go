@@ -222,6 +222,21 @@ func (r *AuditEventRepository) GetDashboardStats(ctx context.Context, districtID
 	stats["total_confirmed_loss_ghs"] = totalLoss
 	stats["total_success_fees_ghs"] = totalFees
 
+	// FE-DASH-02 fix: also count field jobs awaiting assignment (status = QUEUED).
+	// The admin dashboard "Pending Assignment" card reads this field.
+	// A separate query is used because field_jobs is a different table.
+	fjArgs := []interface{}{}
+	fjWhere := "status = 'QUEUED'"
+	if districtID != nil {
+		fjWhere += " AND district_id = $1"
+		fjArgs = append(fjArgs, *districtID)
+	}
+	var pendingAssignment int64
+	_ = r.q(ctx).QueryRow(ctx, fmt.Sprintf(
+		"SELECT COUNT(*) FROM field_jobs WHERE %s", fjWhere), fjArgs...,
+	).Scan(&pendingAssignment)
+	stats["pending_assignment"] = pendingAssignment
+
 	return stats, err
 }
 

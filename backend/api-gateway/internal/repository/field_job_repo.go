@@ -387,11 +387,16 @@ func (r *FieldJobRepository) WriteEvidence(ctx context.Context, jobID uuid.UUID,
 	photoURLsJSON, _ := json.Marshal(ev.PhotoURLs)
 	photoHashesJSON, _ := json.Marshal(ev.PhotoHashes)
 
+	// BE-OCR-01 fix: write ocr_confidence to the dedicated column (added in migration 022)
+	// as well as to evidence_data JSONB. Sentinel's iwa_water_balance.go queries
+	// ae.ocr_confidence directly — storing it only in JSONB caused the metering
+	// inaccuracy component of the IWA water balance to always be zero.
 	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE audit_events
 		SET
 			ocr_reading_value       = $1,
 			ocr_status              = $2::ocr_status,
+			ocr_confidence          = $8,
 			gps_latitude            = $3,
 			gps_longitude           = $4,
 			gps_precision_m         = $5,

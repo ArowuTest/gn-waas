@@ -356,7 +356,7 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           title="Success Fees Earned"
-          value={statsLoading ? '—' : formatCurrency(stats?.success_fees_earned_ghs ?? 0)}
+          value={statsLoading ? '—' : formatCurrency(stats?.total_success_fees_ghs ?? 0)}
           subtitle="3% of recovered revenue"
           icon={<DollarSign size={18} />}
           variant="success"

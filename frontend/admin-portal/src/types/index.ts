@@ -237,6 +237,8 @@ export interface DashboardStats {
   gra_signed: number
   total_confirmed_loss_ghs: number
   total_success_fees_ghs: number
+  // FE-DASH-02 fix: field jobs awaiting officer assignment (status = QUEUED)
+  pending_assignment: number
 }
 
 export interface NRWSummary {
