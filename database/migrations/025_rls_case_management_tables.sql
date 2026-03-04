@@ -15,12 +15,17 @@
 -- be district-scoped.
 --
 -- Pattern mirrors migration 012 (existing RLS tables):
+--   FORCE ROW LEVEL SECURITY
+--   FOR ALL TO gnwaas_app
 --   USING (current_user_is_admin() OR district_id = current_district_id())
 --
 -- current_user_is_admin() returns TRUE for SYSTEM_ADMIN / SUPER_ADMIN /
 -- MOF_AUDITOR roles (set via SET LOCAL app.user_role).
 -- current_district_id() returns the UUID from SET LOCAL app.district_id.
 -- Both helper functions are defined in migration 012.
+--
+-- DB-M01 fix: DROP POLICY IF EXISTS before each CREATE POLICY so this
+-- migration is idempotent on re-run (follows the pattern in migration 024).
 -- ============================================================
 
 -- ─── gwl_case_actions ────────────────────────────────────────────────────────
@@ -28,10 +33,11 @@
 -- district_id is nullable (NULL = system-generated action); the policy
 -- allows NULL rows to be visible to admins only.
 ALTER TABLE gwl_case_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gwl_case_actions FORCE ROW LEVEL SECURITY;
 
--- Admins see all rows; district users see only their district's rows.
--- Rows with NULL district_id are visible to admins only (system actions).
+DROP POLICY IF EXISTS rls_gwl_case_actions_district ON gwl_case_actions;
 CREATE POLICY rls_gwl_case_actions_district ON gwl_case_actions
+    FOR ALL TO gnwaas_app
     USING (
         current_user_is_admin()
         OR district_id = current_district_id()
@@ -41,8 +47,11 @@ CREATE POLICY rls_gwl_case_actions_district ON gwl_case_actions
 -- Category change requests raised by GWL billing officers.
 -- district_id is NOT NULL (enforced by schema).
 ALTER TABLE reclassification_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reclassification_requests FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS rls_reclassification_requests_district ON reclassification_requests;
 CREATE POLICY rls_reclassification_requests_district ON reclassification_requests
+    FOR ALL TO gnwaas_app
     USING (
         current_user_is_admin()
         OR district_id = current_district_id()
@@ -52,8 +61,11 @@ CREATE POLICY rls_reclassification_requests_district ON reclassification_request
 -- Overbilling credit requests raised against a specific gwl_bill.
 -- district_id is NOT NULL (enforced by schema).
 ALTER TABLE credit_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_requests FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS rls_credit_requests_district ON credit_requests;
 CREATE POLICY rls_credit_requests_district ON credit_requests
+    FOR ALL TO gnwaas_app
     USING (
         current_user_is_admin()
         OR district_id = current_district_id()

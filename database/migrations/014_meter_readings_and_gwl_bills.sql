@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS meter_readings (
     pressure_bar        NUMERIC(6,3),                    -- Line pressure at read time
     read_method         VARCHAR(30) NOT NULL DEFAULT 'MANUAL',  -- OCR | MANUAL | AMR | CDC
     reader_id           UUID REFERENCES users(id),       -- NULL = automated / CDC
-    ocr_confidence      NUMERIC(5,2),                    -- 0-100 OCR confidence score
+    ocr_confidence      NUMERIC(5,2),                    -- 0.0-1.0 OCR confidence score (matches ocr-service output and sentinel threshold)
     photo_hash          VARCHAR(64),                     -- SHA-256 of meter photo
     photo_url           TEXT,                            -- Object-store URL
     gps_latitude        NUMERIC(10,8),

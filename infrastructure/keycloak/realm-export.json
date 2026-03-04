@@ -266,50 +266,85 @@
   "roles": {
     "realm": [
       {
+        "name": "SUPER_ADMIN",
+        "description": "GN-WAAS super administrator \u2014 full system access, cross-district",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      },
+      {
         "name": "SYSTEM_ADMIN",
-        "description": "Full system access"
+        "description": "System administrator \u2014 user management, configuration, audit oversight",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
       },
       {
-        "name": "DISTRICT_MANAGER",
-        "description": "District-level management"
+        "name": "MINISTER_VIEW",
+        "description": "Ministry of Finance / MoWS read-only executive dashboard",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
       },
       {
-        "name": "AUDIT_SUPERVISOR",
-        "description": "Audit workflow management"
+        "name": "GRA_OFFICER",
+        "description": "Ghana Revenue Authority officer \u2014 VAT compliance and e-invoice review",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      },
+      {
+        "name": "MOF_AUDITOR",
+        "description": "Ministry of Finance auditor \u2014 NRW financial analysis and reporting",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      },
+      {
+        "name": "GWL_EXECUTIVE",
+        "description": "Ghana Water Limited executive \u2014 strategic dashboard, read-only",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      },
+      {
+        "name": "GWL_MANAGER",
+        "description": "GWL district manager \u2014 case management, field dispatch, district reports",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      },
+      {
+        "name": "GWL_SUPERVISOR",
+        "description": "GWL billing supervisor \u2014 approve reclassifications and credit requests",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      },
+      {
+        "name": "GWL_ANALYST",
+        "description": "GWL billing analyst \u2014 review anomaly flags, prepare case notes",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
+      },
+      {
+        "name": "FIELD_SUPERVISOR",
+        "description": "Field audit supervisor \u2014 assign jobs, review evidence, escalate",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "gnwaas"
       },
       {
         "name": "FIELD_OFFICER",
-        "description": "Field audit execution"
-      },
-      {
-        "name": "GRA_LIAISON",
-        "description": "GRA compliance and VAT recovery"
-      },
-      {
-        "name": "FINANCE_ANALYST",
-        "description": "Financial reporting and NRW analysis"
-      },
-      {
-        "name": "READONLY_VIEWER",
-        "description": "Read-only access"
-      },
-      {
-        "name": "SUPER_ADMIN",
-        "description": "GN-WAAS Super Admin role",
+        "description": "Field audit officer \u2014 mobile app, meter reading, photo capture, GPS",
         "composite": false,
         "clientRole": false,
         "containerId": "gnwaas"
       },
       {
-        "name": "EXECUTIVE",
-        "description": "GN-WAAS Executive role",
-        "composite": false,
-        "clientRole": false,
-        "containerId": "gnwaas"
-      },
-      {
-        "name": "GWL_STAFF",
-        "description": "GN-WAAS Gwl Staff role",
+        "name": "MDA_USER",
+        "description": "Ministries, Departments and Agencies read-only user",
         "composite": false,
         "clientRole": false,
         "containerId": "gnwaas"
