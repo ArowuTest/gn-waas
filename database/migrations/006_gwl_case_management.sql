@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS gwl_case_actions (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_gwl_case_actions_flag    ON gwl_case_actions(anomaly_flag_id);
-CREATE INDEX idx_gwl_case_actions_account ON gwl_case_actions(account_id);
-CREATE INDEX idx_gwl_case_actions_created ON gwl_case_actions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gwl_case_actions_flag    ON gwl_case_actions(anomaly_flag_id);
+CREATE INDEX IF NOT EXISTS idx_gwl_case_actions_account ON gwl_case_actions(account_id);
+CREATE INDEX IF NOT EXISTS idx_gwl_case_actions_created ON gwl_case_actions(created_at DESC);
 
 -- ── Reclassification Requests ─────────────────────────────────────────────────
 -- When GWL agrees an account is in the wrong category, they raise a formal
@@ -70,9 +70,9 @@ CREATE TABLE IF NOT EXISTS reclassification_requests (
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_reclass_account  ON reclassification_requests(account_id);
-CREATE INDEX idx_reclass_status   ON reclassification_requests(status);
-CREATE INDEX idx_reclass_district ON reclassification_requests(district_id);
+CREATE INDEX IF NOT EXISTS idx_reclass_account  ON reclassification_requests(account_id);
+CREATE INDEX IF NOT EXISTS idx_reclass_status   ON reclassification_requests(status);
+CREATE INDEX IF NOT EXISTS idx_reclass_district ON reclassification_requests(district_id);
 
 -- ── Credit Requests ───────────────────────────────────────────────────────────
 -- When GN-WAAS detects overbilling, GWL can issue a credit to the customer.
@@ -111,9 +111,9 @@ CREATE TABLE IF NOT EXISTS credit_requests (
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_credit_account  ON credit_requests(account_id);
-CREATE INDEX idx_credit_status   ON credit_requests(status);
-CREATE INDEX idx_credit_district ON credit_requests(district_id);
+CREATE INDEX IF NOT EXISTS idx_credit_account  ON credit_requests(account_id);
+CREATE INDEX IF NOT EXISTS idx_credit_status   ON credit_requests(status);
+CREATE INDEX IF NOT EXISTS idx_credit_district ON credit_requests(district_id);
 
 -- ── GWL Monthly Reports ───────────────────────────────────────────────────────
 -- Auto-generated monthly summary reports for GWL management and Ministry of Finance.
@@ -151,8 +151,8 @@ CREATE TABLE IF NOT EXISTS gwl_monthly_reports (
     UNIQUE(report_period, district_id)
 );
 
-CREATE INDEX idx_gwl_reports_period   ON gwl_monthly_reports(report_period DESC);
-CREATE INDEX idx_gwl_reports_district ON gwl_monthly_reports(district_id);
+CREATE INDEX IF NOT EXISTS idx_gwl_reports_period   ON gwl_monthly_reports(report_period DESC);
+CREATE INDEX IF NOT EXISTS idx_gwl_reports_district ON gwl_monthly_reports(district_id);
 
 -- ── Add GWL-specific columns to anomaly_flags ─────────────────────────────────
 -- Extend the existing anomaly_flags table with GWL workflow columns

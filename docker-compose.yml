@@ -485,21 +485,27 @@ services:
     profiles:
       - seed
     environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}  # V19-CF-02 fix: was ${DB_PASSWORD:-gnwaas_dev_password}
+      # Password for gnwaas_user (used to run migrations)
+      PGPASSWORD: ${POSTGRES_PASSWORD:-gnwaas_dev_password_2026}
+      # V19-CF-02 fix: gnwaas_admin has a separate password set in init-db.sh.
+      # The previous config used PGPASSWORD (gnwaas_user's password) for both
+      # migrations AND seeds, causing authentication failure when running seeds
+      # as gnwaas_admin. PGPASSWORD_ADMIN carries the correct admin password.
+      PGPASSWORD_ADMIN: ${ADMIN_DB_PASSWORD:-gnwaas_admin_dev_2026}
     volumes:
       - ./database/migrations:/migrations
       - ./database/seeds:/seeds
     command: >
       sh -c "
         echo 'Running GN-WAAS database migrations...' &&
-        for f in /migrations/*.sql; do
+        for f in $$(ls /migrations/*.sql | sort -V); do
           echo "  Applying: $$f" &&
           psql -h postgres -U gnwaas_user -d gnwaas -f $$f || exit 1
         done &&
         echo 'Running GN-WAAS seed data...' &&
-        for f in /seeds/0*.sql; do
+        for f in $$(ls /seeds/0*.sql | sort -V); do
           echo "  Seeding: $$f" &&
-          psql -h postgres -U gnwaas_admin -d gnwaas -f $$f || exit 1
+          PGPASSWORD=$$PGPASSWORD_ADMIN psql -h postgres -U gnwaas_admin -d gnwaas -f $$f || exit 1
         done &&
         echo 'Database seeding complete!'
       "

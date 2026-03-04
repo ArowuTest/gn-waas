@@ -278,7 +278,7 @@ func (r *AuditEventRepository) GetByDistrictTx(
 	ctx context.Context,
 	q Querier,
 	districtID interface{},
-	status string,
+	status, graStatus string,
 	limit, offset int,
 ) ([]*domain.AuditEvent, int, error) {
 	args := []interface{}{districtID}

@@ -314,23 +314,39 @@ func (s *CDCSyncService) syncBillingRecords(ctx context.Context, gwlDB *pgxpool.
 			continue
 		}
 
+		// NEW-DB-02 fix: gwl_category is NOT NULL in gwl_bills.
+		// Default to RESIDENTIAL if the GWL source did not supply a category.
+		gwlCategory := mapped.GWLCategory
+		if gwlCategory == "" {
+			gwlCategory = "RESIDENTIAL"
+		}
+
 		rawJSON, _ := json.Marshal(rawRow)
 
+		// V19-DB-02 fix (complete):
+		//   vat_amount_ghs   → gwl_vat_ghs    (schema column name)
+		//   total_amount_ghs → gwl_total_ghs   (schema column name)
+		//   bill_date        → gwl_read_date   (schema column name)
+		//   gwl_category     added (NOT NULL, was omitted — NEW-DB-02)
+		//   raw_gwl_data     now exists via migration 020 (NEW-DB-01)
 		_, err = s.gnwaasDB.Exec(ctx, `
 			INSERT INTO gwl_bills (
 				gwl_bill_id, account_id, billing_period_start, billing_period_end,
-				consumption_m3, gwl_amount_ghs, vat_amount_ghs, total_amount_ghs,
-				bill_date, payment_status, raw_gwl_data
-			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+				consumption_m3, gwl_category, gwl_amount_ghs, gwl_vat_ghs, gwl_total_ghs,
+				gwl_read_date, payment_status, raw_gwl_data
+			) VALUES ($1,$2::uuid,$3,$4,$5,$6::account_category,$7,$8,$9,$10,$11,$12)
 			ON CONFLICT (gwl_bill_id) DO UPDATE SET
 				consumption_m3 = EXCLUDED.consumption_m3,
+				gwl_category   = EXCLUDED.gwl_category,
 				gwl_amount_ghs = EXCLUDED.gwl_amount_ghs,
-				vat_amount_ghs = EXCLUDED.vat_amount_ghs,
-				total_amount_ghs = EXCLUDED.total_amount_ghs,
-				payment_status = EXCLUDED.payment_status`,  -- V19-DB-02 fix: was billed_amount_ghs
+				gwl_vat_ghs    = EXCLUDED.gwl_vat_ghs,
+				gwl_total_ghs  = EXCLUDED.gwl_total_ghs,
+				gwl_read_date  = EXCLUDED.gwl_read_date,
+				payment_status = EXCLUDED.payment_status,
+				raw_gwl_data   = EXCLUDED.raw_gwl_data`,
 			mapped.GWLBillID, accountID,
 			mapped.BillingPeriodStart, mapped.BillingPeriodEnd,
-			mapped.ConsumptionM3, mapped.GWLAmountGHS, mapped.GWLVatGHS, mapped.GWLTotalGHS,
+			mapped.ConsumptionM3, gwlCategory, mapped.GWLAmountGHS, mapped.GWLVatGHS, mapped.GWLTotalGHS,
 			mapped.GWLReadDate, mapped.PaymentStatus, string(rawJSON),
 		)
 		if err != nil {
@@ -395,7 +411,8 @@ func (s *CDCSyncService) syncMeterReadings(ctx context.Context, gwlDB *pgxpool.P
 
 		readingDate := toTime(rawRow["reading_date"])
 		readingValue := toFloat64(rawRow["current_reading"])
-		// V19-DB-01: GN-WAAS schema uses read_method (not reading_type)
+
+		// V19-DB-01 fix: GN-WAAS schema uses read_method (not reading_type)
 		readMethod := toString(rawRow["reading_type"])
 		if readMethod == "" {
 			readMethod = "MANUAL"
@@ -403,14 +420,17 @@ func (s *CDCSyncService) syncMeterReadings(ctx context.Context, gwlDB *pgxpool.P
 
 		rawJSON, _ := json.Marshal(rawRow)
 
+		// NEW-DB-01 fix: raw_gwl_data column now exists via migration 020.
+		// V19-DB-01 fix: column names corrected to reading_m3 / read_method.
 		_, err = s.gnwaasDB.Exec(ctx, `
 			INSERT INTO meter_readings (
 				account_id, reading_date, reading_m3,
 				read_method, raw_gwl_data
 			) VALUES ($1::uuid,$2,$3,$4,$5)
 			ON CONFLICT (account_id, reading_date) DO UPDATE SET
-				reading_m3  = EXCLUDED.reading_m3,
-				read_method = EXCLUDED.read_method`,  -- V19-DB-01 fix: was reading_value_m3/reading_type
+				reading_m3   = EXCLUDED.reading_m3,
+				read_method  = EXCLUDED.read_method,
+				raw_gwl_data = EXCLUDED.raw_gwl_data`,
 			accountID, readingDate, readingValue, readMethod, string(rawJSON),
 		)
 		if err != nil {

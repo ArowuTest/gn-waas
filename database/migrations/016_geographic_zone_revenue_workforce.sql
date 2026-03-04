@@ -59,10 +59,10 @@ CREATE TABLE IF NOT EXISTS revenue_recovery_events (
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_revenue_recovery_district  ON revenue_recovery_events(district_id);
-CREATE INDEX idx_revenue_recovery_account   ON revenue_recovery_events(account_id);
-CREATE INDEX idx_revenue_recovery_status    ON revenue_recovery_events(status);
-CREATE INDEX idx_revenue_recovery_created   ON revenue_recovery_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_revenue_recovery_district  ON revenue_recovery_events(district_id);
+CREATE INDEX IF NOT EXISTS idx_revenue_recovery_account   ON revenue_recovery_events(account_id);
+CREATE INDEX IF NOT EXISTS idx_revenue_recovery_status    ON revenue_recovery_events(status);
+CREATE INDEX IF NOT EXISTS idx_revenue_recovery_created   ON revenue_recovery_events(created_at DESC);
 
 COMMENT ON TABLE revenue_recovery_events IS
     'Each row represents one revenue recovery event triggered by a GN-WAAS audit. '
@@ -87,8 +87,8 @@ EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'TimescaleDB not available — officer_gps_tracks will be a plain table: %', SQLERRM;
 END $hyper$;
 
-CREATE INDEX idx_gps_tracks_officer  ON officer_gps_tracks(officer_id, recorded_at DESC);
-CREATE INDEX idx_gps_tracks_job      ON officer_gps_tracks(field_job_id) WHERE field_job_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_gps_tracks_officer  ON officer_gps_tracks(officer_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gps_tracks_job      ON officer_gps_tracks(field_job_id) WHERE field_job_id IS NOT NULL;
 
 COMMENT ON TABLE officer_gps_tracks IS
     'GPS breadcrumb trail for field officers. Enables the Admin Portal Workforce '
