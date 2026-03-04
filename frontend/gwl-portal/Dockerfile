@@ -4,7 +4,7 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Accept build-time API URL (injected by docker-compose build args)
-ARG VITE_API_URL=http://localhost:3000
+ARG VITE_API_URL=""
 ARG VITE_KEYCLOAK_URL=http://localhost:8080
 ARG VITE_KEYCLOAK_REALM=gnwaas
 ARG VITE_KEYCLOAK_CLIENT_ID=gnwaas-portal

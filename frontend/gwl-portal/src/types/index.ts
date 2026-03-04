@@ -1,5 +1,24 @@
 // ─── GWL Portal Type Definitions ─────────────────────────────────────────────
 
+// ── RBAC User Roles (matches user_role SQL enum + Keycloak realm roles) ───────
+// SEC-C01 fix: canonical role set must be identical across all layers:
+//   PostgreSQL user_role enum, backend knownRoles map, Keycloak realm-export.json,
+//   and all frontend UserRole types.
+export type UserRole =
+  | 'SUPER_ADMIN'
+  | 'SYSTEM_ADMIN'
+  | 'MINISTER_VIEW'
+  | 'GRA_OFFICER'
+  | 'MOF_AUDITOR'
+  | 'GWL_EXECUTIVE'
+  | 'GWL_MANAGER'
+  | 'GWL_SUPERVISOR'
+  | 'GWL_ANALYST'
+  | 'FIELD_SUPERVISOR'
+  | 'FIELD_OFFICER'
+  | 'MDA_USER'
+
+
 export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export type GWLStatus =
   | 'PENDING_REVIEW'

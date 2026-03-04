@@ -549,11 +549,31 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	gwl.Get("/reports/monthly", gwlHandler.GetMonthlyReport)
 
 	// ── Report export endpoints (server-generated PDF + CSV) ──────────────────
-	reports.Get("/monthly/pdf",          reportHandler.GetMonthlyReportPDF)
-	reports.Get("/monthly/csv",          reportHandler.GetMonthlyReportCSV)
-	reports.Get("/gra-compliance/csv",   reportHandler.GetGRAComplianceCSV)
-	reports.Get("/audit-trail/csv",      reportHandler.GetAuditTrailCSV)
-	reports.Get("/field-jobs/csv",       reportHandler.GetFieldJobsCSV)
+	// RBAC-REPORT-01 fix: report exports are sensitive regulatory documents.
+	// Restrict to roles that legitimately need them:
+	//   Monthly PDF/CSV  — management and auditors
+	//   GRA Compliance   — GRA officers and auditors
+	//   Audit Trail      — system admins and auditors
+	//   Field Jobs       — supervisors and management
+	reportAdminRoles := middleware.RequireRoles(
+		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR",
+		"GWL_EXECUTIVE", "GWL_MANAGER", "GWL_SUPERVISOR",
+	)
+	reportGRARoles := middleware.RequireRoles(
+		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GRA_OFFICER",
+		"GWL_EXECUTIVE", "GWL_MANAGER",
+	)
+	reports.Get("/monthly/pdf",        reportAdminRoles, reportHandler.GetMonthlyReportPDF)
+	reports.Get("/monthly/csv",        reportAdminRoles, reportHandler.GetMonthlyReportCSV)
+	reports.Get("/gra-compliance/csv", reportGRARoles,   reportHandler.GetGRAComplianceCSV)
+	reports.Get("/audit-trail/csv",    reportAdminRoles, reportHandler.GetAuditTrailCSV)
+	reports.Get("/field-jobs/csv",
+		middleware.RequireRoles(
+			"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR",
+			"GWL_MANAGER", "GWL_SUPERVISOR", "FIELD_SUPERVISOR",
+		),
+		reportHandler.GetFieldJobsCSV,
+	)
 
 	// ── Core Data Endpoints (BE-7) ───────────────────────────────────────────
 	// Read-only access to production, meter-reading, water-balance, billing data.
