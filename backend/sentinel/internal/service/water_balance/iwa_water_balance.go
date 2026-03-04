@@ -573,7 +573,7 @@ func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceRes
 
 // RunAllDistricts computes the water balance for all active districts
 func (s *IWAWaterBalanceService) RunAllDistricts(ctx context.Context, periodStart, periodEnd time.Time) ([]*WaterBalanceResult, error) {
-	rows, err := s.db.Query(ctx, `SELECT id FROM districts WHERE is_active = true ORDER BY name`)
+	rows, err := s.db.Query(ctx, `SELECT id FROM districts WHERE is_active = true ORDER BY district_name`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list districts: %w", err)
 	}

@@ -24,9 +24,25 @@
 ALTER TABLE shadow_bills
     DROP CONSTRAINT IF EXISTS shadow_bills_gwl_bill_id_fkey;
 
+-- ─── Step 1b: Remove FKs from anomaly_flags → gwl_billing_records ────────────
+-- anomaly_flags.gwl_bill_id was defined in migration 004 as:
+--   gwl_bill_id UUID REFERENCES gwl_billing_records(id)
+-- PostgreSQL auto-names this FK as anomaly_flags_gwl_bill_id_fkey.
+-- Must be dropped before the table can be dropped.
+ALTER TABLE anomaly_flags
+    DROP CONSTRAINT IF EXISTS anomaly_flags_gwl_bill_id_fkey;
+
+-- ─── Step 1c: Remove FKs from credit_requests → gwl_billing_records ──────────
+-- credit_requests.gwl_bill_id was defined in migration 006 as:
+--   gwl_bill_id UUID REFERENCES gwl_billing_records(id)
+-- PostgreSQL auto-names this FK as credit_requests_gwl_bill_id_fkey.
+-- Must be dropped before the table can be dropped.
+ALTER TABLE credit_requests
+    DROP CONSTRAINT IF EXISTS credit_requests_gwl_bill_id_fkey;
+
 -- ─── Step 2: Drop the empty gwl_billing_records table ────────────────────────
 -- Safe: the table was never populated (cdc-ingestor always wrote to gwl_bills).
--- The FK from shadow_bills has already been dropped above.
+-- All FKs referencing it have been dropped above.
 DROP TABLE IF EXISTS gwl_billing_records;
 
 -- ─── Step 3: Recreate gwl_billing_records as a compatibility VIEW ─────────────
@@ -77,12 +93,23 @@ ALTER TABLE shadow_bills
     ADD CONSTRAINT shadow_bills_gwl_bill_id_fkey
     FOREIGN KEY (gwl_bill_id) REFERENCES gwl_bills(id) ON DELETE CASCADE;
 
--- ─── Step 6: Grant DELETE on all tables to gnwaas_app ────────────────────────
+-- ─── Step 6: Restore FKs from anomaly_flags and credit_requests → gwl_bills ──
+-- Now that gwl_billing_records is a VIEW (not a table), FKs cannot reference it.
+-- Instead, point directly to gwl_bills(id) which is the actual source of truth.
+ALTER TABLE anomaly_flags
+    ADD CONSTRAINT anomaly_flags_gwl_bill_id_fkey
+    FOREIGN KEY (gwl_bill_id) REFERENCES gwl_bills(id) ON DELETE SET NULL;
+
+ALTER TABLE credit_requests
+    ADD CONSTRAINT credit_requests_gwl_bill_id_fkey
+    FOREIGN KEY (gwl_bill_id) REFERENCES gwl_bills(id) ON DELETE SET NULL;
+
+-- ─── Step 7: Grant DELETE on all tables to gnwaas_app ────────────────────────
 -- Migration 012 only granted SELECT, INSERT, UPDATE. DELETE is needed for
 -- operations like cancelling field jobs and removing stale records.
 -- SEC-01 prerequisite: gnwaas_app must have full DML permissions.
 GRANT DELETE ON ALL TABLES IN SCHEMA public TO gnwaas_app;
 
--- ─── Step 7: Grant EXECUTE on all functions to gnwaas_app ────────────────────
+-- ─── Step 8: Grant EXECUTE on all functions to gnwaas_app ────────────────────
 -- Needed for RLS helper functions (current_district_id, current_user_is_admin, etc.)
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO gnwaas_app;
