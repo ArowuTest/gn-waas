@@ -138,9 +138,11 @@ func Middleware(pool *pgxpool.Pool, logger *zap.Logger) fiber.Handler {
 		}
 
 		if txErr != nil {
-			// Non-fatal: log and proceed without RLS rather than blocking the request.
-			// This should trigger an alert in production monitoring.
-			logger.Warn("RLS middleware: failed to begin RLS transaction — proceeding WITHOUT RLS enforcement",
+			// BE-M01 fix: a failure to begin the RLS transaction must be a hard failure.
+			// Proceeding without RLS would silently expose cross-district data, which is
+			// a critical security vulnerability. Return HTTP 500 immediately so the caller
+			// knows the request was not processed, and ops are alerted via error logs.
+			logger.Error("RLS middleware: failed to begin RLS transaction — rejecting request (BE-M01)",
 				zap.Error(txErr),
 				zap.String("user_id", rlsCtx.UserID),
 				zap.String("user_role", rlsCtx.UserRole),
@@ -148,7 +150,10 @@ func Middleware(pool *pgxpool.Pool, logger *zap.Logger) fiber.Handler {
 				zap.String("path", c.Path()),
 				zap.String("method", c.Method()),
 			)
-			return c.Next()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":   "RLS_TRANSACTION_FAILED",
+				"message": "Unable to establish a secure database context. Please retry.",
+			})
 		}
 
 		// Store the RLS-activated transaction in the Go request context.

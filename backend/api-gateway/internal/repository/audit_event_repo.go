@@ -229,6 +229,7 @@ func (r *AuditEventRepository) GetDashboardStats(ctx context.Context, districtID
 // Mirrors the request body in audit_handler.go ReportIllegalConnection.
 type IllegalConnectionReport struct {
 	OfficerID                string
+	DistrictID               string   // SEC-H01 fix: district of the reporting officer
 	JobID                    string
 	ConnectionType           string
 	Severity                 string
@@ -247,17 +248,19 @@ type IllegalConnectionReport struct {
 // Uses r.q(ctx) so the INSERT runs inside the RLS-activated transaction.
 func (r *AuditEventRepository) CreateIllegalConnection(ctx context.Context, rep *IllegalConnectionReport) (uuid.UUID, error) {
 	var reportID uuid.UUID
+	// SEC-H01 fix: include district_id so RLS policy can enforce district isolation.
+	// district_id is populated from the reporting officer's JWT district claim.
 	err := r.q(ctx).QueryRow(ctx, `
 		INSERT INTO illegal_connections (
-			officer_id, job_id, connection_type, severity, description,
+			officer_id, district_id, job_id, connection_type, severity, description,
 			estimated_daily_loss_litres, address, account_number,
 			latitude, longitude, gps_accuracy, photo_count, photo_hashes, reported_at
 		) VALUES (
-			$1::uuid, $2::uuid, $3, $4, $5,
-			$6, $7, $8,
-			$9, $10, $11, $12, $13, NOW()
+			$1::uuid, NULLIF($2, '')::uuid, NULLIF($3, '')::uuid, $4, $5, $6,
+			$7, $8, $9,
+			$10, $11, $12, $13, $14, NOW()
 		) RETURNING id`,
-		rep.OfficerID, rep.JobID, rep.ConnectionType, rep.Severity, rep.Description,
+		rep.OfficerID, rep.DistrictID, rep.JobID, rep.ConnectionType, rep.Severity, rep.Description,
 		rep.EstimatedDailyLossLitres, rep.Address, rep.AccountNumber,
 		rep.Latitude, rep.Longitude, rep.GPSAccuracy, rep.PhotoCount, rep.PhotoHashes,
 	).Scan(&reportID)

@@ -83,26 +83,70 @@ COMMENT ON VIEW gwl_billing_records IS
 -- Required for the ON CONFLICT (gwl_bill_id) DO UPDATE clause in
 -- shadow_bill_repo.go (tariff-engine). Without this, the first duplicate
 -- insert crashes with SQLSTATE 42P10.
-ALTER TABLE shadow_bills
-    ADD CONSTRAINT shadow_bills_gwl_bill_id_unique
-    UNIQUE (gwl_bill_id);
+-- DB-H01 fix: wrapped in idempotent DO block so re-running the migration
+-- on a database where the constraint already exists does not fail.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'shadow_bills'::regclass
+          AND conname   = 'shadow_bills_gwl_bill_id_unique'
+    ) THEN
+        ALTER TABLE shadow_bills
+            ADD CONSTRAINT shadow_bills_gwl_bill_id_unique
+            UNIQUE (gwl_bill_id);
+    END IF;
+END;
+$$;
 
 -- ─── Step 5: Add FK from shadow_bills.gwl_bill_id → gwl_bills.id ─────────────
 -- Restores referential integrity, now pointing to the populated table.
-ALTER TABLE shadow_bills
-    ADD CONSTRAINT shadow_bills_gwl_bill_id_fkey
-    FOREIGN KEY (gwl_bill_id) REFERENCES gwl_bills(id) ON DELETE CASCADE;
+-- DB-H01 fix: idempotent DO block.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'shadow_bills'::regclass
+          AND conname   = 'shadow_bills_gwl_bill_id_fkey'
+    ) THEN
+        ALTER TABLE shadow_bills
+            ADD CONSTRAINT shadow_bills_gwl_bill_id_fkey
+            FOREIGN KEY (gwl_bill_id) REFERENCES gwl_bills(id) ON DELETE CASCADE;
+    END IF;
+END;
+$$;
 
 -- ─── Step 6: Restore FKs from anomaly_flags and credit_requests → gwl_bills ──
 -- Now that gwl_billing_records is a VIEW (not a table), FKs cannot reference it.
 -- Instead, point directly to gwl_bills(id) which is the actual source of truth.
-ALTER TABLE anomaly_flags
-    ADD CONSTRAINT anomaly_flags_gwl_bill_id_fkey
-    FOREIGN KEY (gwl_bill_id) REFERENCES gwl_bills(id) ON DELETE SET NULL;
+-- DB-H01 fix: idempotent DO blocks for both constraints.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'anomaly_flags'::regclass
+          AND conname   = 'anomaly_flags_gwl_bill_id_fkey'
+    ) THEN
+        ALTER TABLE anomaly_flags
+            ADD CONSTRAINT anomaly_flags_gwl_bill_id_fkey
+            FOREIGN KEY (gwl_bill_id) REFERENCES gwl_bills(id) ON DELETE SET NULL;
+    END IF;
+END;
+$$;
 
-ALTER TABLE credit_requests
-    ADD CONSTRAINT credit_requests_gwl_bill_id_fkey
-    FOREIGN KEY (gwl_bill_id) REFERENCES gwl_bills(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'credit_requests'::regclass
+          AND conname   = 'credit_requests_gwl_bill_id_fkey'
+    ) THEN
+        ALTER TABLE credit_requests
+            ADD CONSTRAINT credit_requests_gwl_bill_id_fkey
+            FOREIGN KEY (gwl_bill_id) REFERENCES gwl_bills(id) ON DELETE SET NULL;
+    END IF;
+END;
+$$;
 
 -- ─── Step 7: Grant DELETE on all tables to gnwaas_app ────────────────────────
 -- Migration 012 only granted SELECT, INSERT, UPDATE. DELETE is needed for

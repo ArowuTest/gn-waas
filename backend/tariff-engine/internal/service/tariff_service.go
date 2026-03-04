@@ -140,9 +140,12 @@ func (s *TariffService) CalculateShadowBill(
 		calc.VariancePct = roundPct((calc.VarianceGHS / req.GWLTotalGHS) * 100)
 	}
 
-	// Load variance threshold from system_config (admin-configurable via admin portal)
-	// Default: 15.0% — matches seed data value SHADOW_BILL_VARIANCE_THRESHOLD
-	varianceThreshold, err := s.configRepo.GetFloat64(ctx, "SHADOW_BILL_VARIANCE_THRESHOLD", 15.0)
+	// Load variance threshold from system_config (admin-configurable via admin portal).
+	// BE-H01 fix: the seed data key is "sentinel.shadow_bill_variance_pct" (see
+	// database/seeds/001_system_config.sql). The previous key "SHADOW_BILL_VARIANCE_THRESHOLD"
+	// never matched, causing the service to always fall back to the hardcoded 15.0 default
+	// and making the admin-configurable threshold completely ineffective.
+	varianceThreshold, err := s.configRepo.GetFloat64(ctx, "sentinel.shadow_bill_variance_pct", 15.0)
 	if err != nil {
 		s.logger.Warn("Failed to load variance threshold from system_config, using default 15%",
 			zap.Error(err),

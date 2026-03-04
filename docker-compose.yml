@@ -61,7 +61,7 @@ services:
     image: redis:7.2-alpine
     container_name: gnwaas-redis
     restart: unless-stopped
-    command: redis-server --requirepass gnwaas_redis_2026 --appendonly yes
+    command: redis-server --requirepass ${REDIS_PASSWORD:-gnwaas_redis_dev_2026} --appendonly yes
     ports:
       - "6379:6379"
     volumes:
@@ -70,7 +70,7 @@ services:
       gnwaas-network:
         ipv4_address: 172.20.0.11
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "gnwaas_redis_2026", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-gnwaas_redis_dev_2026}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -157,7 +157,7 @@ services:
       DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: gnwaas_redis_2026
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-gnwaas_redis_dev_2026}
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: gnwaas
       KEYCLOAK_CLIENT_ID: gnwaas-api
@@ -212,7 +212,7 @@ services:
       DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: gnwaas_redis_2026
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-gnwaas_redis_dev_2026}
     ports:
       - "3002:3002"
     healthcheck:
@@ -282,7 +282,8 @@ services:
       GRA_API_BASE_URL: https://vsdc.gra.gov.gh/api/v8.1
       GRA_API_KEY: ""
       GRA_BUSINESS_TIN: ""
-      GRA_SANDBOX_MODE: "${GRA_SANDBOX_MODE:-true}"
+      # BE-M02 fix: default to false in production. Set GRA_SANDBOX_MODE=true ONLY for local dev.
+      GRA_SANDBOX_MODE: "${GRA_SANDBOX_MODE:-false}"
     ports:
       - "3004:3004"
     healthcheck:
@@ -378,6 +379,8 @@ services:
         VITE_KEYCLOAK_REALM: gnwaas
         VITE_KEYCLOAK_CLIENT_ID: gnwaas-admin
         VITE_MAPBOX_TOKEN: ""
+        # FE-H01 fix: explicitly disable dev mode in production Docker builds
+        VITE_DEV_MODE: "false"
     container_name: gnwaas-admin-portal
     restart: unless-stopped
     ports:
@@ -408,6 +411,7 @@ services:
         VITE_KEYCLOAK_URL: http://localhost:8080
         VITE_KEYCLOAK_REALM: gnwaas
         VITE_KEYCLOAK_CLIENT_ID: gnwaas-gwl
+        VITE_DEV_MODE: "false"
     container_name: gnwaas-gwl-portal
     restart: unless-stopped
     ports:
@@ -436,6 +440,7 @@ services:
         VITE_KEYCLOAK_URL: http://localhost:8080
         VITE_KEYCLOAK_REALM: gnwaas
         VITE_KEYCLOAK_CLIENT_ID: gnwaas-authority
+        VITE_DEV_MODE: "false"
     container_name: gnwaas-authority-portal
     restart: unless-stopped
     ports:

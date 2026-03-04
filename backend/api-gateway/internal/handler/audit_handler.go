@@ -820,10 +820,16 @@ func (h *FieldJobHandler) ReportIllegalConnection(c *fiber.Ctx) error {
 		// Non-fatal: log the discrepancy but proceed — hashes may be missing for offline submissions
 	}
 
+	// SEC-H01 fix: extract district_id from the RLS context (set by JWT middleware)
+	// so the illegal connection report is associated with the officer's district.
+	// This enables the RLS policy on illegal_connections to enforce district isolation.
+	districtIDForReport, _ := c.Locals("rls_district_id").(string)
+
 	// Use the repository method so the INSERT runs inside the RLS-activated
 	// transaction from rls.Middleware — no raw DB() bypass.
 	reportID, err := h.auditRepo.CreateIllegalConnection(c.UserContext(), &repository.IllegalConnectionReport{
 		OfficerID:                officerID,
+		DistrictID:               districtIDForReport,
 		JobID:                    derefString(req.JobID),
 		ConnectionType:           req.ConnectionType,
 		Severity:                 req.Severity,

@@ -30,6 +30,11 @@ type Claims struct {
 	// DistrictID is a custom Keycloak claim populated via a User Attribute mapper.
 	// It restricts district-scoped roles to their assigned district.
 	DistrictID        string              `json:"district_id,omitempty"`
+	// GnwaasRole is a dedicated single-value claim set by the Keycloak
+	// "gnwaas_role" User Attribute mapper. Using a dedicated claim avoids the
+	// fragile RealmAccess.Roles[0] pattern (SEC-M01 fix). When present, this
+	// claim is used as the authoritative primary role for RLS context.
+	GnwaasRole        string              `json:"gnwaas_role,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -269,8 +274,9 @@ func AuthMiddleware(cfg AuthConfig, logger *zap.Logger) fiber.Handler {
 		if districtID == "" {
 			districtID = "00000000-0000-0000-0000-000000000000"
 		}
-		primaryRole := ""
-		if len(claims.RealmAccess.Roles) > 0 {
+		// SEC-M01 fix: prefer dedicated gnwaas_role claim over array[0]
+		primaryRole := claims.GnwaasRole
+		if primaryRole == "" && len(claims.RealmAccess.Roles) > 0 {
 			primaryRole = claims.RealmAccess.Roles[0]
 		}
 		c.Locals("rls_district_id", districtID)
@@ -416,9 +422,14 @@ func SetRLSContext() fiber.Handler {
 			districtID = "00000000-0000-0000-0000-000000000000"
 		}
 
-		// Determine primary role (first realm role)
-		primaryRole := ""
-		if len(claims.RealmAccess.Roles) > 0 {
+		// SEC-M01 fix: Prefer the dedicated gnwaas_role claim over the fragile
+		// RealmAccess.Roles[0] pattern. The gnwaas_role claim is set by a
+		// Keycloak User Attribute mapper and always contains exactly one role,
+		// eliminating ambiguity caused by JWT role array ordering.
+		// Fall back to the first realm role only if gnwaas_role is absent
+		// (e.g. legacy tokens or non-Keycloak test environments).
+		primaryRole := claims.GnwaasRole
+		if primaryRole == "" && len(claims.RealmAccess.Roles) > 0 {
 			primaryRole = claims.RealmAccess.Roles[0]
 		}
 
