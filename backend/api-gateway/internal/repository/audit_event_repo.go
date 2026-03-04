@@ -131,13 +131,24 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 	r.q(ctx).QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM audit_events WHERE %s", where), args...).Scan(&total)
 
 	args = append(args, limit, offset)
+	// FIX: expanded SELECT to include fields required by GRACompliancePage and AuditsPage:
+	// account_number, account_holder (from water_accounts), district_name (from districts),
+	// gra_sdc_id (receipt number), gra_qr_code_url, gra_signed_at, confirmed_loss_ghs, success_fee_ghs
 	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
-		SELECT id, audit_reference, account_id, district_id, anomaly_flag_id,
-		       status, assigned_officer_id, gra_status,
-		       gwl_billed_ghs, shadow_bill_ghs, variance_pct,
-		       is_locked, created_at, updated_at
-		FROM audit_events WHERE %s
-		ORDER BY created_at DESC
+		SELECT ae.id, ae.audit_reference, ae.account_id, ae.district_id, ae.anomaly_flag_id,
+		       ae.status, ae.assigned_officer_id, ae.gra_status,
+		       ae.gwl_billed_ghs, ae.shadow_bill_ghs, ae.variance_pct,
+		       ae.confirmed_loss_ghs, ae.success_fee_ghs,
+		       ae.gra_sdc_id, ae.gra_qr_code_url, ae.gra_signed_at,
+		       ae.is_locked, ae.created_at, ae.updated_at,
+		       COALESCE(wa.account_number, '')  AS account_number,
+		       COALESCE(wa.customer_name, '')   AS account_holder,
+		       COALESCE(d.district_name, '')    AS district_name
+		FROM audit_events ae
+		LEFT JOIN water_accounts wa ON wa.id = ae.account_id
+		LEFT JOIN districts d ON d.id = ae.district_id
+		WHERE %s
+		ORDER BY ae.created_at DESC
 		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1), args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("GetByDistrict failed: %w", err)
@@ -151,7 +162,10 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 			&e.ID, &e.AuditReference, &e.AccountID, &e.DistrictID, &e.AnomalyFlagID,
 			&e.Status, &e.AssignedOfficerID, &e.GRAStatus,
 			&e.GWLBilledGHS, &e.ShadowBillGHS, &e.VariancePct,
+			&e.ConfirmedLossGHS, &e.SuccessFeeGHS,
+			&e.GRASDCId, &e.GRAQRCodeURL, &e.GRASignedAt,
 			&e.IsLocked, &e.CreatedAt, &e.UpdatedAt,
+			&e.AccountNumber, &e.AccountHolder, &e.DistrictName,
 		)
 		if err != nil {
 			return nil, 0, err

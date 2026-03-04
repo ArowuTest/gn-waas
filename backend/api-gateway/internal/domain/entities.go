@@ -48,6 +48,10 @@ type AuditEvent struct {
 	Notes                 *string    `db:"notes" json:"notes,omitempty"`
 	CreatedAt             time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt             time.Time  `db:"updated_at" json:"updated_at"`
+	// Denormalised fields populated by GetByDistrict JOIN (for GRACompliancePage / AuditsPage)
+	AccountNumber         string     `json:"account_number,omitempty"`
+	AccountHolder         string     `json:"account_holder,omitempty"`
+	DistrictName          string     `json:"district_name,omitempty"`
 }
 
 // FieldJob represents a field officer dispatch job

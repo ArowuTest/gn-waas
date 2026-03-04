@@ -10,8 +10,8 @@ export function AnomaliesPage() {
   const [selectedAnomaly, setSelectedAnomaly] = useState<typeof anomalies[0] | null>(null)
   const [filters, setFilters] = useState({
     district_id: '',
-    level: '',
-    type: '',
+    severity: '',   // FIX: backend reads 'severity', not 'level'
+    anomaly_type: '', // FIX: backend now accepts 'anomaly_type' filter
     status: 'OPEN',
     limit: 25,
     offset: 0,
@@ -73,8 +73,8 @@ export function AnomaliesPage() {
 
           <select
             className="input w-36"
-            value={filters.level}
-            onChange={e => setFilters(f => ({ ...f, level: e.target.value, offset: 0 }))}
+            value={filters.severity}
+            onChange={e => setFilters(f => ({ ...f, severity: e.target.value, offset: 0 }))}
           >
             <option value="">All Levels</option>
             <option value="CRITICAL">Critical</option>
@@ -85,8 +85,8 @@ export function AnomaliesPage() {
 
           <select
             className="input w-48"
-            value={filters.type}
-            onChange={e => setFilters(f => ({ ...f, type: e.target.value, offset: 0 }))}
+            value={filters.anomaly_type}
+            onChange={e => setFilters(f => ({ ...f, anomaly_type: e.target.value, offset: 0 }))}
           >
             <option value="">All Types</option>
             <option value="SHADOW_BILL_VARIANCE">Shadow Bill Variance</option>
@@ -104,7 +104,7 @@ export function AnomaliesPage() {
           >
             <option value="">All Statuses</option>
             <option value="OPEN">Open</option>
-            <option value="IN_PROGRESS">In Progress</option>
+            <option value="ACKNOWLEDGED">Acknowledged</option>
             <option value="RESOLVED">Resolved</option>
             <option value="FALSE_POSITIVE">False Positive</option>
           </select>

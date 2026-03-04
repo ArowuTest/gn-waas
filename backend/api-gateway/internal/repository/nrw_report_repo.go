@@ -55,6 +55,7 @@ type NRWSummaryRow struct {
 	DataConfidenceGrade *int      `json:"data_confidence_grade"`
 	IsPilotDistrict     bool      `json:"is_pilot_district"`
 	Grade               string    `json:"grade"` // A/B/C/D/F derived from loss_ratio_pct
+	ZoneType            *string   `json:"zone_type,omitempty"` // FIX: added for frontend NRWSummaryPage
 }
 
 // GetNRWSummary returns NRW performance per district for the given period.
@@ -97,7 +98,8 @@ func (r *NRWReportRepository) GetNRWSummary(ctx context.Context, districtID *uui
 			COALESCE(audit_stats.total_recovered, 0)                     AS total_recovered_ghs,
 			d.loss_ratio_pct,
 			d.data_confidence_grade,
-			d.is_pilot_district
+			d.is_pilot_district,
+			d.zone_type
 		FROM districts d
 		LEFT JOIN (
 			SELECT district_id,
@@ -143,7 +145,7 @@ func (r *NRWReportRepository) GetNRWSummary(ctx context.Context, districtID *uui
 			&row.TotalAccounts, &row.FlaggedAccounts,
 			&row.OpenAnomalies, &row.CriticalAnomalies, &row.HighAnomalies,
 			&row.TotalEstimatedLoss, &row.TotalConfirmedLoss, &row.TotalRecovered,
-			&row.LossRatioPct, &row.DataConfidenceGrade, &row.IsPilotDistrict,
+			&row.LossRatioPct, &row.DataConfidenceGrade, &row.IsPilotDistrict, &row.ZoneType,
 		)
 		if err != nil {
 			return nil, err

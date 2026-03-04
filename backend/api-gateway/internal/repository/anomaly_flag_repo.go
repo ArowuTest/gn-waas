@@ -85,6 +85,7 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 	districtID *uuid.UUID,
 	severity string,
 	status string,
+	anomalyType string, // FIX: added anomaly_type filter
 	limit, offset int,
 ) ([]AnomalyFlag, int, error) {
 	if limit <= 0 || limit > 200 {
@@ -109,6 +110,12 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 	if status != "" {
 		where += " AND status = $" + itoa(argIdx)
 		args = append(args, status)
+		argIdx++
+	}
+	// FIX: anomaly_type filter (from frontend type dropdown)
+	if anomalyType != "" {
+		where += " AND anomaly_type = $" + itoa(argIdx)
+		args = append(args, anomalyType)
 		argIdx++
 	}
 
@@ -169,6 +176,7 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 	districtID *uuid.UUID,
 	severity string,
 	status string,
+	anomalyType string,
 	limit, offset int,
 ) ([]AnomalyFlag, int, error) {
 	if limit <= 0 || limit > 200 {
@@ -193,6 +201,12 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 	if status != "" {
 		where += " AND status = $" + itoa(argIdx)
 		args = append(args, status)
+		argIdx++
+	}
+	// FIX: anomaly_type filter (from frontend type dropdown)
+	if anomalyType != "" {
+		where += " AND anomaly_type = $" + itoa(argIdx)
+		args = append(args, anomalyType)
 		argIdx++
 	}
 

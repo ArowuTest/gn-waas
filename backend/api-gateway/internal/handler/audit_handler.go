@@ -393,8 +393,9 @@ func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	severity := c.Query("severity")
-	status := c.Query("status")
+	severity    := c.Query("severity")
+	status      := c.Query("status")
+	anomalyType := c.Query("anomaly_type") // FIX: support anomaly_type filter from frontend
 	limit := c.QueryInt("limit", 50)
 	offset := c.QueryInt("offset", 0)
 	if limit > 100 { limit = 100 }
@@ -416,7 +417,7 @@ func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
 	}
 
 	// RLS is enforced by the rls.Middleware applied to the /api/v1 group.
-	flags, total, err := h.flagRepo.ListAnomalyFlags(ctx, districtID, severity, status, limit, offset)
+	flags, total, err := h.flagRepo.ListAnomalyFlags(ctx, districtID, severity, status, anomalyType, limit, offset)
 	if err != nil {
 		h.logger.Error("list anomaly flags", zap.Error(err))
 		return response.InternalError(c, "failed to fetch anomaly flags")
@@ -452,7 +453,7 @@ func (h *AnomalyFlagHandler) GetDistrictSummary(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_ID", "Invalid district ID")
 	}
 	// Return counts by severity for the district
-	flags, total, err := h.flagRepo.ListAnomalyFlags(c.UserContext(), &districtID, "", "OPEN", 1000, 0)
+	flags, total, err := h.flagRepo.ListAnomalyFlags(c.UserContext(), &districtID, "", "OPEN", "", 1000, 0)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch district summary")
 	}
@@ -597,9 +598,14 @@ func (h *FieldJobHandler) ListAllJobs(c *fiber.Ctx) error {
 	if offset < 0 { offset = 0 }
 
 	// G12: Validate status against known field_job_status enum values
+	// FIX: validJobStatuses must match field_job_status PostgreSQL enum exactly.
+	// Enum values (after migration 009): QUEUED, ASSIGNED, DISPATCHED, EN_ROUTE, ON_SITE,
+	// COMPLETED, FAILED, CANCELLED, ESCALATED, SOS.
+	// Removed IN_PROGRESS (not in enum); added DISPATCHED, EN_ROUTE, FAILED.
 	validJobStatuses := map[string]bool{
-		"": true, "QUEUED": true, "ASSIGNED": true, "IN_PROGRESS": true,
-		"ON_SITE": true, "COMPLETED": true, "ESCALATED": true, "SOS": true, "CANCELLED": true,
+		"": true, "QUEUED": true, "ASSIGNED": true, "DISPATCHED": true,
+		"EN_ROUTE": true, "ON_SITE": true, "COMPLETED": true,
+		"FAILED": true, "CANCELLED": true, "ESCALATED": true, "SOS": true,
 	}
 	if !validJobStatuses[status] {
 		return response.BadRequest(c, "INVALID_STATUS", "Invalid status value")

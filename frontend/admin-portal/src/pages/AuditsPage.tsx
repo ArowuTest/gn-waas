@@ -61,10 +61,15 @@ export function AuditsPage() {
           >
             <option value="">All Statuses</option>
             <option value="PENDING">Pending</option>
-            <option value="ASSIGNED">Assigned</option>
             <option value="IN_PROGRESS">In Progress</option>
+            <option value="AWAITING_GRA">Awaiting GRA</option>
+            <option value="GRA_CONFIRMED">GRA Confirmed</option>
+            <option value="GRA_FAILED">GRA Failed</option>
             <option value="COMPLETED">Completed</option>
+            <option value="DISPUTED">Disputed</option>
+            <option value="ESCALATED">Escalated</option>
             <option value="CLOSED">Closed</option>
+            <option value="PENDING_COMPLIANCE">Pending Compliance</option>
           </select>
         </div>
       </Card>

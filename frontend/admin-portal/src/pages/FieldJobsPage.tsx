@@ -359,7 +359,7 @@ export function FieldJobsPage() {
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value="ALL">All Statuses</option>
-              {['QUEUED','DISPATCHED','EN_ROUTE','ON_SITE','COMPLETED','FAILED','SOS'].map(s => (
+              {['QUEUED','DISPATCHED','EN_ROUTE','ON_SITE','COMPLETED','FAILED','CANCELLED','ESCALATED','SOS'].map(s => (
                 <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
               ))}
             </select>

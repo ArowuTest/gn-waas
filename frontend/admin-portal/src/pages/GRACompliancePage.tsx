@@ -20,15 +20,17 @@ import {
 interface GRAComplianceRecord {
   id: string
   audit_reference: string
-  account_number: string
-  account_holder: string
-  district_name: string
-  invoice_amount_ghs: number
-  vat_amount_ghs: number
-  gra_receipt_number: string | null
-  gra_qr_code: string | null
-  gra_locked_at: string | null
-  status: 'SIGNED' | 'PENDING' | 'FAILED' | 'EXEMPT'
+  // FIX: field names aligned with expanded GetByDistrict response
+  account_number: string       // from water_accounts JOIN
+  account_holder: string       // from water_accounts.customer_name JOIN
+  district_name: string        // from districts JOIN
+  gwl_billed_ghs: number | null  // invoice amount
+  shadow_bill_ghs: number | null // shadow bill (used as VAT proxy)
+  gra_sdc_id: string | null    // GRA receipt number
+  gra_qr_code_url: string | null
+  gra_signed_at: string | null // GRA lock timestamp
+  gra_status: string           // SIGNED | PENDING | FAILED | EXEMPT
+  status: string               // audit lifecycle status
   created_at: string
 }
 
@@ -73,9 +75,9 @@ function useGRAComplianceSummary(period: string, districtId: string) {
         },
       })
       const records: GRAComplianceRecord[] = res.data?.data?.data ?? []
-      const signed   = records.filter(r => r.status === 'SIGNED').length
-      const pending  = records.filter(r => r.status === 'PENDING').length
-      const failed   = records.filter(r => r.status === 'FAILED').length
+      const signed   = records.filter(r => r.gra_status === 'SIGNED').length
+      const pending  = records.filter(r => r.gra_status === 'PENDING').length
+      const failed   = records.filter(r => r.gra_status === 'FAILED').length
       const total    = records.length
       const totalVat = records.reduce((sum, r) => sum + (r.vat_amount_ghs ?? 0), 0)
       return {
@@ -152,9 +154,9 @@ export function GRACompliancePage() {
   const filtered = records.filter(r =>
     !search ||
     r.audit_reference.toLowerCase().includes(search.toLowerCase()) ||
-    r.account_number.toLowerCase().includes(search.toLowerCase()) ||
-    r.account_holder.toLowerCase().includes(search.toLowerCase()) ||
-    (r.gra_receipt_number ?? '').toLowerCase().includes(search.toLowerCase())
+    (r.account_number ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (r.account_holder ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (r.gra_sdc_id ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
   const handleExportCSV = () => {
@@ -162,14 +164,14 @@ export function GRACompliancePage() {
       ['Audit Ref', 'Account', 'Holder', 'District', 'Invoice (GHS)', 'VAT (GHS)', 'GRA Receipt', 'Status', 'Signed At'],
       ...filtered.map(r => [
         r.audit_reference,
-        r.account_number,
-        r.account_holder,
-        r.district_name,
-        r.invoice_amount_ghs.toFixed(2),
-        r.vat_amount_ghs.toFixed(2),
-        r.gra_receipt_number ?? '',
+        r.account_number ?? '',
+        r.account_holder ?? '',
+        r.district_name ?? '',
+        (r.gwl_billed_ghs ?? 0).toFixed(2),
+        (r.shadow_bill_ghs ?? 0).toFixed(2),
+        r.gra_sdc_id ?? '',
         r.status,
-        r.gra_locked_at ? new Date(r.gra_locked_at).toLocaleString() : '',
+        r.gra_signed_at ? new Date(r.gra_signed_at).toLocaleString() : '',
       ]),
     ]
     const csv = '\uFEFF' + rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
@@ -307,13 +309,13 @@ export function GRACompliancePage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">{r.district_name}</td>
                     <td className="px-4 py-3 text-right font-medium">
-                      ₵{r.invoice_amount_ghs.toFixed(2)}
+                      ₵{(r.gwl_billed_ghs ?? 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-600">
-                      ₵{r.vat_amount_ghs.toFixed(2)}
+                      ₵{(r.shadow_bill_ghs ?? 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">
-                      {r.gra_receipt_number ?? (
+                      {r.gra_sdc_id ?? (
                         <span className="text-gray-300">—</span>
                       )}
                     </td>
@@ -321,8 +323,8 @@ export function GRACompliancePage() {
                       <StatusBadge status={r.status} />
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400">
-                      {r.gra_locked_at
-                        ? new Date(r.gra_locked_at).toLocaleString()
+                      {r.gra_signed_at
+                        ? new Date(r.gra_signed_at).toLocaleString()
                         : <span className="text-gray-300">—</span>
                       }
                     </td>
