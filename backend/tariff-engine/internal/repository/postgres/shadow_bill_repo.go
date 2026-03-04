@@ -23,11 +23,29 @@ func NewShadowBillRepository(db *pgxpool.Pool, logger *zap.Logger) *ShadowBillRe
 	return &ShadowBillRepository{db: db, logger: logger}
 }
 
-// Create persists a shadow bill calculation
+// Create persists a shadow bill calculation.
+// FLOW-06 fix: billing_period_start and billing_period_end are NOT NULL in the
+// shadow_bills schema. If the caller has not populated them on the entity, this
+// method fetches them from gwl_bills using the gwl_bill_id (which is gwl_bills.id
+// after migration 021 unified the billing tables).
 func (r *ShadowBillRepository) Create(
 	ctx context.Context,
 	bill *entities.ShadowBillCalculation,
 ) error {
+
+	// Fetch billing period from gwl_bills if not already set on the entity.
+	if bill.BillingPeriodStart.IsZero() || bill.BillingPeriodEnd.IsZero() {
+		var periodStart, periodEnd time.Time
+		err := r.db.QueryRow(ctx,
+			`SELECT billing_period_start, billing_period_end FROM gwl_bills WHERE id = $1`,
+			bill.GWLBillID,
+		).Scan(&periodStart, &periodEnd)
+		if err != nil {
+			return fmt.Errorf("fetch billing period for shadow bill (gwl_bill_id=%s): %w", bill.GWLBillID, err)
+		}
+		bill.BillingPeriodStart = periodStart
+		bill.BillingPeriodEnd = periodEnd
+	}
 
 	query := `
 		INSERT INTO shadow_bills (
@@ -57,7 +75,7 @@ func (r *ShadowBillRepository) Create(
 			calculation_version = EXCLUDED.calculation_version`
 
 	_, err := r.db.Exec(ctx, query,
-		bill.GWLBillID, bill.AccountID, nil, nil, // period dates fetched from gwl_billing_records
+		bill.GWLBillID, bill.AccountID, bill.BillingPeriodStart, bill.BillingPeriodEnd,
 		bill.ConsumptionM3, bill.CorrectCategory, bill.TariffRateID, bill.VATConfigID,
 		bill.Tier1VolumeM3, bill.Tier1Rate, bill.Tier1AmountGHS,
 		bill.Tier2VolumeM3, bill.Tier2Rate, bill.Tier2AmountGHS,

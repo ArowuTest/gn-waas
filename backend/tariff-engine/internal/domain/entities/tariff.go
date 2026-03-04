@@ -42,6 +42,10 @@ type VATConfig struct {
 type ShadowBillCalculation struct {
 	AccountID           uuid.UUID `json:"account_id"`
 	GWLBillID           uuid.UUID `json:"gwl_bill_id"`
+	// FLOW-06 fix: billing period dates are NOT NULL in shadow_bills schema.
+	// They are populated from gwl_bills when the tariff service fetches the bill.
+	BillingPeriodStart  time.Time `json:"billing_period_start"`
+	BillingPeriodEnd    time.Time `json:"billing_period_end"`
 	ConsumptionM3       float64   `json:"consumption_m3"`
 	CorrectCategory     string    `json:"correct_category"`
 	TariffRateID        uuid.UUID `json:"tariff_rate_id"`

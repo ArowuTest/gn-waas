@@ -323,6 +323,11 @@ func (h *DataHandler) ListWaterBalance(c *fiber.Ctx) error {
 
 	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
+		-- FLOW-07 fix: use correct column names matching water_balance_records schema.
+		-- Schema (migration 003, written by sentinel): nrw_percent, ili_score,
+		-- data_confidence_score, computed_at, estimated_revenue_recovery_ghs.
+		-- The old query used nrw_pct, ili_value, data_confidence_grade, calculated_at,
+		-- apparent_loss_value_ghs — none of which exist in the schema.
 		SELECT
 			wb.id, wb.district_id, wb.period_start, wb.period_end,
 			wb.system_input_volume_m3,
@@ -340,11 +345,11 @@ func (h *DataHandler) ListWaterBalance(c *fiber.Ctx) error {
 			wb.service_conn_leakage_m3,
 			wb.total_real_losses_m3,
 			wb.total_nrw_m3,
-			wb.nrw_pct,
-			wb.apparent_loss_value_ghs,
-			wb.ili_value,
-			wb.data_confidence_grade,
-			wb.calculated_at,
+			wb.nrw_percent,
+			wb.estimated_revenue_recovery_ghs,
+			wb.ili_score,
+			wb.data_confidence_score,
+			wb.computed_at,
 			d.district_name, d.district_code
 		FROM water_balance_records wb
 		JOIN districts d ON d.id = wb.district_id

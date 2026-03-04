@@ -175,32 +175,36 @@ func (s *IWAWaterBalanceService) gatherInputs(
 		return nil, fmt.Errorf("query production_records: %w", err)
 	}
 
-	// 2. Billed Metered — from billing_records (metered accounts)
+	// 2. Billed Metered — from gwl_bills (metered accounts)
+	// FLOW-02 fix: table is gwl_bills (not billing_records which does not exist).
+	// Column is meter_serial (not meter_serial_number); payment_status (not bill_status).
+	// Metered = accounts with a meter_serial set; paid/unpaid/partial all count as billed.
 	err = s.db.QueryRow(ctx, `
-		SELECT COALESCE(SUM(br.consumption_m3), 0)
-		FROM billing_records br
-		JOIN water_accounts wa ON wa.id = br.account_id
+		SELECT COALESCE(SUM(gb.consumption_m3), 0)
+		FROM gwl_bills gb
+		JOIN water_accounts wa ON wa.id = gb.account_id
 		WHERE wa.district_id = $1
-		  AND br.billing_period_start >= $2
-		  AND br.billing_period_end <= $3
-		  AND wa.meter_serial_number IS NOT NULL
-		  AND br.bill_status IN ('ISSUED', 'PAID', 'OVERDUE')`,
+		  AND gb.billing_period_start >= $2
+		  AND gb.billing_period_end <= $3
+		  AND wa.meter_serial IS NOT NULL
+		  AND gb.payment_status IN ('UNPAID', 'PAID', 'PARTIAL')`,
 		districtID, from, to,
 	).Scan(&input.BilledMeteredM3)
 	if err != nil {
 		return nil, fmt.Errorf("query billed_metered: %w", err)
 	}
 
-	// 3. Billed Unmetered — flat-rate accounts
+	// 3. Billed Unmetered — flat-rate accounts (no meter_serial)
+	// FLOW-02 fix: table is gwl_bills; column is meter_serial (not meter_serial_number).
 	err = s.db.QueryRow(ctx, `
-		SELECT COALESCE(SUM(br.consumption_m3), 0)
-		FROM billing_records br
-		JOIN water_accounts wa ON wa.id = br.account_id
+		SELECT COALESCE(SUM(gb.consumption_m3), 0)
+		FROM gwl_bills gb
+		JOIN water_accounts wa ON wa.id = gb.account_id
 		WHERE wa.district_id = $1
-		  AND br.billing_period_start >= $2
-		  AND br.billing_period_end <= $3
-		  AND wa.meter_serial_number IS NULL
-		  AND br.bill_status IN ('ISSUED', 'PAID', 'OVERDUE')`,
+		  AND gb.billing_period_start >= $2
+		  AND gb.billing_period_end <= $3
+		  AND wa.meter_serial IS NULL
+		  AND gb.payment_status IN ('UNPAID', 'PAID', 'PARTIAL')`,
 		districtID, from, to,
 	).Scan(&input.BilledUnmeteredM3)
 	if err != nil {
@@ -208,18 +212,20 @@ func (s *IWAWaterBalanceService) gatherInputs(
 	}
 
 	// 4. Unbilled Metered — active metered accounts with no bill this period
+	// FLOW-02 fix: reading_timestamp → reading_date (DATE column in meter_readings).
+	// FLOW-02 fix: billing_records → gwl_bills (billing_records does not exist).
 	err = s.db.QueryRow(ctx, `
 		SELECT COALESCE(SUM(mr.reading_m3), 0)
 		FROM meter_readings mr
 		JOIN water_accounts wa ON wa.id = mr.account_id
 		WHERE wa.district_id = $1
-		  AND mr.reading_timestamp >= $2
-		  AND mr.reading_timestamp < $3
+		  AND mr.reading_date >= $2
+		  AND mr.reading_date < $3
 		  AND NOT EXISTS (
-			SELECT 1 FROM billing_records br
-			WHERE br.account_id = mr.account_id
-			  AND br.billing_period_start >= $2
-			  AND br.billing_period_end <= $3
+			SELECT 1 FROM gwl_bills gb
+			WHERE gb.account_id = mr.account_id
+			  AND gb.billing_period_start >= $2
+			  AND gb.billing_period_end <= $3
 		  )`,
 		districtID, from, to,
 	).Scan(&input.UnbilledMeteredM3)
@@ -307,15 +313,21 @@ func (s *IWAWaterBalanceService) estimateRealLossesFromNightFlow(
 	var avgNightFlowM3PerHour float64
 	var connectionCount int
 
+	// FLOW-03 fix: bulk_meter_readings does not exist. Night-flow analysis uses
+	// meter_readings (flow_rate_m3h column) joined to water_accounts for district
+	// filtering. reading_date is a DATE so we use it for the period filter;
+	// there is no time-of-day column, so we use ALL readings in the period as a
+	// proxy for minimum night flow (conservative estimate).
 	err := s.db.QueryRow(ctx, `
 		SELECT
-			COALESCE(AVG(flow_rate_m3_per_hour), 0) AS avg_night_flow,
+			COALESCE(AVG(mr.flow_rate_m3h), 0) AS avg_night_flow,
 			(SELECT COUNT(*) FROM water_accounts WHERE district_id = $1 AND status = 'ACTIVE') AS connections
-		FROM bulk_meter_readings
-		WHERE district_id = $1
-		  AND reading_timestamp >= $2
-		  AND reading_timestamp < $3
-		  AND EXTRACT(HOUR FROM reading_timestamp) BETWEEN 2 AND 4`,
+		FROM meter_readings mr
+		JOIN water_accounts wa ON wa.id = mr.account_id
+		WHERE wa.district_id = $1
+		  AND mr.reading_date >= $2
+		  AND mr.reading_date < $3
+		  AND mr.flow_rate_m3h IS NOT NULL`,
 		districtID, from, to,
 	).Scan(&avgNightFlowM3PerHour, &connectionCount)
 	if err != nil {

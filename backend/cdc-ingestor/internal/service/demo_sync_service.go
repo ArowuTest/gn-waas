@@ -294,10 +294,14 @@ func (s *DemoSyncService) generateProductionRecords(ctx context.Context, periodS
 		variance := 0.92 + s.rng.Float64()*0.16
 		produced := avgDaily * daysInMonth * variance
 
+		// FLOW-01 fix: use correct column names matching production_records schema.
+		// Schema (migration 003) uses: recorded_at TIMESTAMPTZ, volume_m3 NUMERIC.
+		// Extra columns (volume_treated_m3, pumping_hours, energy_kwh, data_quality_score)
+		// are added by migration 022 so the richer data is preserved.
 		_, _ = s.gnwaasDB.Exec(ctx, `
 			INSERT INTO production_records (
-				id, district_id, record_date,
-				volume_produced_m3, volume_treated_m3,
+				id, district_id, recorded_at,
+				volume_m3, volume_treated_m3,
 				pumping_hours, energy_kwh,
 				source_type, data_quality_score, created_at
 			) VALUES (

@@ -78,18 +78,21 @@ func (v *SupplyValidator) ValidateDistrict(
 		readingTime time.Time
 	}
 
+	// FLOW-04 fix: reading_time → reading_date (DATE column in meter_readings schema).
+	// FLOW-05 fix: meter_serial is on water_accounts, not meter_readings.
+	//   Use wa.meter_serial (joined) with fallback to mr.id::text for unmetered accounts.
 	rows, err := v.db.Query(ctx, `
 		SELECT
 			mr.account_id,
-			COALESCE(mr.meter_serial, mr.id::text) AS meter_id,
+			COALESCE(wa.meter_serial, mr.id::text) AS meter_id,
 			mr.reading_m3,
-			mr.reading_time
+			mr.reading_date
 		FROM meter_readings mr
 		JOIN water_accounts wa ON wa.id = mr.account_id
 		WHERE wa.district_id = $1
-		  AND mr.reading_time BETWEEN $2 AND $3
+		  AND mr.reading_date BETWEEN $2 AND $3
 		  AND mr.reading_m3 > 0
-		ORDER BY mr.reading_time`,
+		ORDER BY mr.reading_date`,
 		districtID, from, to,
 	)
 	if err != nil {
