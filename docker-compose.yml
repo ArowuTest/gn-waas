@@ -213,6 +213,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-gnwaas_redis_dev_2026}
+      # INFRA-NATS-01 fix: sentinel subscribes to CDC sync events and sentinel trigger events.
+      NATS_URL: nats://nats:4222
     ports:
       - "3002:3002"
     healthcheck:
@@ -223,6 +225,8 @@ services:
       start_period: 20s
     depends_on:
       postgres:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     networks:
       gnwaas-network:
@@ -355,12 +359,16 @@ services:
       GWL_DB_USER: ""
       GWL_DB_PASSWORD: ""
       GWL_SCHEMA_MAP_PATH: /app/config/gwl_schema_map.yaml
+      # INFRA-NATS-01 fix: cdc-ingestor publishes gnwaas.cdc.sync.completed events.
+      NATS_URL: nats://nats:4222
     ports:
       - "3006:3006"
     volumes:
       - ./config/gwl_schema_map.yaml:/app/config/gwl_schema_map.yaml:ro
     depends_on:
       postgres:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     networks:
       gnwaas-network:
@@ -374,7 +382,7 @@ services:
       context: ./frontend/admin-portal
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:3000
+        VITE_API_URL: ""  # FE-VITE-API-01 fix: empty = relative URL, nginx proxies /api/ to api-gateway:3000
         VITE_KEYCLOAK_URL: http://localhost:8080
         VITE_KEYCLOAK_REALM: gnwaas
         VITE_KEYCLOAK_CLIENT_ID: gnwaas-admin
@@ -407,7 +415,7 @@ services:
       context: ./frontend/gwl-portal
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:3000
+        VITE_API_URL: ""  # FE-VITE-API-01 fix: empty = relative URL, nginx proxies /api/ to api-gateway:3000
         VITE_KEYCLOAK_URL: http://localhost:8080
         VITE_KEYCLOAK_REALM: gnwaas
         VITE_KEYCLOAK_CLIENT_ID: gnwaas-gwl
@@ -436,7 +444,7 @@ services:
       context: ./frontend/authority-portal
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:3000
+        VITE_API_URL: ""  # FE-VITE-API-01 fix: empty = relative URL, nginx proxies /api/ to api-gateway:3000
         VITE_KEYCLOAK_URL: http://localhost:8080
         VITE_KEYCLOAK_REALM: gnwaas
         VITE_KEYCLOAK_CLIENT_ID: gnwaas-authority

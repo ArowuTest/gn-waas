@@ -166,8 +166,20 @@ CREATE TABLE IF NOT EXISTS field_jobs (
 );
 
 -- Add FK back to audit_events
-ALTER TABLE audit_events ADD CONSTRAINT fk_audit_field_job
-    FOREIGN KEY (field_job_id) REFERENCES field_jobs(id);
+-- DB-IDEMPOTENT-01 fix: wrapped in idempotent DO block so re-running the migration
+-- (e.g. on a fresh deployment) does not fail with "constraint already exists".
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'fk_audit_field_job'
+          AND conrelid = 'audit_events'::regclass
+    ) THEN
+        ALTER TABLE audit_events ADD CONSTRAINT fk_audit_field_job
+            FOREIGN KEY (field_job_id) REFERENCES field_jobs(id);
+    END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS idx_field_jobs_officer ON field_jobs(assigned_officer_id);
 CREATE INDEX IF NOT EXISTS idx_field_jobs_district ON field_jobs(district_id);

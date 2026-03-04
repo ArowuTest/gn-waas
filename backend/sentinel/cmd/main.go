@@ -91,7 +91,7 @@ func main() {
 		getEnv("DB_HOST", "localhost"),
 		getEnv("DB_PORT", "5432"),
 		getEnv("DB_NAME", "gnwaas"),
-		getEnv("DB_USER", "gnwaas_user"),
+		getEnv("DB_USER", "gnwaas_app"),
 		getEnv("DB_PASSWORD", ""),
 		getEnv("DB_SSL_MODE", "disable"),
 	)
