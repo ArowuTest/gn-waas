@@ -8,6 +8,7 @@
  * No hardcoded data. No stubs. All downloads are real server-generated files.
  */
 import { useState } from 'react'
+import { useDistricts } from '../hooks/useQueries'
 import { apiClient } from '../lib/api-client'
 import {
   FileText, Download, BarChart2, Shield,
@@ -108,6 +109,9 @@ export function ReportsPage() {
   const [period, setPeriod]           = useState(defaultPeriod)
   const [downloading, setDownloading] = useState<string | null>(null)
   const [lastDL, setLastDL]           = useState<Record<string, string>>({})
+  const [selectedDistrictId, setSelectedDistrictId] = useState('')
+
+  const { data: districts = [] } = useDistricts()
 
   const triggerDownload = async (
     key: string,
@@ -165,8 +169,8 @@ export function ReportsPage() {
       description: 'VSDC invoice signing status, VAT collected, compliance rate, and failed submission details for the selected period.',
       onDownloadCSV: () => triggerDownload(
         'gra-csv',
-        '/audits',
-        { period, format: 'csv' },
+        '/reports/gra-compliance/csv',
+        { period, district_id: selectedDistrictId },
         `gnwaas-gra-compliance-${period}.csv`,
         'blob',
       ),
@@ -178,8 +182,8 @@ export function ReportsPage() {
       description: 'Immutable log of all field officer audit events, OCR readings, GPS coordinates, and photo evidence references.',
       onDownloadCSV: () => triggerDownload(
         'audit-csv',
-        '/audits',
-        { period, include_evidence: 'true', format: 'csv' },
+        '/reports/audit-trail/csv',
+        { period, district_id: selectedDistrictId },
         `gnwaas-audit-trail-${period}.csv`,
         'blob',
       ),
@@ -191,8 +195,8 @@ export function ReportsPage() {
       description: 'All field officer dispatch jobs for the period: status, completion times, SOS events, and evidence submission rates.',
       onDownloadCSV: () => triggerDownload(
         'jobs-csv',
-        '/field-jobs',
-        { period, format: 'csv' },
+        '/reports/field-jobs/csv',
+        { period, district_id: selectedDistrictId },
         `gnwaas-field-jobs-${period}.csv`,
         'blob',
       ),
@@ -224,6 +228,19 @@ export function ReportsPage() {
             onChange={e => setPeriod(e.target.value)}
             className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">District (for CSV exports)</label>
+            <select
+              value={selectedDistrictId}
+              onChange={e => setSelectedDistrictId(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value="">All Districts</option>
+              {districts.map(d => (
+                <option key={d.id} value={d.id}>{d.district_name}</option>
+              ))}
+            </select>
+          </div>
           <p className="text-xs text-gray-400">
             All reports below will be generated for: <strong>{period}</strong>
           </p>

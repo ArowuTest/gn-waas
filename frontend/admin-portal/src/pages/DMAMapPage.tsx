@@ -14,9 +14,9 @@ interface District {
   zone_type: string
   is_pilot_district: boolean
   is_active: boolean
-  latitude?: number
-  longitude?: number
-  nrw_percentage?: number
+  gps_latitude?: number
+  gps_longitude?: number
+  loss_ratio_pct?: number
   total_connections?: number
   open_anomalies?: number
 }
@@ -99,9 +99,9 @@ export default function DMAMapPage() {
       districts.forEach((district, idx) => {
         // Use approximate Ghana district coordinates if not provided
         // In production these come from the districts table lat/lng columns
-        const lat = district.latitude ?? GHANA_CENTER[0] + (idx % 5) * 0.8 - 2
-        const lng = district.longitude ?? GHANA_CENTER[1] + Math.floor(idx / 5) * 0.8 - 2
-        const nrw = district.nrw_percentage ?? 0
+        const lat = district.gps_latitude ?? GHANA_CENTER[0] + (idx % 5) * 0.8 - 2
+        const lng = district.gps_longitude ?? GHANA_CENTER[1] + Math.floor(idx / 5) * 0.8 - 2
+        const nrw = district.loss_ratio_pct ?? 0
         const color = nrwColor(nrw)
 
         const marker = L.circleMarker([lat, lng], {

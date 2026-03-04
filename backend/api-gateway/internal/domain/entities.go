@@ -124,6 +124,9 @@ type District struct {
 	DataConfidenceGrade *int      `db:"data_confidence_grade" json:"data_confidence_grade,omitempty"`
 	IsPilotDistrict     bool      `db:"is_pilot_district" json:"is_pilot_district"`
 	IsActive            bool      `db:"is_active" json:"is_active"`
+	// GPS coordinates for DMA map rendering (nullable — not all districts have GPS set)
+	GPSLatitude         *float64  `db:"gps_latitude" json:"gps_latitude,omitempty"`
+	GPSLongitude        *float64  `db:"gps_longitude" json:"gps_longitude,omitempty"`
 	CreatedAt           time.Time `db:"created_at" json:"created_at"`
 }
 

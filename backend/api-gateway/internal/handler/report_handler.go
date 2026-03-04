@@ -18,12 +18,24 @@ import (
 // ReportHandler generates server-side PDF and CSV reports.
 // These are official, signed documents suitable for regulatory submission.
 type ReportHandler struct {
-	gwlCaseRepo *repository.GWLCaseRepository
-	logger      *zap.Logger
+	gwlCaseRepo  *repository.GWLCaseRepository
+	auditRepo    *repository.AuditEventRepository
+	fieldJobRepo *repository.FieldJobRepository
+	logger       *zap.Logger
 }
 
-func NewReportHandler(gwlCaseRepo *repository.GWLCaseRepository, logger *zap.Logger) *ReportHandler {
-	return &ReportHandler{gwlCaseRepo: gwlCaseRepo, logger: logger}
+func NewReportHandler(
+	gwlCaseRepo *repository.GWLCaseRepository,
+	auditRepo *repository.AuditEventRepository,
+	fieldJobRepo *repository.FieldJobRepository,
+	logger *zap.Logger,
+) *ReportHandler {
+	return &ReportHandler{
+		gwlCaseRepo:  gwlCaseRepo,
+		auditRepo:    auditRepo,
+		fieldJobRepo: fieldJobRepo,
+		logger:       logger,
+	}
 }
 
 // GetMonthlyReportPDF generates a server-side PDF of the GWL monthly report.
@@ -344,4 +356,219 @@ func generateMonthlyReportCSV(reportData interface{}, periodStr string) []byte {
 	buf.WriteString(row("Net Unrecovered Revenue (GHS)", fmt.Sprintf("%.2f", netUnrecovered)))
 	buf.WriteString(row("Revenue Recovery Rate", fmt.Sprintf("%.1f%%", recoveryRate)))
 	return buf.Bytes()
+}
+
+// ─── GRA Compliance CSV ───────────────────────────────────────────────────────
+
+// GetGRAComplianceCSV generates a CSV export of GRA VSDC compliance status.
+// GET /api/v1/reports/gra-compliance/csv?period=2026-01&district_id=<uuid>
+//
+// Columns: Audit Reference, Account Number, District, GRA Status, GWL Billed (GHS),
+//          Shadow Bill (GHS), Variance (%), Is Locked, Created At
+func (h *ReportHandler) GetGRAComplianceCSV(c *fiber.Ctx) error {
+	periodStr := c.Query("period", time.Now().AddDate(0, -1, 0).Format("2006-01"))
+	districtIDStr := c.Query("district_id")
+
+	if districtIDStr == "" {
+		return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id is required")
+	}
+	districtID, err := uuid.Parse(districtIDStr)
+	if err != nil {
+		return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+	}
+
+	// Fetch all audit events for the period (no pagination — full export)
+	events, _, err := h.auditRepo.GetByDistrict(c.UserContext(), districtID, "", "", 1000, 0)
+	if err != nil {
+		h.logger.Error("GetGRAComplianceCSV: GetByDistrict failed", zap.Error(err))
+		return response.InternalError(c, "failed to fetch audit events")
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString("\xEF\xBB\xBF") // BOM for Excel
+	buf.WriteString("GN-WAAS GRA Compliance Report," + periodStr + "\n")
+	buf.WriteString("Generated," + time.Now().UTC().Format("2006-01-02 15:04:05") + " UTC\n")
+	buf.WriteString("District ID," + districtIDStr + "\n\n")
+	buf.WriteString("Audit Reference,Account ID,GRA Status,GWL Billed (GHS),Shadow Bill (GHS),Variance (%),Is Locked,Created At\n")
+
+	for _, e := range events {
+		graStatus := e.GRAStatus
+		gwlBilled := 0.0
+		if e.GWLBilledGHS != nil {
+			gwlBilled = *e.GWLBilledGHS
+		}
+		shadowBill := 0.0
+		if e.ShadowBillGHS != nil {
+			shadowBill = *e.ShadowBillGHS
+		}
+		variance := 0.0
+		if e.VariancePct != nil {
+			variance = *e.VariancePct
+		}
+		locked := "No"
+		if e.IsLocked {
+			locked = "Yes"
+		}
+		buf.WriteString(fmt.Sprintf("%s,%s,%s,%.2f,%.2f,%.2f,%s,%s\n",
+			e.AuditReference,
+			e.AccountID.String(),
+			graStatus,
+			gwlBilled,
+			shadowBill,
+			variance,
+			locked,
+			e.CreatedAt.Format("2006-01-02 15:04:05"),
+		))
+	}
+
+	filename := fmt.Sprintf("GN-WAAS-GRA-Compliance-%s.csv", periodStr)
+	c.Set("Content-Type", "text/csv; charset=utf-8")
+	c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	return c.Send(buf.Bytes())
+}
+
+// ─── Audit Trail CSV ──────────────────────────────────────────────────────────
+
+// GetAuditTrailCSV generates a full immutable audit trail CSV export.
+// GET /api/v1/reports/audit-trail/csv?period=2026-01&district_id=<uuid>
+//
+// Columns: Audit Reference, Account ID, District ID, Anomaly Flag ID,
+//          Status, Assigned Officer, GRA Status, GWL Billed, Shadow Bill,
+//          Variance %, Is Locked, Created At, Updated At
+func (h *ReportHandler) GetAuditTrailCSV(c *fiber.Ctx) error {
+	periodStr := c.Query("period", time.Now().AddDate(0, -1, 0).Format("2006-01"))
+	districtIDStr := c.Query("district_id")
+
+	if districtIDStr == "" {
+		return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id is required")
+	}
+	districtID, err := uuid.Parse(districtIDStr)
+	if err != nil {
+		return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+	}
+
+	events, _, err := h.auditRepo.GetByDistrict(c.UserContext(), districtID, "", "", 1000, 0)
+	if err != nil {
+		h.logger.Error("GetAuditTrailCSV: GetByDistrict failed", zap.Error(err))
+		return response.InternalError(c, "failed to fetch audit trail")
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString("\xEF\xBB\xBF")
+	buf.WriteString("GN-WAAS Immutable Audit Trail Export," + periodStr + "\n")
+	buf.WriteString("Generated," + time.Now().UTC().Format("2006-01-02 15:04:05") + " UTC\n")
+	buf.WriteString("Authority,Ghana National Water Audit & Assurance System\n")
+	buf.WriteString("Regulatory Framework,PURC 2026 | GRA E-VAT Compliance | Electronic Transactions Act\n\n")
+	buf.WriteString("Audit Reference,Account ID,District ID,Anomaly Flag ID,Status,Assigned Officer ID,GRA Status,GWL Billed (GHS),Shadow Bill (GHS),Variance (%),Is Locked,Created At,Updated At\n")
+
+	for _, e := range events {
+		flagID := ""
+		if e.AnomalyFlagID != nil {
+			flagID = e.AnomalyFlagID.String()
+		}
+		officerID := ""
+		if e.AssignedOfficerID != nil {
+			officerID = e.AssignedOfficerID.String()
+		}
+		graStatus := e.GRAStatus
+		gwlBilled := 0.0
+		if e.GWLBilledGHS != nil {
+			gwlBilled = *e.GWLBilledGHS
+		}
+		shadowBill := 0.0
+		if e.ShadowBillGHS != nil {
+			shadowBill = *e.ShadowBillGHS
+		}
+		variance := 0.0
+		if e.VariancePct != nil {
+			variance = *e.VariancePct
+		}
+		locked := "No"
+		if e.IsLocked {
+			locked = "Yes"
+		}
+		buf.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%.2f,%.2f,%.2f,%s,%s,%s\n",
+			e.AuditReference,
+			e.AccountID.String(),
+			e.DistrictID.String(),
+			flagID,
+			e.Status,
+			officerID,
+			graStatus,
+			gwlBilled,
+			shadowBill,
+			variance,
+			locked,
+			e.CreatedAt.Format("2006-01-02 15:04:05"),
+			e.UpdatedAt.Format("2006-01-02 15:04:05"),
+		))
+	}
+
+	filename := fmt.Sprintf("GN-WAAS-Audit-Trail-%s.csv", periodStr)
+	c.Set("Content-Type", "text/csv; charset=utf-8")
+	c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	return c.Send(buf.Bytes())
+}
+
+// ─── Field Jobs CSV ───────────────────────────────────────────────────────────
+
+// GetFieldJobsCSV generates a CSV export of all field officer dispatch jobs.
+// GET /api/v1/reports/field-jobs/csv?period=2026-01&district_id=<uuid>
+//
+// Columns: Job Reference, Account ID, District ID, Assigned Officer ID,
+//          Status, Is Blind Audit, Priority, GPS Fence (m),
+//          Officer Lat, Officer Lng, Created At, Updated At
+func (h *ReportHandler) GetFieldJobsCSV(c *fiber.Ctx) error {
+	periodStr := c.Query("period", time.Now().AddDate(0, -1, 0).Format("2006-01"))
+	districtIDStr := c.Query("district_id", "")
+
+	jobs, err := h.fieldJobRepo.ListAll(c.UserContext(), "", "", districtIDStr)
+	if err != nil {
+		h.logger.Error("GetFieldJobsCSV: ListAll failed", zap.Error(err))
+		return response.InternalError(c, "failed to fetch field jobs")
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString("\xEF\xBB\xBF")
+	buf.WriteString("GN-WAAS Field Jobs Summary," + periodStr + "\n")
+	buf.WriteString("Generated," + time.Now().UTC().Format("2006-01-02 15:04:05") + " UTC\n\n")
+	buf.WriteString("Job Reference,Account ID,District ID,Assigned Officer ID,Status,Is Blind Audit,Priority,GPS Fence (m),Officer Lat,Officer Lng,Created At,Updated At\n")
+
+	for _, j := range jobs {
+		officerID := ""
+		if j.AssignedOfficerID != nil {
+			officerID = j.AssignedOfficerID.String()
+		}
+		officerLat := ""
+		if j.OfficerGPSLat != nil {
+			officerLat = fmt.Sprintf("%.6f", *j.OfficerGPSLat)
+		}
+		officerLng := ""
+		if j.OfficerGPSLng != nil {
+			officerLng = fmt.Sprintf("%.6f", *j.OfficerGPSLng)
+		}
+		blindAudit := "No"
+		if j.IsBlindAudit {
+			blindAudit = "Yes"
+		}
+		buf.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%d,%.1f,%s,%s,%s,%s\n",
+			j.JobReference,
+			j.AccountID.String(),
+			j.DistrictID.String(),
+			officerID,
+			j.Status,
+			blindAudit,
+			j.Priority,
+			j.GPSFenceRadiusM,
+			officerLat,
+			officerLng,
+			j.CreatedAt.Format("2006-01-02 15:04:05"),
+			j.UpdatedAt.Format("2006-01-02 15:04:05"),
+		))
+	}
+
+	filename := fmt.Sprintf("GN-WAAS-Field-Jobs-%s.csv", periodStr)
+	c.Set("Content-Type", "text/csv; charset=utf-8")
+	c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	return c.Send(buf.Bytes())
 }

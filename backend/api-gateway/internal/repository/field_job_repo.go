@@ -277,7 +277,8 @@ func (r *DistrictRepository) GetAll(ctx context.Context) ([]*domain.District, er
 	rows, err := r.q(ctx).Query(ctx, `
 		SELECT id, district_code, district_name, region,
 		       population_estimate, total_connections, supply_status, zone_type,
-		       geographic_zone, loss_ratio_pct, data_confidence_grade, is_pilot_district, is_active, created_at
+		       geographic_zone, loss_ratio_pct, data_confidence_grade, is_pilot_district, is_active,
+		       gps_latitude, gps_longitude, created_at
 		FROM districts WHERE is_active = TRUE ORDER BY district_name`)
 	if err != nil {
 		return nil, err
@@ -290,7 +291,8 @@ func (r *DistrictRepository) GetAll(ctx context.Context) ([]*domain.District, er
 		err := rows.Scan(
 			&d.ID, &d.DistrictCode, &d.DistrictName, &d.Region,
 			&d.PopulationEstimate, &d.TotalConnections, &d.SupplyStatus, &d.ZoneType,
-			&d.GeographicZone, &d.LossRatioPct, &d.DataConfidenceGrade, &d.IsPilotDistrict, &d.IsActive, &d.CreatedAt,
+			&d.GeographicZone, &d.LossRatioPct, &d.DataConfidenceGrade, &d.IsPilotDistrict, &d.IsActive,
+			&d.GPSLatitude, &d.GPSLongitude, &d.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -305,12 +307,14 @@ func (r *DistrictRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 	err := r.q(ctx).QueryRow(ctx, `
 		SELECT id, district_code, district_name, region,
 		       population_estimate, total_connections, supply_status, zone_type,
-		       geographic_zone, loss_ratio_pct, data_confidence_grade, is_pilot_district, is_active, created_at
+		       geographic_zone, loss_ratio_pct, data_confidence_grade, is_pilot_district, is_active,
+		       gps_latitude, gps_longitude, created_at
 		FROM districts WHERE id = $1`, id,
 	).Scan(
 		&d.ID, &d.DistrictCode, &d.DistrictName, &d.Region,
 		&d.PopulationEstimate, &d.TotalConnections, &d.SupplyStatus, &d.ZoneType,
-		&d.GeographicZone, &d.LossRatioPct, &d.DataConfidenceGrade, &d.IsPilotDistrict, &d.IsActive, &d.CreatedAt,
+		&d.GeographicZone, &d.LossRatioPct, &d.DataConfidenceGrade, &d.IsPilotDistrict, &d.IsActive,
+		&d.GPSLatitude, &d.GPSLongitude, &d.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetByID district failed: %w", err)

@@ -100,7 +100,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	flagHandler     := handler.NewAnomalyFlagHandler(flagRepo, logger)
 	gwlCaseRepo     := repository.NewGWLCaseRepository(db, logger)
 	gwlHandler       := handler.NewGWLHandler(gwlCaseRepo, logger)
-	reportHandler    := handler.NewReportHandler(gwlCaseRepo, logger)
+	reportHandler    := handler.NewReportHandler(gwlCaseRepo, auditRepo, fieldJobRepo, logger)
 	adminUserHandler := handler.NewAdminUserHandler(db, logger)
 	healthHandler   := handler.NewHealthHandler(db)
 
@@ -549,8 +549,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	gwl.Get("/reports/monthly", gwlHandler.GetMonthlyReport)
 
 	// ── Report export endpoints (server-generated PDF + CSV) ──────────────────
-	reports.Get("/monthly/pdf", reportHandler.GetMonthlyReportPDF)
-	reports.Get("/monthly/csv", reportHandler.GetMonthlyReportCSV)
+	reports.Get("/monthly/pdf",          reportHandler.GetMonthlyReportPDF)
+	reports.Get("/monthly/csv",          reportHandler.GetMonthlyReportCSV)
+	reports.Get("/gra-compliance/csv",   reportHandler.GetGRAComplianceCSV)
+	reports.Get("/audit-trail/csv",      reportHandler.GetAuditTrailCSV)
+	reports.Get("/field-jobs/csv",       reportHandler.GetFieldJobsCSV)
 
 	// ── Core Data Endpoints (BE-7) ───────────────────────────────────────────
 	// Read-only access to production, meter-reading, water-balance, billing data.
