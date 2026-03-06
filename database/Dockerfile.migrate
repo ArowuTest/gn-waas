@@ -1,0 +1,14 @@
+FROM postgres:16-alpine
+
+# Install bash and sort for version-sorted migration execution
+RUN apk add --no-cache bash
+
+WORKDIR /app
+
+COPY database/migrations/ /migrations/
+COPY database/seeds/ /seeds/
+COPY database/migrate.sh /app/migrate.sh
+
+RUN chmod +x /app/migrate.sh
+
+CMD ["/app/migrate.sh"]

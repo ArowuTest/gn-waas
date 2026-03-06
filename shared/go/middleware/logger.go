@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"time"
-
 	"os"
+	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -49,25 +49,44 @@ func RequestLogger(logger *zap.Logger) fiber.Handler {
 	}
 }
 
-// allowedOrigins lists the known GN-WAAS portal origins.
-// In development (APP_ENV=development), all origins are permitted.
-// In production, only these origins are allowed.
-var allowedOrigins = map[string]bool{
-	"https://admin.gnwaas.gov.gh":     true,
-	"https://authority.gnwaas.gov.gh": true,
-	"https://gwl.gnwaas.gov.gh":       true,
-	"https://gnwaas.gov.gh":           true,
-	"https://www.gnwaas.gov.gh":       true,
-	// Staging origins
-	"https://admin-staging.gnwaas.gov.gh":     true,
-	"https://authority-staging.gnwaas.gov.gh": true,
+// buildAllowedOrigins constructs the set of allowed CORS origins.
+// Hard-coded production origins are always included.
+// Additional origins can be injected at runtime via CORS_ALLOWED_ORIGINS
+// (comma-separated), which lets Render/Vercel preview URLs work without
+// a code change.
+func buildAllowedOrigins() map[string]bool {
+	origins := map[string]bool{
+		// Production sovereign domains
+		"https://admin.gnwaas.gov.gh":     true,
+		"https://authority.gnwaas.gov.gh": true,
+		"https://gwl.gnwaas.gov.gh":       true,
+		"https://gnwaas.gov.gh":           true,
+		"https://www.gnwaas.gov.gh":       true,
+		// Staging
+		"https://admin-staging.gnwaas.gov.gh":     true,
+		"https://authority-staging.gnwaas.gov.gh": true,
+	}
+
+	// Runtime-injectable origins (Vercel preview URLs, Render custom domains, etc.)
+	// Set CORS_ALLOWED_ORIGINS=https://gn-waas-admin.vercel.app,https://gn-waas-gwl.vercel.app
+	if extra := os.Getenv("CORS_ALLOWED_ORIGINS"); extra != "" {
+		for _, o := range strings.Split(extra, ",") {
+			o = strings.TrimSpace(o)
+			if o != "" {
+				origins[o] = true
+			}
+		}
+	}
+
+	return origins
 }
 
 // CORS configures Cross-Origin Resource Sharing.
-// Production: restricts to known portal origins (allowedOrigins map above).
-// Development: permits all origins for local development convenience.
+// Development (APP_ENV=development or unset): permits all origins.
+// Production: restricts to allowedOrigins (hard-coded + CORS_ALLOWED_ORIGINS env var).
 func CORS() fiber.Handler {
 	isDev := os.Getenv("APP_ENV") == "development" || os.Getenv("APP_ENV") == ""
+	allowedOrigins := buildAllowedOrigins()
 
 	return func(c *fiber.Ctx) error {
 		origin := c.Get("Origin")
@@ -80,8 +99,7 @@ func CORS() fiber.Handler {
 			c.Set("Access-Control-Allow-Origin", origin)
 			c.Set("Vary", "Origin")
 		} else if origin != "" {
-			// Unknown origin in production — reject preflight, allow simple requests
-			// (browser will block the response for cross-origin requests)
+			// Unknown origin in production — reject preflight
 			if c.Method() == fiber.MethodOptions {
 				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 					"error": "CORS: origin not allowed",
@@ -103,8 +121,6 @@ func CORS() fiber.Handler {
 }
 
 // SecurityHeaders adds security headers to all responses.
-// In production, HSTS is set to enforce HTTPS for 1 year.
-// CSP is set to restrict resource loading to same-origin only.
 func SecurityHeaders() fiber.Handler {
 	isProd := os.Getenv("APP_ENV") == "production"
 
@@ -115,13 +131,10 @@ func SecurityHeaders() fiber.Handler {
 		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Set("Permissions-Policy", "geolocation=(self), microphone=(), camera=(self)")
 
-		// HSTS: enforce HTTPS for 1 year (production only — breaks local HTTP dev)
 		if isProd {
 			c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 		}
 
-		// Content-Security-Policy: restrict to same-origin + known CDNs
-		// Allows: self, inline styles (needed for React), data URIs for images
 		csp := "default-src 'self'; " +
 			"script-src 'self'; " +
 			"style-src 'self' 'unsafe-inline'; " +
