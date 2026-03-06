@@ -85,7 +85,7 @@ export default function App() {
     <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
           <AppRoutes />
         </BrowserRouter>
       </AuthProvider>
