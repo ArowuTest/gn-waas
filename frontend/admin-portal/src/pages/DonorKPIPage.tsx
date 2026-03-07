@@ -48,7 +48,7 @@ interface FieldKPIs {
 interface MoMoKPIs {
   total_transactions: number;
   matched_transactions: number;
-  ghost_accounts: number;
+  ghost_accounts: number; // populated only if GWL provides payment feed
   fraud_flags: number;
   total_amount_ghs: number;
   unmatched_amount_ghs: number;
@@ -286,7 +286,7 @@ const DonorKPIPage: React.FC = () => {
             {[
               { label: 'Total Transactions', value: fmt(momo.total_transactions) },
               { label: 'Matched', value: fmt(momo.matched_transactions) },
-              { label: 'Ghost Accounts', value: fmt(momo.ghost_accounts), color: 'text-red-600' },
+              // Ghost account detection is done via sentinel anomaly flags, not MoMo data
               { label: 'Fraud Flags', value: fmt(momo.fraud_flags), color: 'text-red-600' },
               { label: 'Total Amount', value: `GH₵${fmt(momo.total_amount_ghs, 2)}` },
               { label: 'Unmatched Amount', value: `GH₵${fmt(momo.unmatched_amount_ghs, 2)}`, color: 'text-orange-600' },

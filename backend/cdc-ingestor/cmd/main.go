@@ -404,32 +404,6 @@ func main() {
 	})
 
 
-	// ── MoMo Reconciliation Upload ────────────────────────────────────────────
-	// POST /api/v1/cdc/upload/momo — upload a MoMo provider CSV export
-	// Supports MTN MoMo, Vodafone Cash, AirtelTigo Money, G-Money
-	momoSvc := service.NewMoMoReconciliationService(gnwaasDB, logger)
-	app.Post("/api/v1/cdc/upload/momo", func(c *fiber.Ctx) error {
-		file, err := c.FormFile("file")
-		if err != nil {
-			return c.Status(400).JSON(fiber.Map{"error": "file is required (multipart/form-data field: file)"})
-		}
-
-		importID := uuid.New()
-		f, err := file.Open()
-		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": "failed to open uploaded file"})
-		}
-		defer f.Close()
-
-		result, err := momoSvc.ImportMoMoPayments(c.Context(), importID, file.Filename, f)
-		if err != nil {
-			logger.Error("MoMo import failed", zap.Error(err))
-			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
-		}
-
-		return c.Status(200).JSON(result)
-	})
-
 	// ── Graceful shutdown ─────────────────────────────────────────────────────
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

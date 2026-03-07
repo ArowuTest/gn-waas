@@ -251,7 +251,9 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		WHERE gps_source = 'FIELD_CONFIRMED'
 	`).Scan(&fieldKPIs.GPSConfirmedAccounts)
 
-	// ── MoMo Reconciliation KPIs ──────────────────────────────────────────────
+	// ── MoMo Reconciliation KPIs ─────────────────────────────────────────────
+	// NOTE: GN-WAAS does not process MoMo payments directly.
+	// These KPIs are populated only if GWL provides a payment data feed.
 	var momoKPIs struct {
 		TotalTransactions    int     `json:"total_transactions"`
 		MatchedTransactions  int     `json:"matched_transactions"`
@@ -260,25 +262,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		TotalAmountGHS       float64 `json:"total_amount_ghs"`
 		UnmatchedAmountGHS   float64 `json:"unmatched_amount_ghs"`
 	}
-
-	h.db.QueryRow(c.Context(), `
-		SELECT
-			COUNT(*),
-			COUNT(*) FILTER (WHERE reconciliation_status = 'MATCHED'),
-			COUNT(*) FILTER (WHERE reconciliation_status = 'GHOST_ACCOUNT'),
-			COUNT(*) FILTER (WHERE is_fraud_flag = true),
-			COALESCE(SUM(amount_ghs), 0),
-			COALESCE(SUM(amount_ghs) FILTER (WHERE reconciliation_status NOT IN ('MATCHED','OVERPAYMENT')), 0)
-		FROM mobile_money_payments
-		WHERE transaction_date BETWEEN $1 AND $2
-	`, periodStart, periodEnd).Scan(
-		&momoKPIs.TotalTransactions,
-		&momoKPIs.MatchedTransactions,
-		&momoKPIs.GhostAccounts,
-		&momoKPIs.FraudFlags,
-		&momoKPIs.TotalAmountGHS,
-		&momoKPIs.UnmatchedAmountGHS,
-	)
+	// Zeroed — MoMo data not ingested by GN-WAAS (GWL owns payment reconciliation)
 
 	// ── Whistleblower KPIs ────────────────────────────────────────────────────
 	var whistleblowerKPIs struct {

@@ -902,25 +902,6 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	donorReports.Get("/kpis", donorReportHandler.GetKPIs)
 	donorReports.Get("/trend", donorReportHandler.GetTrend)
 
-	// ── Compound House Management ─────────────────────────────────────────────
-	compoundHandler := handler.NewCompoundHouseHandler(db, logger)
-	compounds := api.Group("/admin/compounds",
-		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER"),
-	)
-	compounds.Post("/", compoundHandler.CreateCompound)
-	compounds.Get("/:id", compoundHandler.GetCompound)
-	compounds.Post("/:id/members", compoundHandler.AddMember)
-	compounds.Post("/:id/split-bill", compoundHandler.SplitBill)
-
-	// ── Meter Calibration ─────────────────────────────────────────────────────
-	meterCalibHandler := handler.NewMeterCalibrationHandler(db, logger)
-	meterCalib := api.Group("/admin/meters",
-		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER", "FIELD_SUPERVISOR"),
-	)
-	meterCalib.Post("/:account_id/calibrations", meterCalibHandler.RecordCalibration)
-	meterCalib.Get("/:account_id/calibrations", meterCalibHandler.GetCalibrationHistory)
-	meterCalib.Get("/due-calibration", meterCalibHandler.GetDueCalibrations)
-
 	// ── Offline Sync (field officers) ─────────────────────────────────────────
 	offlineSyncHandler := handler.NewOfflineSyncHandler(db, logger)
 	// Field officer sync endpoints
