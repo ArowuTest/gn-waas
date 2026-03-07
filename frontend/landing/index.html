@@ -1,15 +1,682 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GN-WAAS — Ghana National Water Audit & Assurance System</title>
-    <meta name="description" content="Reducing Ghana's 51.6% Non-Revenue Water through intelligent billing audit, fraud detection, and GRA-compliant revenue recovery." />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GN-WAAS — Ghana National Water Audit & Assurance System</title>
+  <meta name="description" content="Sovereign software platform recovering GHS 2.1 billion in annual non-revenue water losses through independent audit, shadow billing, and GPS-locked field verification." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:   #16a34a;
+      --green-d: #15803d;
+      --green-l: #dcfce7;
+      --gold:    #ca8a04;
+      --gold-l:  #fef9c3;
+      --red:     #dc2626;
+      --red-l:   #fee2e2;
+      --blue:    #2563eb;
+      --blue-l:  #dbeafe;
+      --slate:   #0f172a;
+      --slate-m: #334155;
+      --slate-l: #64748b;
+      --border:  #e2e8f0;
+      --bg:      #f8fafc;
+      --white:   #ffffff;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--slate);
+      line-height: 1.6;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 1.1rem; color: var(--slate);
+      text-decoration: none;
+    }
+    .nav-brand .badge {
+      background: var(--green); color: white;
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em;
+      padding: 2px 7px; border-radius: 4px;
+    }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+    .nav-links a {
+      color: var(--slate-m); text-decoration: none; font-size: 0.9rem; font-weight: 500;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--green); }
+    .nav-cta {
+      background: var(--green); color: white !important;
+      padding: 8px 18px; border-radius: 8px;
+      font-weight: 600 !important; font-size: 0.85rem !important;
+      transition: background 0.15s !important;
+    }
+    .nav-cta:hover { background: var(--green-d) !important; }
+
+    /* ── HERO ── */
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f4c2a 100%);
+      color: white;
+      padding: 100px 2rem 80px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 100px; padding: 6px 16px;
+      font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #86efac;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.8rem);
+      font-weight: 800; line-height: 1.15;
+      max-width: 820px; margin: 0 auto 20px;
+    }
+    .hero h1 span { color: #4ade80; }
+    .hero p {
+      font-size: 1.15rem; color: #cbd5e1;
+      max-width: 600px; margin: 0 auto 40px;
+      font-weight: 400;
+    }
+    .hero-stats {
+      display: flex; justify-content: center; gap: 3rem;
+      flex-wrap: wrap; margin-bottom: 48px;
+    }
+    .hero-stat { text-align: center; }
+    .hero-stat .num {
+      font-size: 2.4rem; font-weight: 800; color: #4ade80;
+      line-height: 1;
+    }
+    .hero-stat .label { font-size: 0.8rem; color: #94a3b8; margin-top: 4px; }
+    .hero-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px; border-radius: 10px;
+      font-weight: 600; font-size: 0.95rem; text-decoration: none;
+      transition: all 0.2s; cursor: pointer; border: none;
+    }
+    .btn-primary { background: var(--green); color: white; }
+    .btn-primary:hover { background: var(--green-d); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(22,163,74,0.4); }
+    .btn-outline { background: transparent; color: white; border: 1.5px solid rgba(255,255,255,0.4); }
+    .btn-outline:hover { background: rgba(255,255,255,0.1); border-color: white; }
+
+    /* ── PORTALS ── */
+    .section { padding: 80px 2rem; max-width: 1200px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--green); margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 800;
+      color: var(--slate); margin-bottom: 16px; line-height: 1.2;
+    }
+    .section-sub { font-size: 1.05rem; color: var(--slate-l); max-width: 560px; }
+
+    .portals-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px; margin-top: 48px;
+    }
+    .portal-card {
+      background: white; border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+      transition: all 0.25s; text-decoration: none; color: inherit;
+      display: flex; flex-direction: column;
+    }
+    .portal-card:hover { transform: translateY(-4px); box-shadow: 0 20px 48px rgba(0,0,0,0.1); border-color: transparent; }
+    .portal-card-header {
+      padding: 28px 28px 20px;
+      display: flex; align-items: flex-start; gap: 16px;
+    }
+    .portal-icon {
+      width: 52px; height: 52px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; flex-shrink: 0;
+    }
+    .portal-card-body { padding: 0 28px 28px; flex: 1; }
+    .portal-card-body h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; }
+    .portal-card-body p { font-size: 0.9rem; color: var(--slate-l); line-height: 1.6; margin-bottom: 16px; }
+    .portal-roles {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px;
+    }
+    .role-tag {
+      font-size: 0.72rem; font-weight: 600; padding: 3px 10px;
+      border-radius: 100px; letter-spacing: 0.02em;
+    }
+    .portal-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.88rem; font-weight: 600; text-decoration: none;
+      padding: 10px 18px; border-radius: 8px; transition: all 0.15s;
+    }
+    .portal-link svg { width: 14px; height: 14px; }
+
+    /* Portal colour themes */
+    .theme-admin .portal-icon { background: #dbeafe; }
+    .theme-admin .portal-link { background: #2563eb; color: white; }
+    .theme-admin .portal-link:hover { background: #1d4ed8; }
+    .theme-admin .role-tag { background: #dbeafe; color: #1e40af; }
+
+    .theme-gwl .portal-icon { background: #dcfce7; }
+    .theme-gwl .portal-link { background: var(--green); color: white; }
+    .theme-gwl .portal-link:hover { background: var(--green-d); }
+    .theme-gwl .role-tag { background: #dcfce7; color: #166534; }
+
+    .theme-authority .portal-icon { background: #fef9c3; }
+    .theme-authority .portal-link { background: #ca8a04; color: white; }
+    .theme-authority .portal-link:hover { background: #a16207; }
+    .theme-authority .role-tag { background: #fef9c3; color: #854d0e; }
+
+    /* ── ARCHITECTURE ── */
+    .arch-section { background: var(--slate); color: white; padding: 80px 2rem; }
+    .arch-inner { max-width: 1200px; margin: 0 auto; }
+    .arch-section .section-label { color: #4ade80; }
+    .arch-section .section-title { color: white; }
+    .arch-section .section-sub { color: #94a3b8; }
+
+    .arch-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px; margin-top: 48px;
+    }
+    .arch-card {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 20px;
+    }
+    .arch-card .arch-icon { font-size: 1.6rem; margin-bottom: 10px; }
+    .arch-card h4 { font-size: 0.9rem; font-weight: 700; color: white; margin-bottom: 6px; }
+    .arch-card p { font-size: 0.8rem; color: #94a3b8; line-height: 1.5; }
+    .arch-card .tech {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem; color: #4ade80;
+      margin-top: 8px;
+    }
+
+    /* ── FEATURES ── */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px; margin-top: 48px;
+    }
+    .feature-card {
+      background: white; border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
+    }
+    .feature-card .feat-icon {
+      width: 44px; height: 44px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; margin-bottom: 14px;
+    }
+    .feature-card h4 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .feature-card p { font-size: 0.875rem; color: var(--slate-l); line-height: 1.6; }
+
+    /* ── COMPLIANCE ── */
+    .compliance-bar {
+      background: white; border: 1px solid var(--border);
+      border-radius: 16px; padding: 32px 40px;
+      display: flex; align-items: center; justify-content: space-around;
+      flex-wrap: wrap; gap: 24px; margin-top: 48px;
+    }
+    .compliance-item { text-align: center; }
+    .compliance-item .c-num { font-size: 2rem; font-weight: 800; color: var(--green); }
+    .compliance-item .c-label { font-size: 0.8rem; color: var(--slate-l); margin-top: 4px; }
+
+    /* ── DEMO CREDENTIALS ── */
+    .creds-section { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 40px; margin-top: 48px; }
+    .creds-section h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 20px; }
+    .creds-table { width: 100%; border-collapse: collapse; }
+    .creds-table th {
+      text-align: left; font-size: 0.75rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--slate-l); padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .creds-table td {
+      padding: 10px 12px; font-size: 0.875rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .creds-table tr:last-child td { border-bottom: none; }
+    .creds-table code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem; background: var(--bg);
+      padding: 2px 6px; border-radius: 4px;
+    }
+    .role-pill {
+      font-size: 0.7rem; font-weight: 700; padding: 2px 8px;
+      border-radius: 100px; white-space: nowrap;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--slate); color: #94a3b8;
+      padding: 40px 2rem; text-align: center;
+    }
+    footer .footer-brand { font-size: 1.1rem; font-weight: 700; color: white; margin-bottom: 8px; }
+    footer p { font-size: 0.85rem; }
+    footer a { color: #4ade80; text-decoration: none; }
+
+    /* ── STATUS BADGE ── */
+    .status-banner {
+      background: var(--green-l); border-bottom: 1px solid #bbf7d0;
+      padding: 10px 2rem; text-align: center;
+      font-size: 0.85rem; font-weight: 500; color: #166534;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    @media (max-width: 640px) {
+      nav { padding: 0 1rem; }
+      .nav-links { display: none; }
+      .hero { padding: 60px 1rem 50px; }
+      .hero-stats { gap: 1.5rem; }
+      .section { padding: 60px 1rem; }
+      .compliance-bar { padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Status Banner -->
+<div class="status-banner">
+  <span class="status-dot"></span>
+  Production-ready · 28 migrations · Zero open audit findings · v28
+</div>
+
+<!-- Nav -->
+<nav>
+  <a href="#" class="nav-brand">
+    <span>💧</span>
+    GN-WAAS
+    <span class="badge">v28</span>
+  </a>
+  <div class="nav-links">
+    <a href="#portals">Portals</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#features">Features</a>
+    <a href="#demo">Demo Access</a>
+    <a href="https://github.com/ArowuTest/gn-waas" target="_blank" rel="noopener">GitHub</a>
+    <a href="#portals" class="nav-cta">Launch App →</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-eyebrow">
+    🇬🇭 Ghana National Water Audit &amp; Assurance System
+  </div>
+  <h1>Recovering <span>GHS 2.1 Billion</span> in Annual Water Revenue Losses</h1>
+  <p>Sovereign software platform that reconciles bulk meter data with billed water, flags commercial theft, and generates GRA-signed audit reports — all without touching GWL's core systems.</p>
+
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="num">51.6%</div>
+      <div class="label">Current NRW Rate</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">20%</div>
+      <div class="label">Target NRW Rate</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">GHS 2.1B</div>
+      <div class="label">Annual Recovery Target</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">28</div>
+      <div class="label">DB Migrations</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">0</div>
+      <div class="label">Open Audit Findings</div>
+    </div>
+  </div>
+
+  <div class="hero-buttons">
+    <a href="#portals" class="btn btn-primary">
+      🚀 Launch Portals
+    </a>
+    <a href="https://github.com/ArowuTest/gn-waas" target="_blank" rel="noopener" class="btn btn-outline">
+      ⭐ View on GitHub
+    </a>
+  </div>
+</section>
+
+<!-- Portals -->
+<section class="section" id="portals">
+  <div class="section-label">Three Portals</div>
+  <div class="section-title">One System, Three Perspectives</div>
+  <p class="section-sub">Each portal is a full React application with real-time data, role-based access control, and district-scoped Row-Level Security.</p>
+
+  <div class="portals-grid">
+
+    <!-- Admin Portal -->
+    <div class="portal-card theme-admin">
+      <div class="portal-card-header">
+        <div class="portal-icon">🛡️</div>
+        <div>
+          <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#2563eb;margin-bottom:4px">Admin Portal</div>
+          <div style="font-size:0.8rem;color:#64748b">Full system oversight</div>
+        </div>
+      </div>
+      <div class="portal-card-body">
+        <h3>GN-WAAS Operations Dashboard</h3>
+        <p>Real-time anomaly flags, audit event management, field job dispatch, DMA heatmap, NRW analysis, GRA compliance reporting, and full user/district administration.</p>
+        <div class="portal-roles">
+          <span class="role-tag">System Admin</span>
+          <span class="role-tag">Audit Manager</span>
+          <span class="role-tag">GRA Auditor</span>
+          <span class="role-tag">Field Supervisor</span>
+        </div>
+        <a href="ADMIN_URL" class="portal-link" id="admin-link">
+          Open Admin Portal
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- GWL Portal -->
+    <div class="portal-card theme-gwl">
+      <div class="portal-card-header">
+        <div class="portal-icon">🏢</div>
+        <div>
+          <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#16a34a;margin-bottom:4px">GWL Portal</div>
+          <div style="font-size:0.8rem;color:#64748b">Ghana Water Limited</div>
+        </div>
+      </div>
+      <div class="portal-card-body">
+        <h3>GWL Case Management</h3>
+        <p>Audit case review, reclassification requests, credit approvals, field officer management, monthly billing reconciliation reports, and revenue recovery tracking.</p>
+        <div class="portal-roles">
+          <span class="role-tag">GWL Management</span>
+          <span class="role-tag">GWL Supervisor</span>
+        </div>
+        <a href="GWL_URL" class="portal-link" id="gwl-link">
+          Open GWL Portal
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- Authority Portal -->
+    <div class="portal-card theme-authority">
+      <div class="portal-card-header">
+        <div class="portal-icon">⚖️</div>
+        <div>
+          <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#ca8a04;margin-bottom:4px">Authority Portal</div>
+          <div style="font-size:0.8rem;color:#64748b">PURC / GRA Oversight</div>
+        </div>
+      </div>
+      <div class="portal-card-body">
+        <h3>Regulatory Oversight Dashboard</h3>
+        <p>National NRW summary, district-level water balance, field officer tracking, meter reading submission, anomaly reporting, and GRA-signed compliance report downloads.</p>
+        <div class="portal-roles">
+          <span class="role-tag">GRA Auditor</span>
+          <span class="role-tag">Field Officer</span>
+        </div>
+        <a href="AUTHORITY_URL" class="portal-link" id="authority-link">
+          Open Authority Portal
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Architecture -->
+<section class="arch-section" id="architecture">
+  <div class="arch-inner">
+    <div class="section-label">System Architecture</div>
+    <div class="section-title">7 Microservices, 1 Unified Platform</div>
+    <p class="section-sub">Built on Go, PostgreSQL with TimescaleDB, and React — deployed on Render (backend) and Vercel (frontends).</p>
+
+    <div class="arch-grid">
+      <div class="arch-card">
+        <div class="arch-icon">🔀</div>
+        <h4>API Gateway</h4>
+        <p>Single entry point. JWT auth, RBAC middleware, rate limiting, request routing to all internal services.</p>
+        <div class="tech">Go · Fiber · Port 3000</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-icon">🔍</div>
+        <h4>Sentinel</h4>
+        <p>IWA/AWWA M36 water balance engine. Detects billing anomalies, night-flow theft, and district-level NRW.</p>
+        <div class="tech">Go · TimescaleDB · Port 3002</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-icon">💰</div>
+        <h4>Tariff Engine</h4>
+        <p>2026 PURC tiered pricing calculator. Generates shadow bills for every account to compare against GWL actuals.</p>
+        <div class="tech">Go · Port 3003</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-icon">🏛️</div>
+        <h4>GRA Bridge</h4>
+        <p>Submits validated audit reports to GRA's VSDC API. Returns QR-signed receipts for immutable evidence.</p>
+        <div class="tech">Go · GRA VSDC API · Port 3004</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-icon">📡</div>
+        <h4>CDC Ingestor</h4>
+        <p>Mirrors GWL's billing database via Change Data Capture. Keeps shadow ledger in sync without write access.</p>
+        <div class="tech">Go · PostgreSQL CDC</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-icon">📷</div>
+        <h4>OCR Service</h4>
+        <p>Extracts meter readings from field photos using Tesseract. Validates GPS coordinates and device fingerprints.</p>
+        <div class="tech">Go · Tesseract · MinIO</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-icon">📱</div>
+        <h4>Flutter App</h4>
+        <p>Offline-first mobile app for field officers. GPS-locked meter photos, digital signatures, auto-sync.</p>
+        <div class="tech">Flutter · Dart · Android/iOS</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="section" id="features">
+  <div class="section-label">Key Capabilities</div>
+  <div class="section-title">Built for Ghana's Water Sector</div>
+  <p class="section-sub">Every feature maps directly to a requirement in the GN-WAAS Master Technical Specification v3.0.</p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feat-icon" style="background:#dbeafe">🔐</div>
+      <h4>12-Role RBAC + Row-Level Security</h4>
+      <p>Keycloak-backed authentication with PostgreSQL RLS on every district-scoped table. No cross-district data leakage possible at the database layer.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon" style="background:#dcfce7">⚖️</div>
+      <h4>Shadow Billing Reconciliation</h4>
+      <p>Independent Lago-style ledger calculates bills using 2026 PURC tariffs. Flags any account where GWL's bill deviates &gt;15% from the shadow bill.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon" style="background:#fef9c3">🌊</div>
+      <h4>IWA/AWWA M36 Water Balance</h4>
+      <p>Full water balance per district: System Input Volume, Authorised Consumption, Real Losses, Apparent Losses, NRW percentage — updated nightly.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon" style="background:#fee2e2">🚨</div>
+      <h4>Night-Flow Theft Detection</h4>
+      <p>2–4 AM bulk meter analysis separates physical leaks (constant flow) from commercial theft (pulsing flow). Triggers automatic field job dispatch.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon" style="background:#f3e8ff">📍</div>
+      <h4>GPS-Locked Field Verification</h4>
+      <p>Mobile app requires GPS proximity to meter location before photo capture. Device ID, GPS precision, and photo hash stored as immutable evidence.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon" style="background:#ffedd5">🧾</div>
+      <h4>GRA E-VAT Integration</h4>
+      <p>Every confirmed audit event is submitted to GRA's VSDC API. Returns a QR-signed receipt that locks the audit record permanently.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon" style="background:#dcfce7">🗄️</div>
+      <h4>28 Idempotent Migrations</h4>
+      <p>All migrations use IF NOT EXISTS guards and DO blocks for constraint creation. Safe to re-run on any environment without data loss.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon" style="background:#dbeafe">📊</div>
+      <h4>TimescaleDB Hypertables</h4>
+      <p>meter_readings, officer_gps_tracks, and revenue_recovery_events are TimescaleDB hypertables for efficient time-series queries at scale.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon" style="background:#fef9c3">🏗️</div>
+      <h4>NITA Sovereign Deployment</h4>
+      <p>Designed for Ghana's National Information Technology Agency infrastructure. No foreign cloud dependency for core data processing.</p>
+    </div>
+  </div>
+
+  <!-- Compliance bar -->
+  <div class="compliance-bar">
+    <div class="compliance-item">
+      <div class="c-num">28</div>
+      <div class="c-label">DB Migrations</div>
+    </div>
+    <div class="compliance-item">
+      <div class="c-num">12</div>
+      <div class="c-label">RBAC Roles</div>
+    </div>
+    <div class="compliance-item">
+      <div class="c-num">0</div>
+      <div class="c-label">Open Audit Findings</div>
+    </div>
+    <div class="compliance-item">
+      <div class="c-num">7</div>
+      <div class="c-label">Microservices</div>
+    </div>
+    <div class="compliance-item">
+      <div class="c-num">20%</div>
+      <div class="c-label">VAT Compliant</div>
+    </div>
+    <div class="compliance-item">
+      <div class="c-num">IWA M36</div>
+      <div class="c-label">Water Balance Standard</div>
+    </div>
+  </div>
+</section>
+
+<!-- Demo Access -->
+<section class="section" id="demo">
+  <div class="section-label">Demo Access</div>
+  <div class="section-title">Pre-seeded Test Accounts</div>
+  <p class="section-sub">All portals ship with seeded demo users. Use the "Quick Login" buttons on the login page, or enter credentials manually.</p>
+
+  <div class="creds-section">
+    <h3>🔑 Demo Credentials (password: <code>GnWaas2026!</code> for all)</h3>
+    <table class="creds-table">
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Email</th>
+          <th>Portal</th>
+          <th>Access Level</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="role-pill" style="background:#dbeafe;color:#1e40af">System Admin</span></td>
+          <td><code>admin@gnwaas.gov.gh</code></td>
+          <td>Admin</td>
+          <td>Full system access, user management, all districts</td>
+        </tr>
+        <tr>
+          <td><span class="role-pill" style="background:#dbeafe;color:#1e40af">Audit Manager</span></td>
+          <td><code>audit.manager@gnwaas.gov.gh</code></td>
+          <td>Admin</td>
+          <td>Audit events, anomaly flags, field jobs, reports</td>
+        </tr>
+        <tr>
+          <td><span class="role-pill" style="background:#fef9c3;color:#854d0e">GRA Auditor</span></td>
+          <td><code>gra.auditor@gra.gov.gh</code></td>
+          <td>Admin / Authority</td>
+          <td>GRA compliance, read-only audit access</td>
+        </tr>
+        <tr>
+          <td><span class="role-pill" style="background:#dcfce7;color:#166534">GWL Management</span></td>
+          <td><code>gwl.manager@gwl.com.gh</code></td>
+          <td>GWL</td>
+          <td>Case management, reclassifications, credits</td>
+        </tr>
+        <tr>
+          <td><span class="role-pill" style="background:#dcfce7;color:#166534">GWL Supervisor</span></td>
+          <td><code>gwl.supervisor@gwl.com.gh</code></td>
+          <td>GWL</td>
+          <td>District-scoped case review, field officer oversight</td>
+        </tr>
+        <tr>
+          <td><span class="role-pill" style="background:#dbeafe;color:#1e40af">Field Supervisor</span></td>
+          <td><code>supervisor@gnwaas.gov.gh</code></td>
+          <td>Admin / Authority</td>
+          <td>Field job assignment, officer tracking</td>
+        </tr>
+        <tr>
+          <td><span class="role-pill" style="background:#f3e8ff;color:#6b21a8">Field Officer</span></td>
+          <td><code>officer1@gnwaas.gov.gh</code></td>
+          <td>Authority</td>
+          <td>Meter readings, anomaly reports, GPS tracking</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-brand">💧 GN-WAAS</div>
+  <p>Ghana National Water Audit &amp; Assurance System · Built for <a href="https://gwcl.com.gh" target="_blank" rel="noopener">Ghana Water Company Limited</a> &amp; <a href="https://gra.gov.gh" target="_blank" rel="noopener">Ghana Revenue Authority</a></p>
+  <p style="margin-top:8px">
+    <a href="https://github.com/ArowuTest/gn-waas" target="_blank" rel="noopener">GitHub Repository</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/ArowuTest/gn-waas/blob/main/DEPLOY.md" target="_blank" rel="noopener">Deployment Guide</a>
+    &nbsp;·&nbsp;
+    IWA/AWWA M36 Compliant · NITA Sovereign Infrastructure
+  </p>
+</footer>
+
+<script>
+  // ── Inject portal URLs ──────────────────────────────────────────────────
+  // These are replaced at deploy time by the Vercel build environment.
+  // Fallback: GitHub Pages demo URLs.
+  const ADMIN_URL     = window.GNWAAS_ADMIN_URL     || 'https://arowutest.github.io/gn-waas/admin/';
+  const GWL_URL       = window.GNWAAS_GWL_URL       || 'https://arowutest.github.io/gn-waas/gwl/';
+  const AUTHORITY_URL = window.GNWAAS_AUTHORITY_URL || 'https://arowutest.github.io/gn-waas/authority/';
+
+  document.getElementById('admin-link').href     = ADMIN_URL;
+  document.getElementById('gwl-link').href       = GWL_URL;
+  document.getElementById('authority-link').href = AUTHORITY_URL;
+
+  // Also update hero CTA
+  document.querySelector('a[href="#portals"].btn-primary') &&
+    (document.querySelector('a[href="#portals"].btn-primary').href = '#portals');
+</script>
+
+</body>
 </html>
