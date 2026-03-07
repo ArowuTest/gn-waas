@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GN-WAAS — Ghana National Water Audit & Assurance System</title>
+  <meta name="description" content="The official portal for the Ghana National Water Audit and Assurance System. An independent oversight platform mandated to recover non-revenue water losses and ensure GRA E-VAT compliance across Ghana's water sector." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Ghana national colours */
+      --gh-red:    #CE1126;
+      --gh-gold:   #FCD116;
+      --gh-green:  #006B3F;
+      --gh-black:  #000000;
+
+      /* UI palette */
+      --primary:   #006B3F;
+      --primary-d: #005230;
+      --primary-l: #e6f4ee;
+      --accent:    #FCD116;
+      --danger:    #CE1126;
+      --slate:     #0f172a;
+      --slate-m:   #334155;
+      --slate-l:   #64748b;
+      --border:    #e2e8f0;
+      --bg:        #f8fafc;
+      --white:     #ffffff;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--slate);
+      line-height: 1.6;
+    }
+
+    /* ── GOVERNMENT TOP BAR ─────────────────────────────────── */
+    .gov-bar {
+      background: var(--gh-green);
+      color: rgba(255,255,255,0.9);
+      font-size: 0.75rem;
+      padding: 6px 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .gov-bar-left { display: flex; align-items: center; gap: 8px; }
+    .gov-bar-left .flag {
+      display: flex; gap: 2px; align-items: center;
+    }
+    .flag-stripe {
+      width: 10px; height: 14px; border-radius: 1px;
+    }
+    .gov-bar a { color: rgba(255,255,255,0.8); text-decoration: none; }
+    .gov-bar a:hover { color: white; text-decoration: underline; }
+
+    /* ── HEADER ─────────────────────────────────────────────── */
+    header {
+      background: white;
+      border-bottom: 3px solid var(--gh-gold);
+      padding: 0 2rem;
+    }
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0;
+      gap: 2rem;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .coat-of-arms {
+      width: 64px;
+      height: 64px;
+      flex-shrink: 0;
+    }
+    .brand-text {}
+    .brand-text .system-name {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--gh-green);
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+    .brand-text .system-full {
+      font-size: 0.8rem;
+      color: var(--slate-l);
+      font-weight: 400;
+      margin-top: 2px;
+    }
+    .brand-text .mandate-line {
+      font-size: 0.72rem;
+      color: var(--slate-m);
+      font-weight: 500;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mandate-line .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--gh-gold); }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    .header-nav a {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--slate-m);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .header-nav a:hover { color: var(--primary); }
+    .header-nav .login-btn {
+      background: var(--primary);
+      color: white !important;
+      padding: 9px 20px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: background 0.15s;
+    }
+    .header-nav .login-btn:hover { background: var(--primary-d); }
+
+    /* ── HERO ───────────────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(160deg, #003d24 0%, #005230 40%, #0a3d1f 100%);
+      color: white;
+      padding: 80px 2rem 70px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--gh-red) 33.3%, var(--gh-gold) 33.3% 66.6%, var(--gh-green) 66.6%);
+    }
+    .hero-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 60px;
+      align-items: center;
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(252,209,22,0.15);
+      border: 1px solid rgba(252,209,22,0.3);
+      border-radius: 4px;
+      padding: 5px 12px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gh-gold);
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(1.9rem, 3.5vw, 2.8rem);
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 16px;
+      color: white;
+    }
+    .hero h1 em {
+      font-style: normal;
+      color: var(--gh-gold);
+    }
+    .hero-sub {
+      font-size: 1rem;
+      color: rgba(255,255,255,0.75);
+      max-width: 520px;
+      margin-bottom: 32px;
+      line-height: 1.7;
+    }
+    .hero-mandate {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-left: 3px solid var(--gh-gold);
+      border-radius: 0 6px 6px 0;
+      padding: 14px 18px;
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.8);
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+    .hero-mandate strong { color: white; }
+
+    .hero-kpis {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .hero-kpi {}
+    .hero-kpi .kpi-val {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--gh-gold);
+      line-height: 1;
+    }
+    .hero-kpi .kpi-label {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.6);
+      margin-top: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── PORTAL ACCESS CARD ─────────────────────────────────── */
+    .access-card {
+      background: white;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.25);
+    }
+    .access-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--slate);
+      margin-bottom: 6px;
+    }
+    .access-card .access-sub {
+      font-size: 0.8rem;
+      color: var(--slate-l);
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .portal-btn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      text-decoration: none;
+      color: var(--slate);
+      margin-bottom: 10px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .portal-btn:hover {
+      border-color: var(--primary);
+      background: var(--primary-l);
+    }
+    .portal-btn:last-child { margin-bottom: 0; }
+    .portal-btn-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .portal-btn-text {}
+    .portal-btn-text .pb-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--slate);
+      display: block;
+    }
+    .portal-btn-text .pb-roles {
+      font-size: 0.72rem;
+      color: var(--slate-l);
+      display: block;
+      margin-top: 1px;
+    }
+    .portal-btn-arrow {
+      margin-left: auto;
+      color: var(--slate-l);
+      font-size: 1rem;
+    }
+    .portal-btn:hover .portal-btn-arrow { color: var(--primary); }
+
+    .access-notice {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 0.72rem;
+      color: var(--slate-l);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      line-height: 1.5;
+    }
+
+    /* ── MANDATE STRIP ──────────────────────────────────────── */
+    .mandate-strip {
+      background: var(--primary-l);
+      border-top: 1px solid #b7dfc9;
+      border-bottom: 1px solid #b7dfc9;
+      padding: 20px 2rem;
+    }
+    .mandate-strip-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .mandate-strip p {
+      font-size: 0.85rem;
+      color: var(--primary-d);
+      font-weight: 500;
+    }
+    .mandate-strip p strong { font-weight: 700; }
+    .mandate-agencies {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .agency-tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--primary);
+      background: white;
+      border: 1px solid #b7dfc9;
+      padding: 4px 10px;
+      border-radius: 4px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── MISSION SECTION ────────────────────────────────────── */
+    .section { padding: 72px 2rem; }
+    .section-inner { max-width: 1200px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: clamp(1.6rem, 2.8vw, 2.2rem);
+      font-weight: 800;
+      color: var(--slate);
+      margin-bottom: 14px;
+      line-height: 1.25;
+    }
+    .section-sub {
+      font-size: 0.95rem;
+      color: var(--slate-l);
+      max-width: 580px;
+      line-height: 1.7;
+    }
+
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+    .pillar-card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      border-top: 3px solid transparent;
+    }
+    .pillar-card.red   { border-top-color: var(--gh-red); }
+    .pillar-card.gold  { border-top-color: var(--gh-gold); }
+    .pillar-card.green { border-top-color: var(--gh-green); }
+    .pillar-num {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--slate-l);
+      margin-bottom: 12px;
+    }
+    .pillar-card h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--slate);
+      margin-bottom: 10px;
+    }
+    .pillar-card p {
+      font-size: 0.875rem;
+      color: var(--slate-l);
+      line-height: 1.65;
+    }
+
+    /* ── IMPACT NUMBERS ─────────────────────────────────────── */
+    .impact-section {
+      background: var(--slate);
+      color: white;
+      padding: 64px 2rem;
+    }
+    .impact-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .impact-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      margin-top: 48px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .impact-item {
+      background: rgba(255,255,255,0.04);
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .impact-item .i-val {
+      font-size: 2.4rem;
+      font-weight: 800;
+      color: var(--gh-gold);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .impact-item .i-label {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.4;
+    }
+    .impact-section .section-label { color: var(--gh-gold); }
+    .impact-section .section-title { color: white; }
+    .impact-section .section-sub { color: rgba(255,255,255,0.6); }
+
+    /* ── OVERSIGHT FRAMEWORK ────────────────────────────────── */
+    .oversight-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      margin-top: 48px;
+      align-items: start;
+    }
+    .oversight-list { list-style: none; }
+    .oversight-list li {
+      display: flex;
+      gap: 14px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .oversight-list li:last-child { border-bottom: none; }
+    .oversight-list .ol-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: var(--primary-l);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .oversight-list .ol-text strong {
+      display: block;
+      font-weight: 700;
+      color: var(--slate);
+      margin-bottom: 2px;
+    }
+    .oversight-list .ol-text span {
+      color: var(--slate-l);
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    .compliance-box {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+    }
+    .compliance-box h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--slate);
+    }
+    .compliance-item-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .compliance-item-row:last-child { border-bottom: none; }
+    .compliance-item-row .ci-check {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary-l);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .compliance-item-row .ci-text { color: var(--slate-m); }
+    .compliance-item-row .ci-ref {
+      margin-left: auto;
+      font-size: 0.7rem;
+      color: var(--slate-l);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* ── PORTAL DIRECTORY ───────────────────────────────────── */
+    .portal-dir-section { background: var(--primary-l); padding: 72px 2rem; }
+    .portal-dir-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 48px;
+    }
+    .portal-dir-card {
+      background: white;
+      border: 1px solid #b7dfc9;
+      border-radius: 12px;
+      padding: 28px;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.2s;
+    }
+    .portal-dir-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(0,107,63,0.15);
+      border-color: var(--primary);
+    }
+    .pdc-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .pdc-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+    .pdc-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--slate-l);
+    }
+    .pdc-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--slate);
+    }
+    .pdc-desc {
+      font-size: 0.82rem;
+      color: var(--slate-l);
+      line-height: 1.6;
+      flex: 1;
+      margin-bottom: 20px;
+    }
+    .pdc-users {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 20px;
+    }
+    .pdc-user-tag {
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 100px;
+      background: var(--primary-l);
+      color: var(--primary);
+    }
+    .pdc-cta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--primary);
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── FOOTER ─────────────────────────────────────────────── */
+    footer {
+      background: var(--slate);
+      color: rgba(255,255,255,0.6);
+      padding: 48px 2rem 32px;
+    }
+    .footer-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .footer-top {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 24px;
+    }
+    .footer-brand-name {
+      font-size: 1rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 8px;
+    }
+    .footer-brand-desc {
+      font-size: 0.8rem;
+      line-height: 1.6;
+      max-width: 320px;
+    }
+    .footer-col h5 {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 12px;
+    }
+    .footer-col a {
+      display: block;
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.6);
+      text-decoration: none;
+      margin-bottom: 8px;
+      transition: color 0.15s;
+    }
+    .footer-col a:hover { color: white; }
+    .footer-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .footer-bottom .ghana-stripe {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+    .fs { width: 16px; height: 6px; border-radius: 1px; }
+
+    /* ── RESPONSIVE ─────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .hero-inner { grid-template-columns: 1fr; }
+      .access-card { display: none; }
+      .pillars-grid { grid-template-columns: 1fr; }
+      .impact-grid { grid-template-columns: repeat(2, 1fr); }
+      .oversight-grid { grid-template-columns: 1fr; }
+      .portal-dir-grid { grid-template-columns: 1fr; }
+      .footer-top { grid-template-columns: 1fr; gap: 24px; }
+      .header-nav { display: none; }
+    }
+    @media (max-width: 640px) {
+      .gov-bar { font-size: 0.68rem; }
+      .hero { padding: 48px 1rem 48px; }
+      .section { padding: 48px 1rem; }
+      .impact-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Government Top Bar -->
+<div class="gov-bar">
+  <div class="gov-bar-left">
+    <div class="flag">
+      <div class="flag-stripe" style="background:#CE1126"></div>
+      <div class="flag-stripe" style="background:#FCD116"></div>
+      <div class="flag-stripe" style="background:#006B3F"></div>
+    </div>
+    <span>Official Government of Ghana Portal &nbsp;·&nbsp; Republic of Ghana</span>
+  </div>
+  <div>
+    <a href="https://ghana.gov.gh" target="_blank" rel="noopener">ghana.gov.gh</a>
+    &nbsp;·&nbsp;
+    <a href="https://nita.gov.gh" target="_blank" rel="noopener">NITA</a>
+    &nbsp;·&nbsp;
+    <a href="https://gra.gov.gh" target="_blank" rel="noopener">GRA</a>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="header-inner">
+    <div class="header-brand">
+      <!-- Ghana Coat of Arms (SVG placeholder — replace with official asset) -->
+      <svg class="coat-of-arms" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Ghana Coat of Arms">
+        <circle cx="32" cy="32" r="30" fill="#006B3F" stroke="#FCD116" stroke-width="2"/>
+        <path d="M32 10 L36 22 L48 22 L38 30 L42 42 L32 34 L22 42 L26 30 L16 22 L28 22 Z" fill="#FCD116"/>
+        <rect x="20" y="44" width="24" height="6" rx="1" fill="#CE1126"/>
+        <text x="32" y="58" text-anchor="middle" font-size="5" fill="white" font-family="serif" font-weight="bold">GHANA</text>
+      </svg>
+      <div class="brand-text">
+        <div class="system-name">GN-WAAS</div>
+        <div class="system-full">Ghana National Water Audit &amp; Assurance System</div>
+        <div class="mandate-line">
+          <span class="dot"></span>
+          Ministry of Water Resources &amp; Sanitation
+          <span class="dot"></span>
+          PURC Oversight
+          <span class="dot"></span>
+          GRA Compliance
+        </div>
+      </div>
+    </div>
+    <nav class="header-nav">
+      <a href="#mandate">Our Mandate</a>
+      <a href="#oversight">Oversight Framework</a>
+      <a href="#portals">Portal Directory</a>
+      <a href="#portals" class="login-btn">Authorised Access →</a>
+    </nav>
+  </div>
+</header>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="hero-eyebrow">
+        🇬🇭 &nbsp; National Revenue Assurance Initiative · 2026
+      </div>
+      <h1>Restoring <em>Financial Integrity</em> to Ghana's Water Sector</h1>
+      <p class="hero-sub">
+        GN-WAAS is the Government of Ghana's independent audit and assurance platform, mandated to quantify, investigate, and recover non-revenue water losses across all districts served by Ghana Water Limited.
+      </p>
+      <div class="hero-mandate">
+        <strong>Statutory Mandate:</strong> Established under the authority of the Ministry of Water Resources &amp; Sanitation in coordination with the Public Utilities Regulatory Commission (PURC) and the Ghana Revenue Authority (GRA) to enforce Act 1151 E-VAT compliance across the water sector.
+      </div>
+      <div class="hero-kpis">
+        <div class="hero-kpi">
+          <div class="kpi-val">51.6%</div>
+          <div class="kpi-label">Current NRW Rate</div>
+        </div>
+        <div class="hero-kpi">
+          <div class="kpi-val">GHS 2.1B</div>
+          <div class="kpi-label">Annual Revenue at Risk</div>
+        </div>
+        <div class="hero-kpi">
+          <div class="kpi-val">20%</div>
+          <div class="kpi-label">NRW Target</div>
+        </div>
+        <div class="hero-kpi">
+          <div class="kpi-val">1.2M</div>
+          <div class="kpi-label">Accounts Under Audit</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Portal Access Card -->
+    <div class="access-card">
+      <h3>🔐 Authorised Portal Access</h3>
+      <p class="access-sub">Select your designated portal below. Access is restricted to credentialed government and utility personnel.</p>
+
+      <a href="ADMIN_URL" class="portal-btn" id="admin-link">
+        <div class="portal-btn-icon" style="background:#dbeafe">🛡️</div>
+        <div class="portal-btn-text">
+          <span class="pb-title">Operations &amp; Audit Portal</span>
+          <span class="pb-roles">System Admin · Audit Manager · Field Supervisor</span>
+        </div>
+        <span class="portal-btn-arrow">→</span>
+      </a>
+
+      <a href="GWL_URL" class="portal-btn" id="gwl-link">
+        <div class="portal-btn-icon" style="background:#dcfce7">🏢</div>
+        <div class="portal-btn-text">
+          <span class="pb-title">GWL Case Management Portal</span>
+          <span class="pb-roles">GWL Management · GWL Supervisor</span>
+        </div>
+        <span class="portal-btn-arrow">→</span>
+      </a>
+
+      <a href="AUTHORITY_URL" class="portal-btn" id="authority-link">
+        <div class="portal-btn-icon" style="background:#fef9c3">⚖️</div>
+        <div class="portal-btn-text">
+          <span class="pb-title">Regulatory Oversight Portal</span>
+          <span class="pb-roles">GRA Auditor · Field Officer · PURC</span>
+        </div>
+        <span class="portal-btn-arrow">→</span>
+      </a>
+
+      <div class="access-notice">
+        🔒 Access to this system is restricted to authorised personnel only. Unauthorised access attempts are logged and may be subject to prosecution under the Electronic Transactions Act, 2008 (Act 772).
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Mandate Strip -->
+<div class="mandate-strip">
+  <div class="mandate-strip-inner">
+    <p>Operated under the joint oversight of: <strong>Ministry of Water Resources &amp; Sanitation · PURC · GRA · NITA</strong></p>
+    <div class="mandate-agencies">
+      <span class="agency-tag">IWA/AWWA M36 Compliant</span>
+      <span class="agency-tag">Act 1151 E-VAT</span>
+      <span class="agency-tag">Act 843 Data Sovereignty</span>
+      <span class="agency-tag">NITA Tier-3 Hosted</span>
+    </div>
+  </div>
+</div>
+
+<!-- Mission / Three Pillars -->
+<section class="section" id="mandate">
+  <div class="section-inner">
+    <div class="section-label">Our Mandate</div>
+    <div class="section-title">Three Pillars of National Water Assurance</div>
+    <p class="section-sub">GN-WAAS operates as an independent oversight layer — it does not replace GWL's billing system. It audits it.</p>
+
+    <div class="pillars-grid">
+      <div class="pillar-card red">
+        <div class="pillar-num">Pillar 01 — Financial Truth</div>
+        <h3>Shadow Billing &amp; Revenue Reconciliation</h3>
+        <p>An independent shadow ledger recalculates every customer bill using official 2026 PURC tariffs. Any account where GWL's actual bill deviates by more than 15% from the shadow calculation is automatically flagged for investigation and GRA compliance review.</p>
+      </div>
+      <div class="pillar-card gold">
+        <div class="pillar-num">Pillar 02 — Physical Truth</div>
+        <h3>Statistical Flow Analysis &amp; Leak Detection</h3>
+        <p>Night-flow analysis (2:00–4:00 AM) across District Metered Areas identifies anomalies that exceed 30% of daily average flow. Pattern recognition distinguishes physical infrastructure leaks from deliberate commercial theft operations.</p>
+      </div>
+      <div class="pillar-card green">
+        <div class="pillar-num">Pillar 03 — Operational Truth</div>
+        <h3>GPS-Locked Field Verification</h3>
+        <p>Field officers operate under a tamper-proof mobile protocol requiring GPS proximity confirmation, OCR-based meter photo capture, and digital signatures. Every audit record is cryptographically hashed and submitted to GRA's VSDC API for legal certification.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Impact Numbers -->
+<section class="impact-section">
+  <div class="impact-inner">
+    <div class="section-label">National Impact</div>
+    <div class="section-title" style="color:white">The Scale of Ghana's Water Revenue Crisis</div>
+    <p class="section-sub">GN-WAAS was established in direct response to five consecutive years of revenue losses that represent 15% of Ghana's total water sector budget.</p>
+
+    <div class="impact-grid">
+      <div class="impact-item">
+        <div class="i-val">51.6%</div>
+        <div class="i-label">Non-Revenue Water<br>National Average</div>
+      </div>
+      <div class="impact-item">
+        <div class="i-val">GHS 2.1B</div>
+        <div class="i-label">Annual Revenue<br>Lost to NRW</div>
+      </div>
+      <div class="impact-item">
+        <div class="i-val">GHS 170M+</div>
+        <div class="i-label">Annual VAT<br>Unrecovered</div>
+      </div>
+      <div class="impact-item">
+        <div class="i-val">20%</div>
+        <div class="i-label">NRW Target Under<br>IWA/AWWA M36</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Oversight Framework -->
+<section class="section" id="oversight">
+  <div class="section-inner">
+    <div class="section-label">Oversight Framework</div>
+    <div class="section-title">How GN-WAAS Enforces Accountability</div>
+    <p class="section-sub">Every audit action is traceable, immutable, and legally certified before it is recorded.</p>
+
+    <div class="oversight-grid">
+      <ul class="oversight-list">
+        <li>
+          <div class="ol-icon">🔍</div>
+          <div class="ol-text">
+            <strong>Anomaly Detection</strong>
+            <span>Sentinel engine continuously monitors shadow bill variances, night-flow patterns, and ghost account indicators across all 1.2M accounts.</span>
+          </div>
+        </li>
+        <li>
+          <div class="ol-icon">📋</div>
+          <div class="ol-text">
+            <strong>Audit Case Management</strong>
+            <span>Flagged anomalies are converted into structured audit cases, assigned to field teams, and tracked from detection through to resolution and revenue recovery.</span>
+          </div>
+        </li>
+        <li>
+          <div class="ol-icon">📍</div>
+          <div class="ol-text">
+            <strong>Field Verification</strong>
+            <span>GPS-fenced mobile audits require officers to be physically present at the meter location. Device authentication prevents proxy submissions.</span>
+          </div>
+        </li>
+        <li>
+          <div class="ol-icon">🏛️</div>
+          <div class="ol-text">
+            <strong>GRA Compliance Lock</strong>
+            <span>No audit report is finalised until GRA's VSDC API returns a signed QR code. This creates prosecution-ready, tamper-proof legal evidence.</span>
+          </div>
+        </li>
+        <li>
+          <div class="ol-icon">📊</div>
+          <div class="ol-text">
+            <strong>Revenue Recovery Tracking</strong>
+            <span>Confirmed recoveries are tracked against the national NRW target. District-level heatmaps provide the Ministry with real-time fiscal intelligence.</span>
+          </div>
+        </li>
+      </ul>
+
+      <div class="compliance-box">
+        <h4>Regulatory Compliance Checklist</h4>
+        <div class="compliance-item-row">
+          <div class="ci-check">✓</div>
+          <span class="ci-text">GRA E-VAT Real-Time Validation</span>
+          <span class="ci-ref">Act 1151</span>
+        </div>
+        <div class="compliance-item-row">
+          <div class="ci-check">✓</div>
+          <span class="ci-text">Data Sovereignty — NITA Tier-3 Hosting</span>
+          <span class="ci-ref">Act 843</span>
+        </div>
+        <div class="compliance-item-row">
+          <div class="ci-check">✓</div>
+          <span class="ci-text">IWA/AWWA M36 Water Balance Standard</span>
+          <span class="ci-ref">IWA M36</span>
+        </div>
+        <div class="compliance-item-row">
+          <div class="ci-check">✓</div>
+          <span class="ci-text">PURC 2026 Tariff Compliance</span>
+          <span class="ci-ref">PURC</span>
+        </div>
+        <div class="compliance-item-row">
+          <div class="ci-check">✓</div>
+          <span class="ci-text">Role-Based Access Control (12 Roles)</span>
+          <span class="ci-ref">RBAC</span>
+        </div>
+        <div class="compliance-item-row">
+          <div class="ci-check">✓</div>
+          <span class="ci-text">Immutable Audit Trail (Append-Only)</span>
+          <span class="ci-ref">Forensic</span>
+        </div>
+        <div class="compliance-item-row">
+          <div class="ci-check">✓</div>
+          <span class="ci-text">TLS 1.3 Encryption in Transit</span>
+          <span class="ci-ref">Security</span>
+        </div>
+        <div class="compliance-item-row">
+          <div class="ci-check">✓</div>
+          <span class="ci-text">Row-Level Security — District Isolation</span>
+          <span class="ci-ref">PostgreSQL RLS</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Portal Directory -->
+<section class="portal-dir-section" id="portals">
+  <div class="section-inner">
+    <div class="section-label">Portal Directory</div>
+    <div class="section-title">Authorised Access by Role</div>
+    <p class="section-sub">Access is restricted to credentialed personnel. Select the portal corresponding to your designated role.</p>
+
+    <div class="portal-dir-grid">
+
+      <a href="ADMIN_URL" class="portal-dir-card" id="admin-dir-link">
+        <div class="pdc-header">
+          <div class="pdc-icon" style="background:#dbeafe">🛡️</div>
+          <div>
+            <div class="pdc-label">Operations Portal</div>
+            <div class="pdc-name">Audit &amp; Operations Command</div>
+          </div>
+        </div>
+        <p class="pdc-desc">
+          Real-time anomaly flags, audit event management, field job dispatch, DMA heatmap, NRW analysis, GRA compliance reporting, and full user and district administration.
+        </p>
+        <div class="pdc-users">
+          <span class="pdc-user-tag">System Admin</span>
+          <span class="pdc-user-tag">Audit Manager</span>
+          <span class="pdc-user-tag">GRA Auditor</span>
+          <span class="pdc-user-tag">Field Supervisor</span>
+        </div>
+        <div class="pdc-cta">
+          <span>Access Portal</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <a href="GWL_URL" class="portal-dir-card" id="gwl-dir-link">
+        <div class="pdc-header">
+          <div class="pdc-icon" style="background:#dcfce7">🏢</div>
+          <div>
+            <div class="pdc-label">Utility Portal</div>
+            <div class="pdc-name">GWL Case Management</div>
+          </div>
+        </div>
+        <p class="pdc-desc">
+          Audit case review and response, billing reclassification requests, credit approvals, field officer management, and monthly reconciliation report access.
+        </p>
+        <div class="pdc-users">
+          <span class="pdc-user-tag">GWL Management</span>
+          <span class="pdc-user-tag">GWL Supervisor</span>
+        </div>
+        <div class="pdc-cta">
+          <span>Access Portal</span>
+          <span>→</span>
+        </div>
+      </a>
+
+      <a href="AUTHORITY_URL" class="portal-dir-card" id="authority-dir-link">
+        <div class="pdc-header">
+          <div class="pdc-icon" style="background:#fef9c3">⚖️</div>
+          <div>
+            <div class="pdc-label">Regulatory Portal</div>
+            <div class="pdc-name">Regulatory Oversight</div>
+          </div>
+        </div>
+        <p class="pdc-desc">
+          National NRW summary, district water balance, field officer tracking, meter reading submission, anomaly reporting, and GRA-signed compliance report downloads.
+        </p>
+        <div class="pdc-users">
+          <span class="pdc-user-tag">GRA Auditor</span>
+          <span class="pdc-user-tag">Field Officer</span>
+          <span class="pdc-user-tag">PURC</span>
+        </div>
+        <div class="pdc-cta">
+          <span>Access Portal</span>
+          <span>→</span>
+        </div>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div>
+        <div class="footer-brand-name">🇬🇭 GN-WAAS</div>
+        <p class="footer-brand-desc">
+          Ghana National Water Audit &amp; Assurance System. An independent oversight platform operated under the authority of the Ministry of Water Resources &amp; Sanitation, in coordination with PURC, GRA, and NITA.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h5>Government Partners</h5>
+        <a href="https://mwrh.gov.gh" target="_blank" rel="noopener">Ministry of Water Resources</a>
+        <a href="https://purc.com.gh" target="_blank" rel="noopener">PURC</a>
+        <a href="https://gra.gov.gh" target="_blank" rel="noopener">Ghana Revenue Authority</a>
+        <a href="https://nita.gov.gh" target="_blank" rel="noopener">NITA</a>
+        <a href="https://gwcl.com.gh" target="_blank" rel="noopener">Ghana Water Limited</a>
+      </div>
+      <div class="footer-col">
+        <h5>Legal &amp; Compliance</h5>
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Use</a>
+        <a href="#">Data Protection (Act 843)</a>
+        <a href="#">E-VAT Compliance (Act 1151)</a>
+        <a href="#">Accessibility Statement</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Republic of Ghana · Ministry of Water Resources &amp; Sanitation · All rights reserved</span>
+      <div class="ghana-stripe">
+        <div class="fs" style="background:#CE1126"></div>
+        <div class="fs" style="background:#FCD116"></div>
+        <div class="fs" style="background:#006B3F"></div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Portal URLs — set these to your actual Vercel deployment URLs
+  const ADMIN_URL     = window.GNWAAS_ADMIN_URL     || 'https://arowutest.github.io/gn-waas/admin/';
+  const GWL_URL       = window.GNWAAS_GWL_URL       || 'https://arowutest.github.io/gn-waas/gwl/';
+  const AUTHORITY_URL = window.GNWAAS_AUTHORITY_URL || 'https://arowutest.github.io/gn-waas/authority/';
+
+  ['admin-link','admin-dir-link'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.href = ADMIN_URL;
+  });
+  ['gwl-link','gwl-dir-link'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.href = GWL_URL;
+  });
+  ['authority-link','authority-dir-link'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.href = AUTHORITY_URL;
+  });
+</script>
+
+</body>
+</html>
