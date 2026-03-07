@@ -75,6 +75,9 @@ function AppRoutes() {
         <Route path="settings" element={<AuditThresholdsPage />} />
         <Route path="tariffs" element={<TariffManagementPage />} />
         <Route path="gaps" element={<GapTrackingPage />} />
+        <Route path="whistleblower" element={<WhistleblowerPage />} />
+        <Route path="donor-kpis" element={<DonorKPIPage />} />
+        <Route path="sync-status" element={<OfflineSyncStatusPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

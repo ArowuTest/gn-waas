@@ -50,6 +50,9 @@ const navGroups = [
       { label: 'Settings',   to: '/settings',   icon: <Settings size={17} />,   roles: ['SYSTEM_ADMIN'] },
       { label: 'Tariffs',    to: '/tariffs',    icon: <Settings size={17} />,   roles: ['SYSTEM_ADMIN'] },
       { label: 'Gap Tracking', to: '/gaps',      icon: <BarChart3 size={17} /> },
+      { label: 'Whistleblower', to: '/whistleblower', icon: <Shield size={17} />, roles: ['SYSTEM_ADMIN'] },
+      { label: 'Donor KPIs',   to: '/donor-kpis',    icon: <FileText size={17} />, roles: ['SYSTEM_ADMIN', 'MOF_AUDITOR'] },
+      { label: 'Sync Status',  to: '/sync-status',   icon: <Smartphone size={17} />, roles: ['SYSTEM_ADMIN'] },
     ],
   },
 ]

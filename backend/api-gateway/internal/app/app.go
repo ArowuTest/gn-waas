@@ -879,6 +879,187 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		})
 	})
 
+
+	// ── Whistleblower Tips (public — no auth required) ────────────────────────
+	// Anonymous tip submission. No login required by design.
+	// Rate-limited separately to prevent abuse.
+	whistleblowerHandler := handler.NewWhistleblowerHandler(db, logger)
+	app.Post("/api/v1/tips", whistleblowerHandler.SubmitTip)
+	app.Get("/api/v1/tips/:ref", whistleblowerHandler.GetTipStatus)
+
+	// ── Whistleblower Admin (SYSTEM_ADMIN only) ───────────────────────────────
+	adminTips := api.Group("/admin/tips",
+		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN"),
+	)
+	adminTips.Get("/", whistleblowerHandler.ListTips)
+	adminTips.Patch("/:id", whistleblowerHandler.UpdateTip)
+
+	// ── Donor KPI Reports ─────────────────────────────────────────────────────
+	donorReportHandler := handler.NewDonorReportHandler(db, logger)
+	donorReports := api.Group("/reports/donor",
+		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER", "GRA_AUDITOR", "GWL_MANAGEMENT"),
+	)
+	donorReports.Get("/kpis", donorReportHandler.GetKPIs)
+	donorReports.Get("/trend", donorReportHandler.GetTrend)
+
+	// ── Compound House Management ─────────────────────────────────────────────
+	compoundHandler := handler.NewCompoundHouseHandler(db, logger)
+	compounds := api.Group("/admin/compounds",
+		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER"),
+	)
+	compounds.Post("/", compoundHandler.CreateCompound)
+	compounds.Get("/:id", compoundHandler.GetCompound)
+	compounds.Post("/:id/members", compoundHandler.AddMember)
+	compounds.Post("/:id/split-bill", compoundHandler.SplitBill)
+
+	// ── Meter Calibration ─────────────────────────────────────────────────────
+	meterCalibHandler := handler.NewMeterCalibrationHandler(db, logger)
+	meterCalib := api.Group("/admin/meters",
+		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER", "FIELD_SUPERVISOR"),
+	)
+	meterCalib.Post("/:account_id/calibrations", meterCalibHandler.RecordCalibration)
+	meterCalib.Get("/:account_id/calibrations", meterCalibHandler.GetCalibrationHistory)
+	meterCalib.Get("/due-calibration", meterCalibHandler.GetDueCalibrations)
+
+	// ── Offline Sync (field officers) ─────────────────────────────────────────
+	offlineSyncHandler := handler.NewOfflineSyncHandler(db, logger)
+	// Field officer sync endpoints
+	api.Get("/sync/pull",
+		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR"),
+		offlineSyncHandler.Pull,
+	)
+	api.Post("/sync/push",
+		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR"),
+		offlineSyncHandler.Push,
+	)
+	api.Get("/sync/status",
+		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR"),
+		offlineSyncHandler.Status,
+	)
+	// Admin sync monitoring
+	api.Get("/admin/sync/queue",
+		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER"),
+		func(c *fiber.Ctx) error {
+			statusFilter := c.Query("status")
+			actionFilter := c.Query("action_type")
+			limitVal := c.QueryInt("limit", 100)
+
+			query := `
+				SELECT
+					osq.id, osq.device_id,
+					COALESCE(u.full_name, 'Unknown') AS user_name,
+					osq.action_type::text, osq.entity_type,
+					osq.entity_id::text, osq.status::text,
+					osq.client_timestamp, osq.processed_at, osq.created_at
+				FROM offline_sync_queue osq
+				LEFT JOIN users u ON u.id = osq.user_id
+				WHERE 1=1
+			`
+			args := []interface{}{}
+			argIdx := 1
+			if statusFilter != "" {
+				query += fmt.Sprintf(" AND osq.status = $%d::sync_status", argIdx)
+				args = append(args, statusFilter)
+				argIdx++
+			}
+			if actionFilter != "" {
+				query += fmt.Sprintf(" AND osq.action_type = $%d::sync_action_type", argIdx)
+				args = append(args, actionFilter)
+				argIdx++
+			}
+			query += fmt.Sprintf(" ORDER BY osq.created_at DESC LIMIT $%d", argIdx)
+			args = append(args, limitVal)
+
+			rows, err := db.Query(c.Context(), query, args...)
+			if err != nil {
+				return c.Status(500).JSON(fiber.Map{"error": "failed to fetch sync queue"})
+			}
+			defer rows.Close()
+
+			type queueItem struct {
+				ID              string  `json:"id"`
+				DeviceID        string  `json:"device_id"`
+				UserName        string  `json:"user_name"`
+				ActionType      string  `json:"action_type"`
+				EntityType      string  `json:"entity_type"`
+				EntityID        string  `json:"entity_id"`
+				Status          string  `json:"status"`
+				ClientTimestamp string  `json:"client_timestamp"`
+				ProcessedAt     *string `json:"processed_at"`
+				CreatedAt       string  `json:"created_at"`
+			}
+
+			var items []queueItem
+			for rows.Next() {
+				var item queueItem
+				var id uuid.UUID
+				var clientTS, createdAt time.Time
+				var processedAt *time.Time
+				if err := rows.Scan(
+					&id, &item.DeviceID, &item.UserName,
+					&item.ActionType, &item.EntityType, &item.EntityID,
+					&item.Status, &clientTS, &processedAt, &createdAt,
+				); err != nil {
+					continue
+				}
+				item.ID = id.String()
+				item.ClientTimestamp = clientTS.Format(time.RFC3339)
+				item.CreatedAt = createdAt.Format(time.RFC3339)
+				if processedAt != nil {
+					s := processedAt.Format(time.RFC3339)
+					item.ProcessedAt = &s
+				}
+				items = append(items, item)
+			}
+			return c.JSON(fiber.Map{"items": items, "total": len(items)})
+		},
+	)
+	api.Get("/admin/sync/devices",
+		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER"),
+		func(c *fiber.Ctx) error {
+			rows, err := db.Query(c.Context(), `
+				SELECT
+					ud.device_id,
+					COALESCE(u.full_name, 'Unknown') AS user_name,
+					ud.last_seen_at,
+					COUNT(osq.id) FILTER (WHERE osq.status = 'PENDING') AS pending_count,
+					COUNT(osq.id) FILTER (WHERE osq.status = 'CONFLICT') AS conflict_count
+				FROM user_devices ud
+				LEFT JOIN users u ON u.id = ud.user_id
+				LEFT JOIN offline_sync_queue osq ON osq.device_id = ud.device_id
+					AND osq.created_at >= NOW() - INTERVAL '24 hours'
+				WHERE ud.last_seen_at >= NOW() - INTERVAL '7 days'
+				GROUP BY ud.device_id, u.full_name, ud.last_seen_at
+				ORDER BY ud.last_seen_at DESC
+				LIMIT 50
+			`)
+			if err != nil {
+				return c.Status(500).JSON(fiber.Map{"error": "failed to fetch devices"})
+			}
+			defer rows.Close()
+
+			type deviceInfo struct {
+				DeviceID      string `json:"device_id"`
+				UserName      string `json:"user_name"`
+				LastSeenAt    string `json:"last_seen_at"`
+				PendingCount  int    `json:"pending_count"`
+				ConflictCount int    `json:"conflict_count"`
+			}
+
+			var devices []deviceInfo
+			for rows.Next() {
+				var d deviceInfo
+				var lastSeen time.Time
+				if err := rows.Scan(&d.DeviceID, &d.UserName, &lastSeen, &d.PendingCount, &d.ConflictCount); err != nil {
+					continue
+				}
+				d.LastSeenAt = lastSeen.Format(time.RFC3339)
+				devices = append(devices, d)
+			}
+			return c.JSON(fiber.Map{"devices": devices, "total": len(devices)})
+		},
+	)
+
 	return &App{
 		fiber:  app,
 		db:     db,
