@@ -116,7 +116,7 @@ func TestSignAuditInvoice_BuildsCorrectLineItem(t *testing.T) {
 		TotalInvoiceGHS: 144.96,
 	}
 
-	resp, err := svc.SignAuditInvoice(context.Background(), audit)
+	resp, _, err := svc.SignAuditInvoice(context.Background(), audit)
 	if err != nil {
 		t.Fatalf("SignAuditInvoice failed: %v", err)
 	}

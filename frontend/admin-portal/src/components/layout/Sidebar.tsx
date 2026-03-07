@@ -48,6 +48,8 @@ const navGroups = [
       { label: 'Districts',  to: '/districts',  icon: <Building2 size={17} />,  roles: ['SYSTEM_ADMIN'] },
       { label: 'Mobile App', to: '/mobile-app', icon: <Smartphone size={17} />, roles: ['SYSTEM_ADMIN'] },
       { label: 'Settings',   to: '/settings',   icon: <Settings size={17} />,   roles: ['SYSTEM_ADMIN'] },
+      { label: 'Tariffs',    to: '/tariffs',    icon: <Settings size={17} />,   roles: ['SYSTEM_ADMIN'] },
+      { label: 'Gap Tracking', to: '/gaps',      icon: <BarChart3 size={17} /> },
     ],
   },
 ]

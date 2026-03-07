@@ -286,7 +286,7 @@ func TestSignAuditInvoice_VATCalculation(t *testing.T) {
 		TotalInvoiceGHS: 180.00,
 	}
 
-	resp, err := svc.SignAuditInvoice(context.Background(), audit)
+	resp, _, err := svc.SignAuditInvoice(context.Background(), audit)
 	if err != nil {
 		t.Fatalf("SignAuditInvoice failed: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestSignAuditInvoice_ZeroVarianceNotSubmitted(t *testing.T) {
 	}
 
 	// Zero-recovery invoices should still succeed (GRA needs the record)
-	resp, err := svc.SignAuditInvoice(context.Background(), audit)
+	resp, _, err := svc.SignAuditInvoice(context.Background(), audit)
 	if err != nil {
 		t.Fatalf("SignAuditInvoice failed for zero variance: %v", err)
 	}

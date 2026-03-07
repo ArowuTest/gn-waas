@@ -283,7 +283,7 @@ services:
       # SEC-01 fix: connect as gnwaas_app (unprivileged, RLS-enforced) not superuser.
       DB_USER: gnwaas_app
       DB_PASSWORD: ${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}
-      GRA_API_BASE_URL: https://vsdc.gra.gov.gh/api/v8.1
+      GRA_VSDC_BASE_URL: https://vsdc.gra.gov.gh/api/v8.1
       GRA_API_KEY: ""
       GRA_BUSINESS_TIN: ""
       # BE-M02 fix: default to false in production. Set GRA_SANDBOX_MODE=true ONLY for local dev.

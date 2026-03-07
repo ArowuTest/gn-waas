@@ -9,8 +9,12 @@ import (
 	"syscall"
 	"time"
 
+	"bytes"
+	"strings"
+
 	"github.com/ArowuTest/gn-waas/backend/cdc-ingestor/internal/service"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	natsgo "github.com/nats-io/nats.go"
 	"go.uber.org/zap"
@@ -78,6 +82,7 @@ func main() {
 	// real account data from the GN-WAAS database, applying PURC 2026 tariffs.
 	// This replicates exactly what the live CDC sync would write.
 	demoSvc := service.NewDemoSyncService(gnwaasDB, logger)
+	fileImportSvc := service.NewFileImportService(gnwaasDB, logger)
 	isLiveMode := mapper.IsGWLConfigured()
 	if !isLiveMode {
 		logger.Info("CDC DEMO MODE ACTIVE — synthetic GWL data will be generated on each sync trigger")
@@ -239,6 +244,129 @@ func main() {
 			}
 		}
 		return c.JSON(results)
+	})
+
+	// ── File Upload Routes (Q4/Q5/Q8) ──────────────────────────────────────────
+	// POST /api/v1/cdc/upload/:type — upload a GWL CSV file
+	// type: accounts | billing | meter_readings | production_records
+	//
+	// Used when GWL cannot provide a live DB replica or API.
+	// Accepts multipart/form-data with field "file" (CSV).
+	// Returns ImportResult with per-row error details.
+	app.Post("/api/v1/cdc/upload/:type", func(c *fiber.Ctx) error {
+		importType := strings.ToUpper(c.Params("type"))
+		validTypes := map[string]bool{
+			"ACCOUNTS": true, "BILLING": true,
+			"METER_READINGS": true, "PRODUCTION_RECORDS": true,
+		}
+		if !validTypes[importType] {
+			return c.Status(400).JSON(fiber.Map{
+				"error": fmt.Sprintf("invalid type %q; valid: accounts, billing, meter_readings, production_records", importType),
+			})
+		}
+
+		fileHeader, err := c.FormFile("file")
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "field 'file' is required (multipart/form-data)"})
+		}
+
+		f, err := fileHeader.Open()
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "failed to open uploaded file"})
+		}
+		defer f.Close()
+
+		// Read into buffer so we can pass an io.Reader
+		var buf bytes.Buffer
+		if _, err := buf.ReadFrom(f); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "failed to read file"})
+		}
+
+		importID := uuid.New()
+		filename := fileHeader.Filename
+
+		// Record import start in gwl_file_imports
+		gnwaasDB.Exec(c.Context(), `
+			INSERT INTO gwl_file_imports (id, import_type, filename, file_size_bytes, status, started_at)
+			VALUES ($1, $2, $3, $4, 'PROCESSING', NOW())
+		`, importID, importType, filename, fileHeader.Size)
+
+		var result *service.ImportResult
+		switch importType {
+		case "ACCOUNTS":
+			result, err = fileImportSvc.ImportAccounts(c.Context(), importID, filename, &buf)
+		case "BILLING":
+			result, err = fileImportSvc.ImportBilling(c.Context(), importID, filename, &buf)
+		case "PRODUCTION_RECORDS":
+			result, err = fileImportSvc.ImportProductionRecords(c.Context(), importID, filename, &buf)
+		default:
+			return c.Status(400).JSON(fiber.Map{"error": "import type not yet implemented: " + importType})
+		}
+
+		if err != nil {
+			gnwaasDB.Exec(c.Context(), `
+				UPDATE gwl_file_imports SET status='FAILED', completed_at=NOW(),
+				error_summary=$1 WHERE id=$2
+			`, fmt.Sprintf(`[{"error":"%s"}]`, err.Error()), importID)
+			return c.Status(422).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		// Update import record
+		gnwaasDB.Exec(c.Context(), `
+			UPDATE gwl_file_imports SET
+				status=$1, records_total=$2, records_success=$3, records_failed=$4,
+				completed_at=NOW()
+			WHERE id=$5
+		`, result.Status, result.RecordsTotal, result.RecordsOK, result.RecordsFailed, importID)
+
+		statusCode := 200
+		if result.Status == "FAILED" {
+			statusCode = 422
+		}
+		return c.Status(statusCode).JSON(result)
+	})
+
+	// GET /api/v1/cdc/imports — list recent file imports
+	app.Get("/api/v1/cdc/imports", func(c *fiber.Ctx) error {
+		rows, err := gnwaasDB.Query(c.Context(), `
+			SELECT id, import_type, filename, file_size_bytes,
+			       status, records_total, records_success, records_failed,
+			       started_at, completed_at, created_at
+			FROM gwl_file_imports
+			ORDER BY created_at DESC
+			LIMIT 50
+		`)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "failed to fetch imports"})
+		}
+		defer rows.Close()
+
+		type importRow struct {
+			ID            string  `json:"id"`
+			ImportType    string  `json:"import_type"`
+			Filename      string  `json:"filename"`
+			FileSizeBytes *int64  `json:"file_size_bytes"`
+			Status        string  `json:"status"`
+			RecordsTotal  int     `json:"records_total"`
+			RecordsOK     int     `json:"records_success"`
+			RecordsFailed int     `json:"records_failed"`
+			StartedAt     *string `json:"started_at"`
+			CompletedAt   *string `json:"completed_at"`
+			CreatedAt     string  `json:"created_at"`
+		}
+
+		var imports []importRow
+		for rows.Next() {
+			var r importRow
+			if err := rows.Scan(
+				&r.ID, &r.ImportType, &r.Filename, &r.FileSizeBytes,
+				&r.Status, &r.RecordsTotal, &r.RecordsOK, &r.RecordsFailed,
+				&r.StartedAt, &r.CompletedAt, &r.CreatedAt,
+			); err == nil {
+				imports = append(imports, r)
+			}
+		}
+		return c.JSON(fiber.Map{"imports": imports, "total": len(imports)})
 	})
 
 	// GET /api/v1/cdc/status — last sync status per type

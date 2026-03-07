@@ -19,16 +19,21 @@ func main() {
 	defer zapLogger.Sync()
 
 	sandboxMode := os.Getenv("GRA_SANDBOX_MODE") != "false"
-	baseURL := getEnv("GRA_VSDC_BASE_URL", "https://vsdc.gra.gov.gh/api/v1")
-	apiKey := getEnv("GRA_API_KEY", "")
+
+	// Q2 fix: consistent env var name GRA_VSDC_BASE_URL, correct default v8.1
+	baseURL     := getEnv("GRA_VSDC_BASE_URL", "https://vsdc.gra.gov.gh/api/v8.1")
+	apiKey      := getEnv("GRA_API_KEY", "")
 	businessTIN := getEnv("GRA_BUSINESS_TIN", "C0000000000")
-	port := getEnv("PORT", "8085")
+	port        := getEnv("PORT", "8085")
 
 	if sandboxMode {
-		zapLogger.Info("GRA Bridge starting in SANDBOX mode")
+		zapLogger.Info("GRA Bridge starting in SANDBOX mode",
+			zap.String("note", "GRA does not operate a public sandbox. "+
+				"Set GRA_SANDBOX_MODE=false with live credentials from GRA Technical Division."),
+		)
 	} else {
 		if apiKey == "" {
-			log.Fatal("GRA_API_KEY must be set in production mode")
+			log.Fatal("GRA_API_KEY must be set in production mode (obtain from GRA Technical Division)")
 		}
 		zapLogger.Info("GRA Bridge starting in PRODUCTION mode",
 			zap.String("base_url", baseURL),
@@ -51,12 +56,15 @@ func main() {
 			"service":      "gra-bridge",
 			"sandbox_mode": sandboxMode,
 			"gra_base_url": baseURL,
+			"api_version":  "8.1",
 		})
 	})
 
 	api := app.Group("/api/v1/gra")
 
 	// POST /api/v1/gra/sign-audit — Sign an audit event invoice
+	// Returns: InvoiceResponse + is_provisional flag
+	// Q1: If GRA is down, returns provisional=true with internal QR; caller queues retry.
 	api.Post("/sign-audit", func(c *fiber.Ctx) error {
 		var req gra.AuditInvoiceRequest
 		if err := c.BodyParser(&req); err != nil {
@@ -69,19 +77,40 @@ func main() {
 			return c.Status(400).JSON(fiber.Map{"error": "total_invoice_ghs must be positive"})
 		}
 
-		resp, err := svc.SignAuditInvoice(c.Context(), &req)
+		resp, retryInfo, err := svc.SignAuditInvoice(c.Context(), &req)
 		if err != nil {
-			zapLogger.Error("Failed to sign audit invoice",
+			// Non-retryable error (GRA rejected or client error)
+			zapLogger.Error("GRA signing failed (non-retryable)",
 				zap.String("audit_event_id", req.AuditEventID),
 				zap.Error(err),
 			)
 			return c.Status(502).JSON(fiber.Map{
-				"error":   "GRA signing failed",
-				"details": err.Error(),
+				"error":        "GRA signing failed",
+				"details":      err.Error(),
+				"should_retry": false,
+				"gra_status":   "FAILED",
 			})
 		}
 
-		return c.JSON(resp)
+		result := fiber.Map{
+			"success":        resp.Success,
+			"sdc_id":         resp.SDCID,
+			"qr_code_url":    resp.QRCodeURL,
+			"qr_code_string": resp.QRCodeString,
+			"qr_code_base64": resp.QRCodeBase64,
+			"invoice_number": resp.InvoiceNumber,
+			"signed_at":      resp.SignedAt,
+			"is_provisional": resp.IsProvisional,
+			"gra_status":     "SIGNED",
+		}
+
+		if resp.IsProvisional && retryInfo != nil {
+			result["gra_status"]   = "PROVISIONAL"
+			result["retry_after"]  = retryInfo.RetryAfter
+			result["should_retry"] = true
+		}
+
+		return c.JSON(result)
 	})
 
 	// POST /api/v1/gra/sign-invoice — Sign a raw invoice

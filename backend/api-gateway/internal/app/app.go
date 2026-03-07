@@ -9,6 +9,7 @@ import (
 	"github.com/ArowuTest/gn-waas/shared/go/middleware"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/config"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/handler"
+	gwsvc "github.com/ArowuTest/gn-waas/backend/api-gateway/internal/service"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/notification"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/storage"
@@ -16,6 +17,7 @@ import (
 	"github.com/ansrivas/fiberprometheus/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -614,6 +616,268 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR"),
 		workforceHandler.GetOfficerTrack,
 	)
+
+	// ── Tariff Admin (Q7: PURC Tariff Schedule — admin-configurable) ─────────
+	// System Admins can manage tariff rates and VAT config without code changes.
+	tariffAdminHandler := handler.NewTariffAdminHandler(db, logger)
+	adminTariffs := api.Group("/admin/tariffs",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN"),
+	)
+	adminTariffs.Get("/",                    tariffAdminHandler.ListTariffRates)
+	adminTariffs.Post("/",                   tariffAdminHandler.CreateTariffRate)
+	adminTariffs.Put("/:id",                 tariffAdminHandler.UpdateTariffRate)
+	adminTariffs.Patch("/:id/deactivate",    tariffAdminHandler.DeactivateTariffRate)
+	adminTariffs.Get("/vat",                 tariffAdminHandler.ListVATConfigs)
+	adminTariffs.Post("/vat",                tariffAdminHandler.CreateVATConfig)
+
+	// ── Geocoding (Q6: Address fallback when GWL GIS unavailable) ────────────
+	geocodingSvc := gwsvc.NewGeocodingService(db, logger)
+	geocoding := api.Group("/admin/geocoding",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN"),
+	)
+	geocoding.Post("/accounts/:id", func(c *fiber.Ctx) error {
+		accountID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "invalid account ID"})
+		}
+		result, err := geocodingSvc.GeocodeAccount(c.Context(), accountID)
+		if err != nil {
+			return c.Status(422).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(result)
+	})
+	geocoding.Post("/districts/:id", func(c *fiber.Ctx) error {
+		districtID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "invalid district ID"})
+		}
+		// Run geocoding in background — returns immediately with job info
+		go func() {
+			bgCtx := context.Background()
+			ok, fail, err := geocodingSvc.GeocodeDistrict(bgCtx, districtID)
+			if err != nil {
+				logger.Error("District geocoding failed", zap.Error(err))
+			} else {
+				logger.Info("District geocoding complete",
+					zap.String("district_id", districtID.String()),
+					zap.Int("success", ok), zap.Int("failed", fail),
+				)
+			}
+		}()
+		return c.JSON(fiber.Map{
+			"message":     "District geocoding started in background",
+			"district_id": districtID.String(),
+			"note":        "Nominatim rate-limited to 1 req/sec. Check /admin/geocoding/status for progress.",
+		})
+	})
+	// Field officer GPS confirmation (Q6: FIELD_CONFIRMED upgrade)
+	geocoding.Post("/accounts/:id/confirm-gps",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "FIELD_OFFICER"),
+		func(c *fiber.Ctx) error {
+			accountID, err := uuid.Parse(c.Params("id"))
+			if err != nil {
+				return c.Status(400).JSON(fiber.Map{"error": "invalid account ID"})
+			}
+			var body struct {
+				Latitude  float64 `json:"latitude"`
+				Longitude float64 `json:"longitude"`
+			}
+			if err := c.BodyParser(&body); err != nil || body.Latitude == 0 {
+				return c.Status(400).JSON(fiber.Map{"error": "latitude and longitude required"})
+			}
+			// Get user ID from JWT claims
+			userIDStr, _ := c.Locals("user_id").(string)
+			userID, _ := uuid.Parse(userIDStr)
+			if err := geocodingSvc.ConfirmGPSFromField(c.Context(), accountID, body.Latitude, body.Longitude, userID); err != nil {
+				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			}
+			return c.JSON(fiber.Map{
+				"message":    "GPS confirmed from field — fence radius set to 5m",
+				"account_id": accountID.String(),
+				"latitude":   body.Latitude,
+				"longitude":  body.Longitude,
+				"source":     "FIELD_CONFIRMED",
+			})
+		},
+	)
+
+	// ── Gap Tracking (Q9: Identified gaps and recouped amounts) ──────────────
+	// Provides a comprehensive view of all identified revenue gaps and their
+	// recovery status. This is the "audit trail" for the managed-service model.
+	gapRoles := middleware.RequireRoles(
+		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GWL_EXECUTIVE", "GWL_MANAGER",
+	)
+	gaps := api.Group("/gaps", gapRoles)
+
+	// GET /api/v1/gaps/summary — aggregate gap and recovery stats
+	gaps.Get("/summary", func(c *fiber.Ctx) error {
+		districtFilter := c.Query("district_id")
+		periodFilter := c.Query("period") // YYYY-MM
+
+		baseWhere := "WHERE 1=1"
+		args := []interface{}{}
+		argIdx := 1
+
+		if districtFilter != "" {
+			baseWhere += fmt.Sprintf(" AND ae.district_id = $%d", argIdx)
+			args = append(args, districtFilter)
+			argIdx++
+		}
+		if periodFilter != "" {
+			baseWhere += fmt.Sprintf(" AND TO_CHAR(ae.created_at, 'YYYY-MM') = $%d", argIdx)
+			args = append(args, periodFilter)
+			argIdx++
+		}
+
+		var summary struct {
+			TotalGapsIdentified    int     `json:"total_gaps_identified"`
+			TotalGapValueGHS       float64 `json:"total_gap_value_ghs"`
+			TotalRecoveredGHS      float64 `json:"total_recovered_ghs"`
+			TotalPendingGHS        float64 `json:"total_pending_ghs"`
+			RecoveryRatePct        float64 `json:"recovery_rate_pct"`
+			SuccessFeesEarnedGHS   float64 `json:"success_fees_earned_ghs"`
+			GRASigned              int     `json:"gra_signed_audits"`
+			GRAProvisional         int     `json:"gra_provisional_audits"`
+			AvgDaysToRecovery      float64 `json:"avg_days_to_recovery"`
+		}
+
+		err := db.QueryRow(c.Context(), fmt.Sprintf(`
+			SELECT
+				COUNT(ae.id)                                                    AS total_gaps,
+				COALESCE(SUM(ae.variance_amount_ghs), 0)                        AS total_gap_value,
+				COALESCE(SUM(rre.recovered_amount_ghs), 0)                      AS total_recovered,
+				COALESCE(SUM(ae.variance_amount_ghs) - SUM(rre.recovered_amount_ghs), 0) AS total_pending,
+				CASE WHEN SUM(ae.variance_amount_ghs) > 0
+					THEN ROUND((SUM(rre.recovered_amount_ghs) / SUM(ae.variance_amount_ghs)) * 100, 2)
+					ELSE 0 END                                                  AS recovery_rate,
+				COALESCE(SUM(rre.success_fee_ghs), 0)                           AS success_fees,
+				COUNT(CASE WHEN ae.gra_compliance_status = 'SIGNED' THEN 1 END) AS gra_signed,
+				COUNT(CASE WHEN ae.gra_compliance_status = 'PROVISIONAL' THEN 1 END) AS gra_provisional,
+				COALESCE(AVG(
+					EXTRACT(EPOCH FROM (rre.confirmed_at - ae.created_at)) / 86400
+				), 0)                                                           AS avg_days
+			FROM audit_events ae
+			LEFT JOIN revenue_recovery_events rre ON rre.audit_event_id = ae.id
+			%s
+		`, baseWhere), args...).Scan(
+			&summary.TotalGapsIdentified,
+			&summary.TotalGapValueGHS,
+			&summary.TotalRecoveredGHS,
+			&summary.TotalPendingGHS,
+			&summary.RecoveryRatePct,
+			&summary.SuccessFeesEarnedGHS,
+			&summary.GRASigned,
+			&summary.GRAProvisional,
+			&summary.AvgDaysToRecovery,
+		)
+		if err != nil {
+			logger.Error("Gap summary query failed", zap.Error(err))
+			return c.Status(500).JSON(fiber.Map{"error": "failed to fetch gap summary"})
+		}
+
+		return c.JSON(summary)
+	})
+
+	// GET /api/v1/gaps — paginated list of all identified gaps with recovery status
+	gaps.Get("/", func(c *fiber.Ctx) error {
+		page := c.QueryInt("page", 1)
+		limit := c.QueryInt("limit", 50)
+		if limit > 200 {
+			limit = 200
+		}
+		offset := (page - 1) * limit
+
+		rows, err := db.Query(c.Context(), `
+			SELECT
+				ae.id,
+				ae.audit_reference,
+				ae.district_id,
+				d.district_name,
+				ae.account_id,
+				wa.gwl_account_number,
+				wa.customer_name,
+				ae.anomaly_type,
+				ae.variance_amount_ghs,
+				ae.gra_compliance_status::text,
+				ae.gra_sdc_id,
+				ae.created_at,
+				rre.id                    AS recovery_id,
+				rre.recovered_amount_ghs,
+				rre.success_fee_ghs,
+				rre.status                AS recovery_status,
+				rre.confirmed_at
+			FROM audit_events ae
+			JOIN districts d ON d.id = ae.district_id
+			LEFT JOIN water_accounts wa ON wa.id = ae.account_id
+			LEFT JOIN revenue_recovery_events rre ON rre.audit_event_id = ae.id
+			ORDER BY ae.created_at DESC
+			LIMIT $1 OFFSET $2
+		`, limit, offset)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "failed to fetch gaps"})
+		}
+		defer rows.Close()
+
+		type gapRow struct {
+			ID                  string   `json:"id"`
+			AuditReference      string   `json:"audit_reference"`
+			DistrictID          string   `json:"district_id"`
+			DistrictName        string   `json:"district_name"`
+			AccountID           *string  `json:"account_id"`
+			AccountNumber       *string  `json:"account_number"`
+			CustomerName        *string  `json:"customer_name"`
+			AnomalyType         string   `json:"anomaly_type"`
+			VarianceAmountGHS   float64  `json:"variance_amount_ghs"`
+			GRAStatus           string   `json:"gra_compliance_status"`
+			GRASDCID            *string  `json:"gra_sdc_id"`
+			CreatedAt           string   `json:"created_at"`
+			RecoveryID          *string  `json:"recovery_id"`
+			RecoveredAmountGHS  *float64 `json:"recovered_amount_ghs"`
+			SuccessFeeGHS       *float64 `json:"success_fee_ghs"`
+			RecoveryStatus      *string  `json:"recovery_status"`
+			ConfirmedAt         *string  `json:"confirmed_at"`
+		}
+
+		var gapList []gapRow
+		for rows.Next() {
+			var r gapRow
+			var id, districtID uuid.UUID
+			var createdAt time.Time
+			var confirmedAt *time.Time
+			var recoveryID *uuid.UUID
+
+			if err := rows.Scan(
+				&id, &r.AuditReference, &districtID, &r.DistrictName,
+				&r.AccountID, &r.AccountNumber, &r.CustomerName,
+				&r.AnomalyType, &r.VarianceAmountGHS,
+				&r.GRAStatus, &r.GRASDCID,
+				&createdAt,
+				&recoveryID, &r.RecoveredAmountGHS, &r.SuccessFeeGHS,
+				&r.RecoveryStatus, &confirmedAt,
+			); err != nil {
+				continue
+			}
+			r.ID = id.String()
+			r.DistrictID = districtID.String()
+			r.CreatedAt = createdAt.Format(time.RFC3339)
+			if recoveryID != nil {
+				s := recoveryID.String()
+				r.RecoveryID = &s
+			}
+			if confirmedAt != nil {
+				s := confirmedAt.Format(time.RFC3339)
+				r.ConfirmedAt = &s
+			}
+			gapList = append(gapList, r)
+		}
+
+		return c.JSON(fiber.Map{
+			"gaps":  gapList,
+			"page":  page,
+			"limit": limit,
+			"total": len(gapList),
+		})
+	})
 
 	return &App{
 		fiber:  app,

@@ -73,6 +73,8 @@ function AppRoutes() {
         <Route path="users" element={<UserManagementPage />} />
         <Route path="districts" element={<DistrictConfigPage />} />
         <Route path="settings" element={<AuditThresholdsPage />} />
+        <Route path="tariffs" element={<TariffManagementPage />} />
+        <Route path="gaps" element={<GapTrackingPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
