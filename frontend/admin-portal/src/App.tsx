@@ -16,6 +16,11 @@ import AuditThresholdsPage from './pages/AuditThresholdsPage'
 import { GRACompliancePage } from './pages/GRACompliancePage'
 import DMAMapPage from './pages/DMAMapPage'
 import { ReportsPage } from './pages/ReportsPage'
+import TariffManagementPage from './pages/TariffManagementPage'
+import GapTrackingPage from './pages/GapTrackingPage'
+import WhistleblowerPage from './pages/WhistleblowerPage'
+import DonorKPIPage from './pages/DonorKPIPage'
+import OfflineSyncStatusPage from './pages/OfflineSyncStatusPage'
 import type { ReactNode } from 'react'
 
 const queryClient = new QueryClient({

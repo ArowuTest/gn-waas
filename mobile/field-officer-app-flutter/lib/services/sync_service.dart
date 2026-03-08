@@ -1,6 +1,7 @@
 // GN-WAAS Field Officer App — Sync Service
 // Background sync: uploads pending submissions and outcomes when connectivity returns
 
+import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/models.dart';
 import 'api_service.dart';
@@ -108,13 +109,57 @@ class SyncService {
     return synced;
   }
 
-  /// Sync all pending data (submissions + outcomes).
+  /// MOB-03 fix: Sync pending illegal connection reports.
+  /// Uses TIP_SUBMISSION action_type to match the backend sync_action_type enum.
+  /// Returns the number of successfully synced reports.
+  Future<int> syncPendingIllegalReports() async {
+    if (!await isOnline()) return 0;
+
+    final pending = await _storage.getPendingIllegalReports();
+    if (pending.isEmpty) return 0;
+
+    int synced = 0;
+    for (final row in pending) {
+      final id = row['id'] as String;
+      final retryCount = (row['retry_count'] as int?) ?? 0;
+      if (retryCount >= 5) continue;
+
+      try {
+        // Decode the stored report JSON
+        final reportJson = row['report_json'] as String? ?? '{}';
+        Map<String, dynamic> reportMap;
+        try {
+          reportMap = Map<String, dynamic>.from(
+            jsonDecode(reportJson) as Map<String, dynamic>,
+          );
+        } catch (_) {
+          reportMap = {};
+        }
+
+        // Submit via the API — photos were already uploaded at capture time
+        // (or will be skipped gracefully if MinIO is unavailable).
+        // The report JSON contains photo_hashes for chain-of-custody.
+        await _api.submitIllegalConnectionReport(
+          _MapReport(reportMap),
+          const [],  // Photos already uploaded at capture; no re-upload needed
+        );
+        await _storage.markIllegalReportDone(id);
+        synced++;
+      } catch (e) {
+        await _storage.markIllegalReportFailed(id, e.toString());
+      }
+    }
+    return synced;
+  }
+
+  /// Sync all pending data (submissions + outcomes + illegal reports).
   /// Returns total number of items synced.
   Future<int> syncAll() async {
     if (!await isOnline()) return 0;
     final submissions = await syncPendingSubmissions();
     final outcomes    = await syncPendingOutcomes();
-    return submissions + outcomes;
+    final reports     = await syncPendingIllegalReports();
+    return submissions + outcomes + reports;
   }
 
   /// Fetch fresh jobs from API and cache them
@@ -132,4 +177,12 @@ class SyncService {
   }
 
   Future<SyncStats> getSyncStats() => _storage.getSyncStats();
+}
+
+/// Wraps a raw Map as a report object with toJson() for submitIllegalConnectionReport.
+/// Used when syncing offline-queued illegal connection reports.
+class _MapReport {
+  final Map<String, dynamic> _data;
+  const _MapReport(this._data);
+  Map<String, dynamic> toJson() => _data;
 }

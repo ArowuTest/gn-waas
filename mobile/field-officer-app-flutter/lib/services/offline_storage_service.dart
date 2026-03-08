@@ -407,6 +407,40 @@ class OfflineStorageService {
     ''', [error, DateTime.now().toIso8601String(), id]);
   }
 
+  // ─── Illegal Connection Reports (offline queue) ───────────────────────────
+
+  /// MOB-03 fix: Retrieve pending illegal connection reports for sync.
+  /// Returns reports with status=PENDING and retry_count < 5.
+  Future<List<Map<String, dynamic>>> getPendingIllegalReports() async {
+    final database = await db;
+    final rows = await database.query(
+      'pending_illegal_reports',
+      where: 'status = ? AND retry_count < 5',
+      whereArgs: ['PENDING'],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+  }
+
+  Future<void> markIllegalReportDone(String id) async {
+    final database = await db;
+    await database.update(
+      'pending_illegal_reports',
+      {'status': 'DONE', 'attempted_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> markIllegalReportFailed(String id, String error) async {
+    final database = await db;
+    // Keep status PENDING so the sync service retries (retry_count < 5 guard)
+    await database.rawUpdate(
+      'UPDATE pending_illegal_reports SET retry_count = retry_count + 1, attempted_at = ? WHERE id = ?',
+      [DateTime.now().toIso8601String(), id],
+    );
+  }
+
   // ─── Photos ────────────────────────────────────────────────────────────────
 
   Future<void> savePhoto(String jobId, MeterPhoto photo) async {

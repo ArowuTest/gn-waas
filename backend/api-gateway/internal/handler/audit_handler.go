@@ -482,7 +482,7 @@ func (h *AnomalyFlagHandler) TriggerScan(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_ID", "Invalid district ID")
 	}
 	sentinelURL := getEnvOrDefault("SENTINEL_SERVICE_URL", "http://sentinel:3002")
-	resp, err := http.Post(sentinelURL+"/api/v1/scan/"+districtID, "application/json", nil)
+	resp, err := http.Post(sentinelURL+"/api/v1/sentinel/scan/"+districtID, "application/json", nil)
 	if err != nil {
 		h.logger.Warn("Sentinel service unavailable for on-demand scan", zap.Error(err))
 		return response.OK(c, fiber.Map{

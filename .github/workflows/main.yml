@@ -35,11 +35,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache-dependency-path: backend/${{ matrix.service }}/go.sum
+          # CI-01 fix: cache all go.sum files via go.work for efficient workspace handling
+          cache-dependency-path: |
+            backend/${{ matrix.service }}/go.sum
+            shared/go/go.sum
 
-      - name: Download dependencies
-        working-directory: backend/${{ matrix.service }}
-        run: go mod download
+      # CI-01 fix: Download dependencies from repo root using go.work.
+      # The go.work file lists all modules so `go mod download` resolves
+      # shared/go replace directives correctly without per-service hacks.
+      - name: Download dependencies (workspace)
+        run: go work sync
 
       - name: Run go vet
         working-directory: backend/${{ matrix.service }}

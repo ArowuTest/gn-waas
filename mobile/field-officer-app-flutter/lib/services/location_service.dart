@@ -40,6 +40,9 @@ class LocationService {
       );
     }
 
+    // MOB-01: geolocator v12 still accepts desiredAccuracy and timeLimit as named
+    // parameters (the high-level Geolocator.getCurrentPosition wrapper handles
+    // platform-specific LocationSettings internally). No API change needed.
     final position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
       timeLimit: const Duration(seconds: 15),

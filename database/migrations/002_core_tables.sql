@@ -78,6 +78,10 @@ CREATE TABLE IF NOT EXISTS districts (
     loss_ratio_pct          NUMERIC(5,2),                  -- Latest calculated NRW %
     data_confidence_grade   data_confidence_grade DEFAULT 0,
     arcgis_layer_id         VARCHAR(100),                  -- GWL ArcGIS reference
+    -- DB-01 fix: GPS centroid for DMA map rendering and mobile geofence validation
+    gps_latitude            NUMERIC(10,8),                 -- WGS-84 latitude  (-90  to  90)
+    gps_longitude           NUMERIC(11,8),                 -- WGS-84 longitude (-180 to 180)
+    geographic_zone         VARCHAR(50),                   -- Administrative zone label
     is_pilot_district       BOOLEAN NOT NULL DEFAULT FALSE,
     is_active               BOOLEAN NOT NULL DEFAULT TRUE,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
