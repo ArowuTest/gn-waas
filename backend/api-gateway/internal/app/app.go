@@ -471,7 +471,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// PATCH /api/v1/sentinel/anomalies/:id/confirm
 	// Confirms anomaly as genuine revenue leakage. Auto-creates revenue_recovery_event.
 	sentinel.Patch("/anomalies/:id/confirm",
-		middleware.RequireRoles("SYSTEM_ADMIN", "AUDIT_MANAGER", "GRA_AUDITOR"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "MOF_AUDITOR", "GRA_OFFICER"),
 		flagHandler.ConfirmAnomaly,
 	)
 	sentinel.Get("/summary/:district_id", flagHandler.GetDistrictSummary)
@@ -917,7 +917,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── Donor KPI Reports ─────────────────────────────────────────────────────
 	donorReportHandler := handler.NewDonorReportHandler(db, logger)
 	donorReports := api.Group("/reports/donor",
-		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER", "GRA_AUDITOR", "GWL_MANAGEMENT"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "MOF_AUDITOR", "GRA_OFFICER", "GWL_EXECUTIVE"),
 	)
 	donorReports.Get("/kpis", donorReportHandler.GetKPIs)
 	donorReports.Get("/trend", donorReportHandler.GetTrend)
@@ -939,7 +939,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	)
 	// Admin sync monitoring
 	api.Get("/admin/sync/queue",
-		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "MOF_AUDITOR"),
 		func(c *fiber.Ctx) error {
 			statusFilter := c.Query("status")
 			actionFilter := c.Query("action_type")
@@ -1016,7 +1016,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		},
 	)
 	api.Get("/admin/sync/devices",
-		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "AUDIT_MANAGER"),
+		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "MOF_AUDITOR"),
 		func(c *fiber.Ctx) error {
 			rows, err := db.Query(c.Context(), `
 				SELECT
