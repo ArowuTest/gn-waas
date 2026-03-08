@@ -134,7 +134,7 @@ class ApiService {
   // ─── Field Jobs ────────────────────────────────────────────────────────────
 
   Future<List<FieldJob>> getMyJobs() async {
-    final res = await _dio.get('/field-jobs/my');
+    final res = await _dio.get('/field-jobs/my-jobs');  // MOB-API-01 fix: backend route is /my-jobs not /my
     final list = res.data['data'] as List<dynamic>;
     return list.map((j) => FieldJob.fromJson(j as Map<String, dynamic>)).toList();
   }
