@@ -7,14 +7,14 @@
 #   - Local:  docker-compose run --rm seed-runner
 #
 # Required env vars:
-#   DATABASE_URL        — full postgres connection string (from Render)
+#   DATABASE_URL        — full postgres connection string (Render provides this)
 #   OR individual:
 #   PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
 #
 # Optional:
-#   GNWAAS_ADMIN_PASSWORD  — password for gnwaas_admin superuser (for seeds)
-#   GNWAAS_APP_PASSWORD    — password for gnwaas_app role (for app connections)
-#   SKIP_SEEDS             — set to "true" to skip seed data (migrations only)
+#   GNWAAS_APP_PASSWORD — password for gnwaas_app role (created if not exists)
+#                         If unset, gnwaas_app is aliased to the Render DB user
+#   SKIP_SEEDS          — set to "true" to skip seed data (migrations only)
 # ============================================================
 
 set -e
@@ -26,12 +26,13 @@ echo "============================================"
 
 # ── Parse DATABASE_URL if provided (Render format) ────────────────────────
 if [ -n "$DATABASE_URL" ]; then
-  # Extract components from postgres://user:pass@host:port/dbname
+  # Extract components from postgres://user:pass@host:port/dbname?sslmode=require
   export PGUSER=$(echo "$DATABASE_URL" | sed -n 's|.*://\([^:]*\):.*|\1|p')
   export PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
   export PGHOST=$(echo "$DATABASE_URL" | sed -n 's|.*@\([^:]*\):.*|\1|p')
   export PGPORT=$(echo "$DATABASE_URL" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
   export PGDATABASE=$(echo "$DATABASE_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
+  export PGSSLMODE=require
   echo "Using DATABASE_URL: host=$PGHOST port=$PGPORT db=$PGDATABASE user=$PGUSER"
 fi
 
@@ -44,46 +45,61 @@ until pg_isready -h "$PGHOST" -p "${PGPORT:-5432}" -U "$PGUSER" -d "$PGDATABASE"
 done
 echo "✅ PostgreSQL is ready"
 
-# ── Create roles and extensions (as superuser if possible) ────────────────
+# ── Set up gnwaas_app role ─────────────────────────────────────────────────
+# On Render managed Postgres, the connection user (gnwaas_user) is the owner.
+# We create gnwaas_app as a separate role for RLS policies.
+# If GNWAAS_APP_PASSWORD is not set, we grant the Render user the gnwaas_app
+# role so it can satisfy the "TO gnwaas_app" RLS policy clauses.
 echo ""
-echo "Setting up roles and extensions..."
+echo "Setting up application roles..."
 
-# Try to create gnwaas_admin and gnwaas_app roles
-# On Render managed Postgres, the connection user IS the admin
-ADMIN_PASS="${GNWAAS_ADMIN_PASSWORD:-gnwaas_admin_dev_2026}"
-APP_PASS="${GNWAAS_APP_PASSWORD:-gnwaas_app_dev_2026}"
+APP_PASS="${GNWAAS_APP_PASSWORD:-}"
 
 psql -v ON_ERROR_STOP=0 << SQL
--- Create roles if they don't exist
-DO \$\$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gnwaas_admin') THEN
-    CREATE ROLE gnwaas_admin WITH LOGIN PASSWORD '${ADMIN_PASS}' SUPERUSER;
-  ELSE
-    ALTER ROLE gnwaas_admin WITH PASSWORD '${ADMIN_PASS}';
-  END IF;
-END \$\$;
+-- Enable required extensions (non-fatal if unavailable on managed Postgres)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Create gnwaas_app role for RLS policies
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gnwaas_app') THEN
-    CREATE ROLE gnwaas_app WITH LOGIN PASSWORD '${APP_PASS}';
+    IF '${APP_PASS}' != '' THEN
+      CREATE ROLE gnwaas_app WITH LOGIN PASSWORD '${APP_PASS}';
+    ELSE
+      -- No password provided: create as nologin role (Render user will be granted it)
+      CREATE ROLE gnwaas_app NOLOGIN;
+    END IF;
+    RAISE NOTICE 'Created gnwaas_app role';
   ELSE
-    ALTER ROLE gnwaas_app WITH PASSWORD '${APP_PASS}';
+    RAISE NOTICE 'gnwaas_app role already exists';
   END IF;
 END \$\$;
 
--- Grant database access
-GRANT ALL PRIVILEGES ON DATABASE ${PGDATABASE:-gnwaas} TO gnwaas_admin;
-GRANT CONNECT ON DATABASE ${PGDATABASE:-gnwaas} TO gnwaas_app;
+-- Grant the Render DB user (gnwaas_user) the gnwaas_app role so RLS policies
+-- that say "TO gnwaas_app" apply to connections made by gnwaas_user.
+DO \$\$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = '${PGUSER}') AND
+     EXISTS (SELECT FROM pg_roles WHERE rolname = 'gnwaas_app') THEN
+    EXECUTE 'GRANT gnwaas_app TO ' || quote_ident('${PGUSER}');
+    RAISE NOTICE 'Granted gnwaas_app to ${PGUSER}';
+  END IF;
+END \$\$;
 
--- Enable extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "postgis";
-CREATE EXTENSION IF NOT EXISTS "timescaledb" CASCADE;
+-- Grant table permissions to gnwaas_app
+GRANT CONNECT ON DATABASE "${PGDATABASE}" TO gnwaas_app;
+GRANT USAGE ON SCHEMA public TO gnwaas_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO gnwaas_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO gnwaas_app;
+
+-- Ensure future tables are also accessible
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO gnwaas_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO gnwaas_app;
 SQL
 
-echo "✅ Roles and extensions configured"
+echo "✅ Roles configured"
 
 # ── Run migrations ─────────────────────────────────────────────────────────
 echo ""
@@ -99,7 +115,7 @@ for f in $(ls /migrations/*.sql | sort -V); do
     MIGRATION_COUNT=$((MIGRATION_COUNT + 1))
   else
     echo "⚠️  (non-fatal)"
-    cat /tmp/migration_err | head -3
+    head -3 /tmp/migration_err
     MIGRATION_ERRORS=$((MIGRATION_ERRORS + 1))
   fi
 done

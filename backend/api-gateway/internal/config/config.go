@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -93,7 +94,7 @@ func Load() (*Config, error) {
 	v.SetDefault("server.write_timeout_sec", 30)
 	v.SetDefault("server.graceful_stop_sec", 10)
 	v.SetDefault("server.dev_mode", false)
-	v.SetDefault("database.ssl_mode", "disable")
+	v.SetDefault("database.ssl_mode", "require")
 	v.SetDefault("database.max_conns", 20)
 	v.SetDefault("database.min_conns", 2)
 	v.SetDefault("redis.db", 0)
@@ -131,12 +132,99 @@ func Load() (*Config, error) {
 		_ = v.BindEnv(key, env)
 	}
 
+	// DATABASE_URL support: Render (and other PaaS) provide a single
+	// DATABASE_URL env var. Parse it and set individual DB_* vars so the
+	// rest of the config system works unchanged.
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		// Format: postgres://user:password@host:port/dbname?sslmode=require
+		if parsed, err := parseDBURL(dbURL); err == nil {
+			if parsed["host"] != "" {
+				_ = v.BindEnv("database.host", "DATABASE_URL")
+				v.Set("database.host", parsed["host"])
+			}
+			if parsed["port"] != "" {
+				_ = v.BindEnv("database.port", "DATABASE_URL")
+				v.Set("database.port", parsed["port"])
+			}
+			if parsed["name"] != "" {
+				v.Set("database.name", parsed["name"])
+			}
+			if parsed["user"] != "" {
+				v.Set("database.user", parsed["user"])
+			}
+			if parsed["password"] != "" {
+				v.Set("database.password", parsed["password"])
+			}
+			if parsed["sslmode"] != "" {
+				v.Set("database.ssl_mode", parsed["sslmode"])
+			}
+		}
+	}
+
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	return &cfg, nil
+}
+
+// parseDBURL parses a postgres:// or postgresql:// URL into its components.
+func parseDBURL(rawURL string) (map[string]string, error) {
+	result := make(map[string]string)
+
+	// Strip scheme
+	s := rawURL
+	for _, prefix := range []string{"postgresql://", "postgres://"} {
+		if strings.HasPrefix(s, prefix) {
+			s = s[len(prefix):]
+			break
+		}
+	}
+
+	// Split user:pass@host:port/dbname?params
+	atIdx := strings.LastIndex(s, "@")
+	if atIdx < 0 {
+		return nil, fmt.Errorf("invalid DATABASE_URL: missing @")
+	}
+	userInfo := s[:atIdx]
+	hostInfo := s[atIdx+1:]
+
+	// Parse user:password
+	if colonIdx := strings.Index(userInfo, ":"); colonIdx >= 0 {
+		result["user"] = userInfo[:colonIdx]
+		result["password"] = userInfo[colonIdx+1:]
+	} else {
+		result["user"] = userInfo
+	}
+
+	// Parse host:port/dbname?params
+	if slashIdx := strings.Index(hostInfo, "/"); slashIdx >= 0 {
+		hostPort := hostInfo[:slashIdx]
+		rest := hostInfo[slashIdx+1:]
+
+		// Strip query params from dbname
+		if qIdx := strings.Index(rest, "?"); qIdx >= 0 {
+			params := rest[qIdx+1:]
+			rest = rest[:qIdx]
+			// Parse sslmode from query params
+			for _, param := range strings.Split(params, "&") {
+				if strings.HasPrefix(param, "sslmode=") {
+					result["sslmode"] = strings.TrimPrefix(param, "sslmode=")
+				}
+			}
+		}
+		result["name"] = rest
+
+		if colonIdx := strings.Index(hostPort, ":"); colonIdx >= 0 {
+			result["host"] = hostPort[:colonIdx]
+			result["port"] = hostPort[colonIdx+1:]
+		} else {
+			result["host"] = hostPort
+		}
+	}
+
+	return result, nil
 }
 
 // Validate checks that all required configuration fields are present.
@@ -157,17 +245,25 @@ func (c *Config) Validate() error {
 	if c.Database.Password == "" {
 		missing = append(missing, "DB_PASSWORD")
 	}
-	if c.Keycloak.URL == "" {
-		missing = append(missing, "KEYCLOAK_URL")
+
+	// Keycloak is only required when DEV_MODE=false.
+	// In staging/demo deployments (DEV_MODE=true), the DevAuthMiddleware
+	// handles authentication without Keycloak, so these vars can be omitted.
+	if !c.Server.DevMode {
+		if c.Keycloak.URL == "" {
+			missing = append(missing, "KEYCLOAK_URL")
+		}
+		if c.Keycloak.Realm == "" {
+			missing = append(missing, "KEYCLOAK_REALM")
+		}
+		if c.Keycloak.ClientID == "" {
+			missing = append(missing, "KEYCLOAK_CLIENT_ID")
+		}
 	}
-	if c.Keycloak.Realm == "" {
-		missing = append(missing, "KEYCLOAK_REALM")
-	}
-	if c.Keycloak.ClientID == "" {
-		missing = append(missing, "KEYCLOAK_CLIENT_ID")
-	}
-	// In production, MinIO must be configured for evidence storage
-	if c.App.Env == "production" {
+
+	// MinIO is optional in staging (photo uploads gracefully disabled when not configured).
+	// In production with APP_ENV=production AND DEV_MODE=false, MinIO is required.
+	if c.App.Env == "production" && !c.Server.DevMode {
 		if c.MinIO.Endpoint == "" {
 			missing = append(missing, "MINIO_ENDPOINT")
 		}
