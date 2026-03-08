@@ -202,7 +202,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('₵450.75'), findsOneWidget);
+      // JobCard now shows monthly leakage with /mo suffix
+      expect(find.text('₵450.75/mo'), findsOneWidget);
     });
   });
 

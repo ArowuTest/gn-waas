@@ -1,14 +1,10 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../models/models.dart';
 import '../../providers/providers.dart';
-import '../../services/api_service.dart';
 import '../../services/location_service.dart';
-import '../../services/offline_storage_service.dart';
 
 /// IllegalConnectionScreen
 ///
@@ -43,7 +39,7 @@ class _IllegalConnectionScreenState
   String _severity = 'HIGH';
   bool _isSubmitting = false;
   bool _isCapturingLocation = false;
-  LocationData? _capturedLocation;
+  LocationResult? _capturedLocation;
   /// Each photo entry stores the File and its SHA-256 hash.
   /// The hash is computed immediately on capture to ensure chain of custody.
   final List<({File file, String hash})> _photos = [];
@@ -79,7 +75,7 @@ class _IllegalConnectionScreenState
     setState(() => _isCapturingLocation = true);
     try {
       final locationService = LocationService();
-      final location = await locationService.getCurrentLocation();
+      final location = await locationService.getCurrentPosition();
       setState(() => _capturedLocation = location);
     } catch (e) {
       if (mounted) {
@@ -167,9 +163,9 @@ class _IllegalConnectionScreenState
         accountNumber: _accountNumberController.text.trim().isEmpty
             ? null
             : _accountNumberController.text.trim(),
-        latitude: _capturedLocation!.latitude,
-        longitude: _capturedLocation!.longitude,
-        gpsAccuracy: _capturedLocation!.accuracy,
+        latitude: _capturedLocation!.lat,
+        longitude: _capturedLocation!.lng,
+        gpsAccuracy: _capturedLocation!.accuracyM,
         photoCount: _photos.length,
         photoHashes: photoHashes,
         reportedAt: DateTime.now().toUtc(),
@@ -195,8 +191,8 @@ class _IllegalConnectionScreenState
           connectionType: _connectionType,
           severity: _severity,
           description: _descriptionController.text.trim(),
-          latitude: _capturedLocation!.latitude,
-          longitude: _capturedLocation!.longitude,
+          latitude: _capturedLocation!.lat,
+          longitude: _capturedLocation!.lng,
           photoCount: _photos.length,
           photoHashes: _photos.map((p) => p.hash).toList(),
         );
@@ -393,12 +389,12 @@ class _IllegalConnectionScreenState
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Lat: ${_capturedLocation!.latitude.toStringAsFixed(6)}, '
-                      'Lng: ${_capturedLocation!.longitude.toStringAsFixed(6)}',
+                      'Lat: ${_capturedLocation!.lat.toStringAsFixed(6)}, '
+                      'Lng: ${_capturedLocation!.lng.toStringAsFixed(6)}',
                       style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
                     ),
                     Text(
-                      'Accuracy: ±${_capturedLocation!.accuracy.toStringAsFixed(1)}m',
+                      'Accuracy: ±${_capturedLocation!.accuracyM.toStringAsFixed(1)}m',
                       style: TextStyle(fontSize: 11, color: Colors.green.shade700),
                     ),
                   ],
@@ -631,3 +627,5 @@ class IllegalConnectionReport {
     'reported_at': reportedAt.toIso8601String(),
   };
 }
+
+

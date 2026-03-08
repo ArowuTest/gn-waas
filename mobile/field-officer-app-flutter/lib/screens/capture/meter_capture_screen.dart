@@ -490,42 +490,101 @@ class _MeterCaptureScreenState extends ConsumerState<MeterCaptureScreen> {
     ),
   );
 
-  Widget _buildDone() => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 80),
-          const SizedBox(height: 16),
-          const Text(
-            'Evidence Submitted!',
-            style: TextStyle(
-              color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800,
+  Widget _buildDone() {
+    final job = ref.read(activeJobProvider);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 80),
+            const SizedBox(height: 16),
+            const Text(
+              'Evidence Submitted!',
+              style: TextStyle(
+                color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'The meter reading and photos have been recorded.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF94A3B8)),
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            key: const Key('back_to_jobs_button'),
-            onPressed: () => context.go('/jobs'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            const SizedBox(height: 8),
+            const Text(
+              'Meter reading and photos recorded.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF94A3B8)),
             ),
-            child: const Text('Back to Jobs'),
-          ),
-        ],
+            const SizedBox(height: 24),
+            // ── Next Step: Record Outcome ──────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1e293b),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFD97706).withOpacity(0.5)),
+              ),
+              child: Column(
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.assignment_outlined, color: Color(0xFFD97706), size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Next Step Required',
+                        style: TextStyle(
+                          color: Color(0xFFD97706),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Record what you found on-site. This is required to advance the audit pipeline and trigger revenue recovery.',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      key: const Key('record_outcome_button'),
+                      onPressed: () {
+                        if (job != null) {
+                          context.go('/jobs/${job.id}/outcome');
+                        } else {
+                          context.go('/jobs');
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD97706),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        'Record Outcome',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              key: const Key('skip_outcome_button'),
+              onPressed: () => context.go('/jobs'),
+              child: const Text(
+                'Skip for now',
+                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _ReviewCard extends StatelessWidget {
@@ -560,3 +619,4 @@ class _ReviewCard extends StatelessWidget {
     ),
   );
 }
+

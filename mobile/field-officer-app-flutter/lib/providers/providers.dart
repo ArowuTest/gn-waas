@@ -228,6 +228,23 @@ class JobsNotifier extends StateNotifier<JobsState> {
     }).toList();
     state = state.copyWith(jobs: updated);
   }
+
+  /// Replace a job in the list with a server-returned updated version.
+  /// Used after recording an outcome to reflect the new status and outcome fields.
+  void updateJobFromServer(FieldJob updatedJob) {
+    final updated = state.jobs.map((j) {
+      if (j.id == updatedJob.id) return updatedJob;
+      return j;
+    }).toList();
+    state = state.copyWith(jobs: updated);
+  }
+
+  /// Sync all pending data (submissions + outcomes) and refresh job list.
+  Future<int> syncAll() async {
+    final synced = await _sync.syncAll();
+    if (synced > 0) await refresh();
+    return synced;
+  }
 }
 
 final jobsProvider = StateNotifierProvider<JobsNotifier, JobsState>(
@@ -243,3 +260,4 @@ final activeJobProvider = StateProvider<FieldJob?>((ref) => null);
 final isOnlineProvider = FutureProvider<bool>((ref) async {
   return ref.read(syncServiceProvider).isOnline();
 });
+

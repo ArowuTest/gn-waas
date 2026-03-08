@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
-import '../reports/illegal_connection_screen.dart';
 
 class JobDetailScreen extends ConsumerStatefulWidget {
   final String jobId;
@@ -39,7 +38,7 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Status updated to ${newStatus.toApiString()}'),
+            content: Text('Status updated to ${newStatus.displayLabel}'),
             backgroundColor: Colors.green.shade700,
           ),
         );
@@ -60,7 +59,11 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final job = _job;
+    // Watch jobs so the UI rebuilds when outcome is recorded
+    final jobsState = ref.watch(jobsProvider);
+    final job = jobsState.jobs.where((j) => j.id == widget.jobId).firstOrNull
+        ?? ref.read(activeJobProvider);
+
     if (job == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Job Detail')),
@@ -73,15 +76,27 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF166534),
         foregroundColor: Colors.white,
-        title: Text(
-          job.jobReference ?? 'Job Detail',
-          style: const TextStyle(fontWeight: FontWeight.w700),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              job.jobReference ?? 'Job Detail',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+            Text(
+              job.status.displayLabel,
+              style: const TextStyle(fontSize: 11, color: Color(0xFFA7F3D0)),
+            ),
+          ],
         ),
         actions: [
           IconButton(
             key: const Key('capture_button'),
             icon: const Icon(Icons.camera_alt_outlined),
-            onPressed: () => context.push('/capture'),
+            onPressed: () {
+              ref.read(activeJobProvider.notifier).state = job;
+              context.push('/capture');
+            },
             tooltip: 'Capture Meter',
           ),
         ],
@@ -91,6 +106,11 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Revenue Leakage Banner ─────────────────────────────────────
+            if (job.primaryLeakageGhs != null)
+              _LeakageBanner(job: job),
+            if (job.primaryLeakageGhs != null) const SizedBox(height: 12),
+
             // ── Status Card ───────────────────────────────────────────────
             _InfoCard(
               title: 'Status',
@@ -130,7 +150,28 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
                 children: [
                   _InfoRow(label: 'Type',     value: job.anomalyType),
                   _InfoRow(label: 'Severity', value: job.alertLevel.toApiString()),
-                  if (job.estimatedVarianceGhs != null)
+                  _InfoRow(
+                    label: 'Description',
+                    value: job.anomalyTypeDescription,
+                  ),
+                  if (job.leakageCategory != null)
+                    _InfoRow(
+                      label: 'Category',
+                      value: job.leakageCategory!.displayLabel,
+                    ),
+                  if (job.monthlyLeakageGhs != null)
+                    _InfoRow(
+                      label: 'Monthly Loss',
+                      value: '₵${job.monthlyLeakageGhs!.toStringAsFixed(2)}/mo',
+                      valueColor: Colors.red.shade700,
+                    ),
+                  if (job.annualisedLeakageGhs != null)
+                    _InfoRow(
+                      label: 'Annual Loss',
+                      value: '₵${job.annualisedLeakageGhs!.toStringAsFixed(2)}/yr',
+                      valueColor: Colors.red.shade800,
+                    ),
+                  if (job.estimatedVarianceGhs != null && job.monthlyLeakageGhs == null)
                     _InfoRow(
                       label: 'Est. Variance',
                       value: '₵${job.estimatedVarianceGhs!.toStringAsFixed(2)}',
@@ -140,6 +181,67 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // ── Field Outcome (if recorded) ───────────────────────────────
+            if (job.hasOutcome) ...[
+              _InfoCard(
+                title: 'Field Outcome',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          job.outcome!.confirmsLeakage
+                              ? Icons.warning_amber_rounded
+                              : Icons.check_circle_outline,
+                          color: job.outcome!.confirmsLeakage
+                              ? const Color(0xFFDC2626)
+                              : const Color(0xFF16A34A),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            job.outcome!.displayLabel,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: job.outcome!.confirmsLeakage
+                                  ? const Color(0xFFDC2626)
+                                  : const Color(0xFF16A34A),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (job.meterFound != null) ...[
+                      const SizedBox(height: 4),
+                      _InfoRow(
+                        label: 'Meter Found',
+                        value: job.meterFound! ? 'Yes' : 'No',
+                        valueColor: job.meterFound! ? Colors.green.shade700 : Colors.red.shade700,
+                      ),
+                    ],
+                    if (job.addressConfirmed != null)
+                      _InfoRow(
+                        label: 'Address',
+                        value: job.addressConfirmed! ? 'Confirmed' : 'Invalid',
+                        valueColor: job.addressConfirmed! ? Colors.green.shade700 : Colors.red.shade700,
+                      ),
+                    if (job.outcomeNotes != null && job.outcomeNotes!.isNotEmpty)
+                      _InfoRow(label: 'Notes', value: job.outcomeNotes!),
+                    if (job.recommendedAction != null && job.recommendedAction!.isNotEmpty)
+                      _InfoRow(label: 'Action', value: job.recommendedAction!),
+                    if (job.outcomeRecordedAt != null)
+                      _InfoRow(
+                        label: 'Recorded',
+                        value: _formatDateTime(job.outcomeRecordedAt!),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // ── GPS ───────────────────────────────────────────────────────
             _InfoCard(
@@ -196,12 +298,15 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── Capture Button ────────────────────────────────────────────
+            // ── Capture Meter Button ──────────────────────────────────────
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 key: const Key('capture_meter_button'),
-                onPressed: () => context.push('/capture'),
+                onPressed: () {
+                  ref.read(activeJobProvider.notifier).state = job;
+                  context.push('/capture');
+                },
                 icon: const Icon(Icons.camera_alt),
                 label: const Text('Capture Meter Reading'),
                 style: ElevatedButton.styleFrom(
@@ -215,7 +320,30 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            // GAP-FIX-02: Report Illegal Connection — was imported but unreachable
+
+            // ── Record Outcome Button (shown when outcome needed) ──────────
+            if (job.needsOutcome) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  key: const Key('record_outcome_button'),
+                  onPressed: () => context.push('/jobs/${job.id}/outcome'),
+                  icon: const Icon(Icons.assignment_turned_in_outlined),
+                  label: const Text('Record Field Outcome'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
+            // ── Report Illegal Connection ─────────────────────────────────
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -242,6 +370,76 @@ class _JobDetailScreenState extends ConsumerState<JobDetailScreen> {
       ),
     );
   }
+
+  String _formatDateTime(DateTime dt) {
+    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+// ─── Revenue Leakage Banner ───────────────────────────────────────────────────
+
+class _LeakageBanner extends StatelessWidget {
+  final FieldJob job;
+  const _LeakageBanner({required this.job});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF7F1D1D), Color(0xFF991B1B)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.trending_down, color: Colors.white, size: 28),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Estimated Revenue Leakage',
+                style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 11),
+              ),
+              Text(
+                '₵${job.primaryLeakageGhs!.toStringAsFixed(2)} / month',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (job.annualisedLeakageGhs != null)
+                Text(
+                  '₵${job.annualisedLeakageGhs!.toStringAsFixed(2)} annualised',
+                  style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+                ),
+            ],
+          ),
+        ),
+        if (job.leakageCategory != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              job.leakageCategory!.displayLabel,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 // ─── Reusable Widgets ─────────────────────────────────────────────────────────
@@ -324,16 +522,17 @@ class _StatusBadge extends StatelessWidget {
 
   Color get _color {
     switch (status) {
-      case FieldJobStatus.queued:     return const Color(0xFF6B7280);
-      case FieldJobStatus.assigned:   return const Color(0xFF0369A1);
-      case FieldJobStatus.dispatched: return const Color(0xFF2563EB);
-      case FieldJobStatus.enRoute:    return const Color(0xFF7C3AED);
-      case FieldJobStatus.onSite:     return const Color(0xFFD97706);
-      case FieldJobStatus.completed:  return const Color(0xFF16A34A);
-      case FieldJobStatus.failed:     return const Color(0xFFDC2626);
-      case FieldJobStatus.cancelled:  return const Color(0xFF6B7280);
-      case FieldJobStatus.escalated:  return const Color(0xFFB45309);
-      case FieldJobStatus.sos:        return const Color(0xFFDC2626);
+      case FieldJobStatus.queued:          return const Color(0xFF6B7280);
+      case FieldJobStatus.assigned:        return const Color(0xFF0369A1);
+      case FieldJobStatus.dispatched:      return const Color(0xFF2563EB);
+      case FieldJobStatus.enRoute:         return const Color(0xFF7C3AED);
+      case FieldJobStatus.onSite:          return const Color(0xFFD97706);
+      case FieldJobStatus.completed:       return const Color(0xFF16A34A);
+      case FieldJobStatus.failed:          return const Color(0xFFDC2626);
+      case FieldJobStatus.cancelled:       return const Color(0xFF6B7280);
+      case FieldJobStatus.escalated:       return const Color(0xFFB45309);
+      case FieldJobStatus.sos:             return const Color(0xFFDC2626);
+      case FieldJobStatus.outcomeRecorded: return const Color(0xFF0891B2);
     }
   }
 
@@ -346,7 +545,7 @@ class _StatusBadge extends StatelessWidget {
       border: Border.all(color: _color.withOpacity(0.3)),
     ),
     child: Text(
-      status.toApiString().replaceAll('_', ' '),
+      status.displayLabel,
       style: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w700,

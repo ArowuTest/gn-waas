@@ -42,7 +42,7 @@ class JobListScreen extends ConsumerWidget {
             icon: Stack(
               children: [
                 const Icon(Icons.sync),
-                if ((jobsState.syncStats?.pendingSubmissions ?? 0) > 0)
+                if (((jobsState.syncStats?.pendingSubmissions ?? 0) + (jobsState.syncStats?.pendingOutcomes ?? 0)) > 0)
                   Positioned(
                     right: 0, top: 0,
                     child: Container(
@@ -56,13 +56,13 @@ class JobListScreen extends ConsumerWidget {
               ],
             ),
             onPressed: () async {
-              final synced = await ref.read(jobsProvider.notifier).syncPending();
+              final synced = await ref.read(jobsProvider.notifier).syncAll();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(synced > 0
-                        ? '$synced submission(s) synced successfully'
-                        : 'No pending submissions to sync'),
+                        ? '$synced item(s) synced successfully'
+                        : 'No pending items to sync'),
                     backgroundColor: synced > 0 ? Colors.green.shade700 : null,
                   ),
                 );
@@ -90,10 +90,12 @@ class JobListScreen extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Offline mode — showing cached jobs'
-                      '${(jobsState.syncStats?.pendingSubmissions ?? 0) > 0
-                          ? ' · ${jobsState.syncStats!.pendingSubmissions} pending sync'
-                          : ''}',
+                      () {
+                        final pending = (jobsState.syncStats?.pendingSubmissions ?? 0) +
+                            (jobsState.syncStats?.pendingOutcomes ?? 0);
+                        return 'Offline mode — showing cached jobs'
+                            '${pending > 0 ? ' · $pending pending sync' : ''}';
+                      }(),
                       style: const TextStyle(
                         color: Color(0xFFFEF3C7), fontSize: 12,
                       ),
@@ -305,15 +307,37 @@ class JobCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (job.estimatedVarianceGhs != null)
-                          Text(
-                            '₵${job.estimatedVarianceGhs!.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFDC2626),
-                            ),
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (job.hasOutcome)
+                              Container(
+                                margin: const EdgeInsets.only(right: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0891B2).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  '✓ OUTCOME',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0891B2),
+                                  ),
+                                ),
+                              ),
+                            if (job.primaryLeakageGhs != null)
+                              Text(
+                                '₵${job.primaryLeakageGhs!.toStringAsFixed(2)}/mo',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
                   ],
@@ -383,3 +407,4 @@ class _EmptyState extends StatelessWidget {
     ),
   );
 }
+

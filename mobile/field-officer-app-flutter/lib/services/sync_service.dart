@@ -1,5 +1,5 @@
 // GN-WAAS Field Officer App — Sync Service
-// Background sync: uploads pending submissions when connectivity returns
+// Background sync: uploads pending submissions and outcomes when connectivity returns
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/models.dart';
@@ -22,7 +22,8 @@ class SyncService {
            !results.contains(ConnectivityResult.none);
   }
 
-  /// Sync all pending submissions to the server
+  /// Sync all pending submissions to the server.
+  /// Returns the number of successfully synced submissions.
   Future<int> syncPendingSubmissions() async {
     if (!await isOnline()) return 0;
 
@@ -83,6 +84,37 @@ class SyncService {
       }
     }
     return synced;
+  }
+
+  /// Sync all pending outcomes to the server.
+  /// Returns the number of successfully synced outcomes.
+  Future<int> syncPendingOutcomes() async {
+    if (!await isOnline()) return 0;
+
+    final pending = await _storage.getPendingOutcomes();
+    if (pending.isEmpty) return 0;
+
+    int synced = 0;
+    for (final item in pending) {
+      if (item.retryCount >= 5) continue;
+      try {
+        await _api.recordFieldJobOutcome(item.jobId, item.outcomeRequest);
+        await _storage.markOutcomeDone(item.id);
+        synced++;
+      } catch (e) {
+        await _storage.markOutcomeFailed(item.id, e.toString());
+      }
+    }
+    return synced;
+  }
+
+  /// Sync all pending data (submissions + outcomes).
+  /// Returns total number of items synced.
+  Future<int> syncAll() async {
+    if (!await isOnline()) return 0;
+    final submissions = await syncPendingSubmissions();
+    final outcomes    = await syncPendingOutcomes();
+    return submissions + outcomes;
   }
 
   /// Fetch fresh jobs from API and cache them

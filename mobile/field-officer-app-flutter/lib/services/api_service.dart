@@ -109,14 +109,10 @@ class ApiService {
     return data;
   }
 
-  /// Normalise user object: backend may return 'name' instead of 'full_name'
+  /// Normalise user object — backend may return 'name' or 'full_name'
   Map<String, dynamic> _normaliseUser(Map<String, dynamic> raw) => {
-    'id':           raw['id'] ?? raw['sub'] ?? '',
-    'email':        raw['email'] ?? '',
-    'full_name':    raw['full_name'] ?? raw['name'] ?? raw['preferred_username'] ?? '',
-    'role':         raw['role'] ?? raw['roles']?.first ?? 'FIELD_OFFICER',
-    'badge_number': raw['badge_number'],
-    'district_id':  raw['district_id'],
+    ...raw,
+    'full_name': raw['full_name'] ?? raw['name'] ?? '',
   };
 
   Future<void> logout() async {
@@ -138,7 +134,7 @@ class ApiService {
   // ─── Field Jobs ────────────────────────────────────────────────────────────
 
   Future<List<FieldJob>> getMyJobs() async {
-    final res = await _dio.get('/field-jobs/my-jobs');
+    final res = await _dio.get('/field-jobs/my');
     final list = res.data['data'] as List<dynamic>;
     return list.map((j) => FieldJob.fromJson(j as Map<String, dynamic>)).toList();
   }
@@ -149,13 +145,34 @@ class ApiService {
     double? gpsLat,
     double? gpsLng,
   }) async {
-    // BE-H03 fix: backend UpdateJobStatus expects officer_lat/officer_lng,
-    // not gps_lat/gps_lng.
     await _dio.patch('/field-jobs/$jobId/status', data: {
       'status':      status.toApiString(),
       if (gpsLat != null) 'officer_lat': gpsLat,
       if (gpsLng != null) 'officer_lng': gpsLng,
     });
+  }
+
+  /// Record the field officer's on-site outcome for a job.
+  ///
+  /// Calls PATCH /field-jobs/:id/outcome — added in migration 031.
+  /// This is the critical step that advances the anomaly flag from
+  /// OPEN → ACKNOWLEDGED and triggers the revenue recovery pipeline.
+  ///
+  /// If offline, the caller should queue the outcome in PendingOutcome
+  /// and call this method when connectivity is restored.
+  Future<FieldJob> recordFieldJobOutcome(
+    String jobId,
+    FieldJobOutcomeRequest request,
+  ) async {
+    final res = await _dio.patch(
+      '/field-jobs/$jobId/outcome',
+      data: request.toJson(),
+    );
+    final body = res.data as Map<String, dynamic>;
+    final data = body.containsKey('data')
+        ? body['data'] as Map<String, dynamic>
+        : body;
+    return FieldJob.fromJson(data);
   }
 
   Future<void> triggerSOS(
@@ -173,8 +190,6 @@ class ApiService {
       'notes':          'SOS triggered from Flutter mobile app',
     });
   }
-
-  // ─── Audit / Submission ────────────────────────────────────────────────────
 
   // ─── Evidence Upload (MinIO presigned URL flow) ──────────────────────────
   //
@@ -259,7 +274,11 @@ class ApiService {
     return User.fromJson(res.data['data'] as Map<String, dynamic>);
   }
 
-  /// Submit an illegal connection report (FIO-004)
+  // ─── Illegal Connection Reports (FIO-004) ─────────────────────────────────
+
+  /// Submit an illegal connection report.
+  /// [report] must have a toJson() method.
+  /// [photos] is a list of MeterPhoto objects (local paths for offline queuing).
   Future<void> submitIllegalConnectionReport(
     dynamic report,
     List<dynamic> photos,

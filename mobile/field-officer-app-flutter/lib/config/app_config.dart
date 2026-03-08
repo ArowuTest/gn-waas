@@ -35,5 +35,5 @@ class AppConfig {
 
   // SQLite DB name
   static const String dbName = 'gnwaas_offline.db';
-  static const int dbVersion = 2;
+  static const int dbVersion = 3;
 }
