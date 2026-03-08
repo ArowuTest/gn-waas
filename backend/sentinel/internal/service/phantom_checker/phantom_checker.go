@@ -25,11 +25,9 @@ import (
 //     → If field finds no address: FRAUDULENT_ACCOUNT (GWL internal fraud)
 type PhantomCheckerService struct {
 	logger               *zap.Logger
-	phantomMonths        int     // Months of identical readings = phantom
-	roundNumberTolerance float64 // Tolerance for "suspiciously round" readings
-	// District average tariff for estimating unmetered consumption leakage
-	// Loaded from system_config; defaults to residential tier-2 rate
-	districtAvgTariffGHS float64
+	phantomMonths        int            // Months of identical readings = phantom
+	roundNumberTolerance float64        // Tolerance for "suspiciously round" readings
+	tariffCfg            *entities.TariffConfig // DB-loaded PURC rates (no hardcoding)
 }
 
 func NewPhantomCheckerService(logger *zap.Logger, phantomMonths int) *PhantomCheckerService {
@@ -37,8 +35,30 @@ func NewPhantomCheckerService(logger *zap.Logger, phantomMonths int) *PhantomChe
 		logger:               logger,
 		phantomMonths:        phantomMonths,
 		roundNumberTolerance: 0.01,
-		districtAvgTariffGHS: 10.83, // PURC 2026 residential tier-2 default
 	}
+}
+
+// WithTariffConfig injects the DB-loaded tariff config into the phantom checker.
+func (p *PhantomCheckerService) WithTariffConfig(cfg *entities.TariffConfig) *PhantomCheckerService {
+	p.tariffCfg = cfg
+	return p
+}
+
+// blendedResidentialRate returns the blended residential tariff rate per m3.
+// Falls back to PURC 2026 tier-2 (10.8320) if tariffCfg is not set.
+func (p *PhantomCheckerService) blendedResidentialRate() float64 {
+	if p.tariffCfg != nil {
+		return p.tariffCfg.BlendedRateForCategory("RESIDENTIAL")
+	}
+	return 10.8320 // PURC 2026 residential tier-2 (fallback only)
+}
+
+// vatMultiplier returns 1 + VAT/100. Falls back to 1.20 (20% VAT).
+func (p *PhantomCheckerService) vatMultiplier() float64 {
+	if p.tariffCfg != nil {
+		return p.tariffCfg.VATMultiplier()
+	}
+	return 1.20
 }
 
 // CheckPhantomMeter analyses billing history for phantom meter patterns.
@@ -172,7 +192,7 @@ func (p *PhantomCheckerService) checkIdenticalReadings(
 	if estimatedActualM3 <= firstConsumption {
 		estimatedActualM3 = firstConsumption * 1.5 // conservative: assume 50% under-reading
 	}
-	monthlyLeakageGHS := (estimatedActualM3 - firstConsumption) * p.districtAvgTariffGHS * 1.20 // +VAT
+	monthlyLeakageGHS := (estimatedActualM3 - firstConsumption) * p.blendedResidentialRate() * p.vatMultiplier()
 
 	return &entities.AnomalyFlag{
 		ID:               uuid.New(),
@@ -192,7 +212,7 @@ func (p *PhantomCheckerService) checkIdenticalReadings(
 				"or readings are being fabricated. "+
 				"Estimated monthly revenue leakage: GH₵%.2f (%.2f m³ under-reported × GH₵%.2f/m³ + 20%% VAT).",
 			account.GWLAccountNumber, firstConsumption, identicalCount,
-			monthlyLeakageGHS, estimatedActualM3-firstConsumption, p.districtAvgTariffGHS,
+			monthlyLeakageGHS, estimatedActualM3-firstConsumption, p.blendedResidentialRate(),
 		),
 		EvidenceData: map[string]interface{}{
 			"account_number":       account.GWLAccountNumber,
@@ -229,7 +249,7 @@ func (p *PhantomCheckerService) checkRoundNumbers(
 
 	// Conservative leakage estimate: assume 20% under-reading on average
 	avgConsumption := account.MonthlyAvgConsumption
-	monthlyLeakageGHS := avgConsumption * 0.20 * p.districtAvgTariffGHS * 1.20
+	monthlyLeakageGHS := avgConsumption * 0.20 * p.blendedResidentialRate() * p.vatMultiplier()
 
 	return &entities.AnomalyFlag{
 		ID:               uuid.New(),
@@ -291,7 +311,7 @@ func (p *PhantomCheckerService) checkZeroVariance(
 		return nil
 	}
 
-	monthlyLeakageGHS := mean * 0.20 * p.districtAvgTariffGHS * 1.20
+	monthlyLeakageGHS := mean * 0.20 * p.blendedResidentialRate() * p.vatMultiplier()
 
 	return &entities.AnomalyFlag{
 		ID:               uuid.New(),

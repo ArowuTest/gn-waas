@@ -112,6 +112,17 @@ func main() {
 	billingRepo  := postgres.NewGWLBillingRepository(db, logger)
 	accountRepo  := postgres.NewWaterAccountRepository(db, logger)
 	districtRepo := postgres.NewDistrictRepository(db, logger)
+	tariffRepo   := postgres.NewTariffRateRepository(db, logger)
+
+	// ── Load PURC tariff rates from DB (no hardcoding in sentinel) ───────────
+	// Rates are seeded in database/seeds/002_tariff_rates.sql and can be
+	// updated via the admin portal tariff management page.
+	tariffCfg, err := tariffRepo.LoadActiveTariffConfig(ctx)
+	if err != nil {
+		logger.Warn("Failed to load tariff config from DB — using PURC 2026 defaults",
+			zap.Error(err))
+		tariffCfg = nil // orchestrator will use defaultTariffCfg()
+	}
 
 	// ── Load thresholds from system_config (with safe defaults) ─────────────
 	// These values are seeded in database/seeds/001_system_config.sql and can
@@ -131,13 +142,15 @@ func main() {
 
 	// ── Services ──────────────────────────────────────────────────────────────
 	reconcilerSvc := reconciler.NewReconcilerService(logger, shadowBillVariancePct)
-	phantomSvc    := phantom_checker.NewPhantomCheckerService(logger, phantomMeterMonths)
-	nightFlowSvc  := night_flow.NewNightFlowAnalyser(logger, nightFlowPctOfDaily)
+	phantomSvc    := phantom_checker.NewPhantomCheckerService(logger, phantomMeterMonths).
+		WithTariffConfig(tariffCfg)
+	nightFlowSvc  := night_flow.NewNightFlowAnalyser(logger, nightFlowPctOfDaily).
+		WithTariffConfig(tariffCfg)
 
 	// ── Orchestrator ──────────────────────────────────────────────────────────
 	orch := orchestrator.NewSentinelOrchestrator(
 		anomalyRepo, billingRepo, accountRepo, districtRepo, nil,
-		reconcilerSvc, phantomSvc, nightFlowSvc, logger,
+		reconcilerSvc, phantomSvc, nightFlowSvc, tariffCfg, logger,
 	)
 
 	// ── HTTP Handler ──────────────────────────────────────────────────────────

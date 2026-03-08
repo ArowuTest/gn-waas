@@ -35,14 +35,39 @@ func (r *AnomalyFlagRepository) Create(ctx context.Context, flag *entities.Anoma
 	// pgx cannot reliably infer custom enum types from plain strings;
 	// without the cast, the INSERT fails with "column is of type anomaly_type
 	// but expression is of type text" on some pgx driver versions.
+	// Normalise leakage category: if not set, derive from anomaly type
+	leakageCategory := flag.LeakageCategory
+	if leakageCategory == "" {
+		switch flag.AnomalyType {
+		case "SHADOW_BILL_VARIANCE", "CATEGORY_MISMATCH", "PHANTOM_METER",
+			"DISTRICT_IMBALANCE", "UNMETERED_CONSUMPTION", "METERING_INACCURACY",
+			"UNAUTHORISED_CONSUMPTION", "VAT_DISCREPANCY":
+			leakageCategory = "REVENUE_LEAKAGE"
+		case "OUTAGE_CONSUMPTION":
+			leakageCategory = "COMPLIANCE"
+		default:
+			leakageCategory = "DATA_QUALITY"
+		}
+	}
+
+	// Annualised = monthly × 12
+	annualised := flag.AnnualisedLeakageGHS
+	if annualised == 0 && flag.MonthlyLeakageGHS > 0 {
+		annualised = flag.MonthlyLeakageGHS * 12
+	}
+
 	query := `
 		INSERT INTO anomaly_flags (
 			account_id, district_id, anomaly_type, alert_level,
 			fraud_type, title, description, estimated_loss_ghs,
 			billing_period_start, billing_period_end,
 			shadow_bill_id, gwl_bill_id, evidence_data,
-			status, sentinel_version, detection_hash
-		) VALUES ($1,$2,$3::anomaly_type,$4::alert_level,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+			status, sentinel_version, detection_hash,
+			leakage_category, monthly_leakage_ghs, annualised_leakage_ghs
+		) VALUES (
+			$1,$2,$3::anomaly_type,$4::alert_level,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+			$17::leakage_category,$18,$19
+		)
 		RETURNING id, created_at`
 
 	err = r.db.QueryRow(ctx, query,
@@ -51,6 +76,7 @@ func (r *AnomalyFlagRepository) Create(ctx context.Context, flag *entities.Anoma
 		flag.BillingPeriodStart, flag.BillingPeriodEnd,
 		flag.ShadowBillID, flag.GWLBillID, evidenceJSON,
 		flag.Status, flag.SentinelVersion, flag.DetectionHash,
+		leakageCategory, flag.MonthlyLeakageGHS, annualised,
 	).Scan(&flag.ID, &flag.CreatedAt)
 
 	if err != nil {

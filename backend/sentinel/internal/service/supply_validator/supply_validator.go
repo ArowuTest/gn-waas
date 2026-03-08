@@ -32,12 +32,16 @@ type SupplyWindow struct {
 // SupplyValidator checks for off-schedule consumption anomalies.
 // It queries the supply_schedules and meter_readings tables directly.
 type SupplyValidator struct {
-	db     *pgxpool.Pool
-	logger *zap.Logger
+	db                     *pgxpool.Pool
+	logger                 *zap.Logger
+	minFlagThresholdLitres float64        // Minimum consumption threshold to flag (litres)
+	tariffCfg              *entities.TariffConfig // DB-loaded PURC rates (no hardcoding)
+}
 
-	// Minimum consumption threshold to flag (litres).
-	// Small amounts may be residual pressure, not active consumption.
-	minFlagThresholdLitres float64
+// WithTariffConfig injects the DB-loaded tariff config.
+func (v *SupplyValidator) WithTariffConfig(cfg *entities.TariffConfig) *SupplyValidator {
+	v.tariffCfg = cfg
+	return v
 }
 
 // New creates a new SupplyValidator.
@@ -254,11 +258,16 @@ func (v *SupplyValidator) classifySeverity(litres float64) string {
 }
 
 // estimateLossGHS estimates the financial loss in Ghana Cedis.
-// Uses the 2026 PURC residential tier-2 rate as a conservative estimate.
+// Uses the DB-loaded PURC residential blended rate + VAT.
+// Falls back to PURC 2026 tier-2 (10.8320) + 20% VAT if tariffCfg is not set.
 func (v *SupplyValidator) estimateLossGHS(m3 float64) float64 {
-	const ratePerM3 = 10.8320 // 2026 PURC residential tier-2 rate
-	const vatRate = 0.20
-	return m3 * ratePerM3 * (1 + vatRate)
+	ratePerM3 := 10.8320 // PURC 2026 residential tier-2 (fallback only)
+	vatMult   := 1.20    // 20% VAT (fallback only)
+	if v.tariffCfg != nil {
+		ratePerM3 = v.tariffCfg.BlendedRateForCategory("RESIDENTIAL")
+		vatMult   = v.tariffCfg.VATMultiplier()
+	}
+	return m3 * ratePerM3 * vatMult
 }
 
 // ─── Exported test helpers ────────────────────────────────────────────────────

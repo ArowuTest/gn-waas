@@ -18,8 +18,9 @@ import (
 // - Compare district production records vs billed consumption
 // - Flag districts where production >> billing (implies unaccounted flow)
 type NightFlowAnalyser struct {
-	logger              *zap.Logger
-	nightFlowThreshold  float64 // % of daily average that triggers flag (from system_config)
+	logger             *zap.Logger
+	nightFlowThreshold float64                // % of daily average that triggers flag (from system_config)
+	tariffCfg          *entities.TariffConfig // DB-loaded PURC rates (no hardcoding)
 }
 
 func NewNightFlowAnalyser(logger *zap.Logger, nightFlowThresholdPct float64) *NightFlowAnalyser {
@@ -27,6 +28,28 @@ func NewNightFlowAnalyser(logger *zap.Logger, nightFlowThresholdPct float64) *Ni
 		logger:             logger,
 		nightFlowThreshold: nightFlowThresholdPct,
 	}
+}
+
+// WithTariffConfig injects the DB-loaded tariff config.
+func (n *NightFlowAnalyser) WithTariffConfig(cfg *entities.TariffConfig) *NightFlowAnalyser {
+	n.tariffCfg = cfg
+	return n
+}
+
+// blendedResidentialRate returns the blended residential tariff rate per m3.
+func (n *NightFlowAnalyser) blendedResidentialRate() float64 {
+	if n.tariffCfg != nil {
+		return n.tariffCfg.BlendedRateForCategory("RESIDENTIAL")
+	}
+	return 10.8320 // PURC 2026 residential tier-2 (fallback only)
+}
+
+// vatMultiplier returns 1 + VAT/100.
+func (n *NightFlowAnalyser) vatMultiplier() float64 {
+	if n.tariffCfg != nil {
+		return n.tariffCfg.VATMultiplier()
+	}
+	return 1.20
 }
 
 // AnalyseDistrictBalance performs statistical night-flow equivalent analysis
@@ -73,10 +96,12 @@ func (n *NightFlowAnalyser) AnalyseDistrictBalance(
 	// IWA/AWWA standard: ~15% of production is acceptable real loss (physical leakage).
 	// Anything above that is apparent loss = revenue leakage.
 	const (
-		realLossBaselinePct  = 15.0  // IWA standard baseline for Ghana infrastructure
-		districtAvgTariffGHS = 10.83 // PURC 2026 residential tier-2 (conservative)
-		vatMultiplier        = 1.20
+		realLossBaselinePct = 15.0 // IWA standard baseline for Ghana infrastructure
 	)
+
+	// Use DB-loaded tariff rates (no hardcoding)
+	districtAvgTariffGHS := n.blendedResidentialRate()
+	vatMult              := n.vatMultiplier()
 
 	realLossM3 := productionM3 * (realLossBaselinePct / 100.0)
 	apparentLossM3 := unaccountedM3 - realLossM3
@@ -85,7 +110,7 @@ func (n *NightFlowAnalyser) AnalyseDistrictBalance(
 	}
 
 	// Monthly revenue leakage = apparent loss × tariff × VAT
-	monthlyLeakageGHS := apparentLossM3 * districtAvgTariffGHS * vatMultiplier
+	monthlyLeakageGHS := apparentLossM3 * districtAvgTariffGHS * vatMult
 	annualisedLeakageGHS := monthlyLeakageGHS * 12
 
 	// Classify severity based on unaccounted percentage
@@ -117,7 +142,7 @@ func (n *NightFlowAnalyser) AnalyseDistrictBalance(
 				"  Total unaccounted:    %.2f m3 (%.1f%% of production)\n"+
 				"  Real loss baseline:  %.2f m3 (%.0f%% IWA standard)\n"+
 				"  Apparent loss:       %.2f m3 (unregistered consumption)\n"+
-				"  Monthly leakage:     GHC%.2f (%.2f m3 x GHC%.2f/m3 x 1.20 VAT)\n"+
+				"  Monthly leakage:     GHC%.2f (%.2f m3 x GHC%.2f/m3 x %.2f VAT)\n"+
 				"  Annual leakage:      GHC%.2f\n\n"+
 				"Possible causes:\n"+
 				"  (1) Unregistered connections - addresses consuming with no billing account\n"+
@@ -129,7 +154,7 @@ func (n *NightFlowAnalyser) AnalyseDistrictBalance(
 			unaccountedM3, unaccountedPct,
 			realLossM3, realLossBaselinePct,
 			apparentLossM3,
-			monthlyLeakageGHS, apparentLossM3, districtAvgTariffGHS,
+			monthlyLeakageGHS, apparentLossM3, districtAvgTariffGHS, vatMult,
 			annualisedLeakageGHS,
 		),
 		EvidenceData: map[string]interface{}{

@@ -74,7 +74,10 @@ const anomalyFlagSelectCols = `
 	id, district_id, account_id, anomaly_type, alert_level, fraud_type,
 	title, description, estimated_loss_ghs, status, assigned_to,
 	resolved_at, resolution_notes, false_positive, confirmed_fraud,
-	recovered_amount_ghs, created_at, updated_at`
+	recovered_amount_ghs,
+	leakage_category, monthly_leakage_ghs, annualised_leakage_ghs,
+	confirmed_leakage_ghs, field_outcome,
+	created_at, updated_at`
 
 func scanAnomalyFlag(row interface {
 	Scan(dest ...any) error
@@ -84,7 +87,10 @@ func scanAnomalyFlag(row interface {
 		&f.ID, &f.DistrictID, &f.AccountID, &f.AnomalyType, &f.AlertLevel, &f.FraudType,
 		&f.Title, &f.Description, &f.EstimatedLossGHS, &f.Status, &f.AssignedTo,
 		&f.ResolvedAt, &f.ResolutionNotes, &f.FalsePositive, &f.ConfirmedFraud,
-		&f.RecoveredAmountGHS, &f.CreatedAt, &f.UpdatedAt,
+		&f.RecoveredAmountGHS,
+		&f.LeakageCategory, &f.MonthlyLeakageGHS, &f.AnnualisedLeakageGHS,
+		&f.ConfirmedLeakageGHS, &f.FieldOutcome,
+		&f.CreatedAt, &f.UpdatedAt,
 	)
 	return f, err
 }
@@ -139,7 +145,7 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 	dataSQL := `SELECT ` + anomalyFlagSelectCols + `
 		FROM anomaly_flags
 		` + where + `
-		ORDER BY created_at DESC
+		ORDER BY monthly_leakage_ghs DESC NULLS LAST, created_at DESC
 		LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
 
 	rows, err := r.q(ctx).Query(ctx, dataSQL, args...)
@@ -230,7 +236,7 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 	dataSQL := `SELECT ` + anomalyFlagSelectCols + `
 		FROM anomaly_flags
 		` + where + `
-		ORDER BY created_at DESC
+		ORDER BY monthly_leakage_ghs DESC NULLS LAST, created_at DESC
 		LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
 
 	rows, err := q.Query(ctx, dataSQL, args...)

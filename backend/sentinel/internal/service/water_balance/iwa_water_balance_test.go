@@ -166,8 +166,9 @@ func TestRevenueRecoveryEstimate(t *testing.T) {
 	result := svc.ComputeForTest(input)
 
 	// Apparent losses = 800 m³
-	// Recovery = 800 × 10.83 × 1.20 = 10,396.80 GHS
-	expectedRecovery := 800.0 * 10.83 * 1.20
+	// Recovery = 800 × 10.8320 × 1.20 = 10,398.72 GHS
+	// Rate: PURC 2026 residential tier-2 fallback (10.8320), VAT 20%
+	expectedRecovery := 800.0 * 10.8320 * 1.20
 	tolerance := 1.0 // GHS
 
 	if result.EstimatedRevenueRecoveryGHS < expectedRecovery-tolerance ||

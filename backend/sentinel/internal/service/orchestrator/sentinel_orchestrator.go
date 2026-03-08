@@ -16,19 +16,36 @@ import (
 	"go.uber.org/zap"
 )
 
+// defaultTariffCfg returns PURC 2026 defaults used only when DB is unavailable.
+// Rates match database/seeds/002_tariff_rates.sql.
+func defaultTariffCfg() *entities.TariffConfig {
+	return &entities.TariffConfig{
+		VATRate: 20.0,
+		Rates: []entities.TariffRate{
+			{Category: "RESIDENTIAL",   TierName: "Tier 1 - Lifeline",  MinVolumeM3: 0, MaxVolumeM3: 5,  RatePerM3: 6.1225},
+			{Category: "RESIDENTIAL",   TierName: "Tier 2 - Standard",  MinVolumeM3: 5, MaxVolumeM3: 0,  RatePerM3: 10.8320},
+			{Category: "COMMERCIAL",    TierName: "Standard Commercial", MinVolumeM3: 0, MaxVolumeM3: 0,  RatePerM3: 18.4500, ServiceCharge: 500},
+			{Category: "INDUSTRIAL",    TierName: "Industrial Rate",     MinVolumeM3: 0, MaxVolumeM3: 0,  RatePerM3: 22.1000, ServiceCharge: 1500},
+			{Category: "PUBLIC_GOVT",   TierName: "Flat Rate",           MinVolumeM3: 0, MaxVolumeM3: 0,  RatePerM3: 15.7372, ServiceCharge: 2000},
+			{Category: "BOTTLED_WATER", TierName: "Bottled Water Rate",  MinVolumeM3: 0, MaxVolumeM3: 0,  RatePerM3: 32.7858, ServiceCharge: 25000},
+		},
+	}
+}
+
 // SentinelOrchestrator coordinates all fraud detection checks
 // It runs all checks in parallel where possible and persists results
 type SentinelOrchestrator struct {
-	anomalyRepo       interfaces.AnomalyFlagRepository
-	billingRepo       interfaces.GWLBillingRepository
-	accountRepo       interfaces.WaterAccountRepository
-	districtRepo      interfaces.DistrictRepository
-	scheduleRepo      interfaces.SupplyScheduleRepository
-	reconcilerSvc     *reconciler.ReconcilerService
-	phantomSvc        *phantom_checker.PhantomCheckerService
-	nightFlowSvc      *night_flow.NightFlowAnalyser
+	anomalyRepo        interfaces.AnomalyFlagRepository
+	billingRepo        interfaces.GWLBillingRepository
+	accountRepo        interfaces.WaterAccountRepository
+	districtRepo       interfaces.DistrictRepository
+	scheduleRepo       interfaces.SupplyScheduleRepository
+	reconcilerSvc      *reconciler.ReconcilerService
+	phantomSvc         *phantom_checker.PhantomCheckerService
+	nightFlowSvc       *night_flow.NightFlowAnalyser
 	supplyValidatorSvc *supply_validator.SupplyValidator // TECH-SE-002: off-schedule detection
-	logger            *zap.Logger
+	tariffCfg          *entities.TariffConfig            // DB-loaded PURC rates (no hardcoding)
+	logger             *zap.Logger
 }
 
 // RunResult holds the results of a sentinel run
@@ -52,11 +69,21 @@ func NewSentinelOrchestrator(
 	reconcilerSvc *reconciler.ReconcilerService,
 	phantomSvc *phantom_checker.PhantomCheckerService,
 	nightFlowSvc *night_flow.NightFlowAnalyser,
+	tariffCfg *entities.TariffConfig,
 	logger *zap.Logger,
 ) *SentinelOrchestrator {
 	// Create supply validator using the district repo's DB pool.
 	// This implements TECH-SE-002: off-schedule consumption detection.
-	supplyValidatorSvc := supply_validator.New(districtRepo.DB(), logger)
+	if tariffCfg == nil {
+		tariffCfg = defaultTariffCfg()
+	}
+	supplyValidatorSvc := supply_validator.New(districtRepo.DB(), logger).
+		WithTariffConfig(tariffCfg)
+
+	// Inject tariff config into all services that need it
+	// (in case they were created without it, e.g. in tests)
+	phantomSvc.WithTariffConfig(tariffCfg)
+	nightFlowSvc.WithTariffConfig(tariffCfg)
 
 	return &SentinelOrchestrator{
 		anomalyRepo:        anomalyRepo,
@@ -68,6 +95,7 @@ func NewSentinelOrchestrator(
 		phantomSvc:         phantomSvc,
 		nightFlowSvc:       nightFlowSvc,
 		supplyValidatorSvc: supplyValidatorSvc,
+		tariffCfg:          tariffCfg,
 		logger:             logger,
 	}
 }
@@ -355,13 +383,12 @@ func (o *SentinelOrchestrator) runDistrictBalanceCheck(ctx context.Context, dist
 func (o *SentinelOrchestrator) runCategoryMismatchCheck(ctx context.Context, districtID uuid.UUID) ([]*entities.AnomalyFlag, []string) {
 	// Residential accounts consuming > 100 m³/month are likely commercial.
 	// This threshold is configurable via system_config.
-	const (
-		commercialThresholdM3  = 100.0
-		residentialRateGHS     = 10.8320 // PURC 2026 residential tier-2
-		commercialRateGHS      = 18.4500 // PURC 2026 commercial blended
-		industrialRateGHS      = 25.2000 // PURC 2026 industrial
-		vatMultiplier          = 1.20    // 20% VAT
-	)
+	// Load rates from DB-backed tariff config (no hardcoding)
+	residentialRateGHS := o.tariffCfg.BlendedRateForCategory("RESIDENTIAL")
+	commercialRateGHS  := o.tariffCfg.BlendedRateForCategory("COMMERCIAL")
+	industrialRateGHS  := o.tariffCfg.BlendedRateForCategory("INDUSTRIAL")
+	vatMultiplier      := o.tariffCfg.VATMultiplier()
+	const commercialThresholdM3 = 100.0 // volume threshold for commercial classification
 
 	accounts, err := o.accountRepo.GetHighConsumptionResidential(ctx, districtID, commercialThresholdM3)
 	if err != nil {

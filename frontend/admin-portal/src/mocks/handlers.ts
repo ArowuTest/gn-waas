@@ -421,4 +421,58 @@ export const handlers = [
     await d()
     return HttpResponse.json({ data: MOCK_USERS.filter(u => u.role === 'FIELD_OFFICER') })
   }),
+
+  // ── Revenue leakage pipeline ──────────────────────────────────────────────
+  http.get(`${BASE}/revenue/pipeline`, async ({ request }) => {
+    await d()
+    return HttpResponse.json({
+      data: {
+        total_detected_annual_ghs: 1_411_200.00,
+        detected:      { count: 8,   ghs: 117_600.00 },
+        field_verified:{ count: 3,   ghs:  54_450.00 },
+        confirmed:     { count: 2,   ghs:  70_300.00 },
+        gra_signed:    { count: 1,   ghs:  56_400.00 },
+        collected:     { count: 1,   ghs:  32_800.00 },
+        recovery_rate_pct: 27.9,
+        total_collected_ghs: 32_800.00,
+        compliance_flags_open: 1,
+        data_quality_flags_open: 2,
+      }
+    })
+  }),
+
+  // ── Confirm anomaly (PATCH /sentinel/anomalies/:id/confirm) ──────────────
+  http.patch(`${BASE}/sentinel/anomalies/:id/confirm`, async ({ params }) => {
+    await d()
+    return HttpResponse.json({
+      data: {
+        id: params.id,
+        status: 'CONFIRMED',
+        confirmed_fraud: true,
+        confirmed_leakage_ghs: 48200.00,
+        updated_at: new Date().toISOString(),
+      }
+    })
+  }),
+
+  // ── Record field job outcome ──────────────────────────────────────────────
+  http.patch(`${BASE}/field-jobs/:id/outcome`, async ({ params }) => {
+    await d()
+    return HttpResponse.json({
+      data: {
+        message: 'Field job outcome recorded',
+        job_id: params.id,
+        outcome: 'METER_FOUND_OK',
+        escalation: { action: 'FLAG_DISMISSED', recommended_action: 'Update GPS coordinates.' },
+      }
+    })
+  }),
+
+  // ── Revenue recovery events confirm ──────────────────────────────────────
+  http.patch(`${BASE}/revenue/events/:id/confirm`, async ({ params }) => {
+    await d()
+    return HttpResponse.json({
+      data: { id: params.id, recovery_status: 'CONFIRMED', confirmed_at: new Date().toISOString() }
+    })
+  }),
 ]

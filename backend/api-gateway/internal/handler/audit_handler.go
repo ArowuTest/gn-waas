@@ -1190,8 +1190,21 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 		if estimatedM3 <= 0 {
 			estimatedM3 = 15.0 // Ghana residential average m³/month
 		}
-		const districtAvgTariffGHS = 10.83
-		monthlyLeakageGHS := estimatedM3 * districtAvgTariffGHS * 1.20
+		// Load residential blended rate from DB (no hardcoding)
+		// Falls back to PURC 2026 tier-2 (10.8320) + 20% VAT if DB unavailable
+		residentialRateGHS := 10.8320
+		vatMult            := 1.20
+		var dbRate, dbVAT float64
+		if err := h.flagRepo.DB().QueryRow(ctx, `
+			SELECT
+			  COALESCE(AVG(tr.rate_per_m3), 10.8320),
+			  COALESCE((SELECT 1.0 + rate_percentage/100.0 FROM vat_config WHERE is_active=TRUE ORDER BY effective_from DESC LIMIT 1), 1.20)
+			FROM tariff_rates tr
+			WHERE tr.category = 'RESIDENTIAL' AND tr.is_active = TRUE`).Scan(&dbRate, &dbVAT); err == nil {
+			residentialRateGHS = dbRate
+			vatMult            = dbVAT
+		}
+		monthlyLeakageGHS := estimatedM3 * residentialRateGHS * vatMult
 
 		// Update the linked anomaly flag to UNMETERED_CONSUMPTION
 		if anomalyFlagID != nil {

@@ -24,7 +24,7 @@ const ISSUE_TYPE_MAP: Record<string, string> = {
   'Meter Tampering':              'METERING_INACCURACY',       // tampered meter → metering inaccuracy
   'Illegal Connection':           'UNAUTHORISED_CONSUMPTION',  // illegal tap → unauthorised consumption
   'Meter Not Found':              'PHANTOM_METER',             // missing meter → phantom meter
-  'Property Demolished / Vacant': 'GHOST_ACCOUNT',            // vacant property → ghost account
+  'Property Demolished / Vacant': 'ADDRESS_UNVERIFIED',            // vacant property → ghost account
   'Wrong Category Billing':       'CATEGORY_MISMATCH',        // exact match
   'Meter Reading Dispute':        'BILLING_VARIANCE',         // billing dispute → billing variance (added in 018)
   'Pipe Leak / Burst':            'PHYSICAL_LEAK',            // physical leak → exact match

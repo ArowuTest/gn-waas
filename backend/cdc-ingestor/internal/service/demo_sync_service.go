@@ -350,32 +350,41 @@ func (s *DemoSyncService) generatePayment(total float64, periodEnd time.Time) (s
 	}
 }
 
-// calcPURCBill applies PURC 2026 tiered tariff rates
+// calcPURCBill applies PURC 2026 tiered tariff rates.
+// Rates match database/seeds/002_tariff_rates.sql (the authoritative source).
+// This function is used ONLY by the demo sync service to generate synthetic GWL
+// billing data that mirrors what the real GWL system would produce.
+//
+// PURC 2026 Approved Tariffs (effective 1 Jan 2026):
+//   RESIDENTIAL  Tier 1 (0–5 m³):   GH₵ 6.1225/m³  (lifeline rate)
+//   RESIDENTIAL  Tier 2 (>5 m³):    GH₵10.8320/m³  (standard rate)
+//   COMMERCIAL:                      GH₵18.4500/m³  + GH₵500 service charge
+//   INDUSTRIAL:                      GH₵22.1000/m³  + GH₵1,500 service charge
+//   PUBLIC_GOVT:                     GH₵15.7372/m³  + GH₵2,000 service charge
+//   BOTTLED_WATER:                   GH₵32.7858/m³  + GH₵25,000 service charge
+//   VAT: 20% on all categories
 func calcPURCBill(category string, m3 float64) (amount, vatAmt, total float64) {
 	switch category {
 	case "RESIDENTIAL":
-		switch {
-		case m3 <= 5:
-			amount = m3 * 1.20
-		case m3 <= 15:
-			amount = 5*1.20 + (m3-5)*2.85
-		case m3 <= 30:
-			amount = 5*1.20 + 10*2.85 + (m3-15)*4.50
-		default:
-			amount = 5*1.20 + 10*2.85 + 15*4.50 + (m3-30)*6.20
+		// Two-tier: lifeline (0–5 m³) + standard (>5 m³)
+		if m3 <= 5 {
+			amount = m3 * 6.1225
+		} else {
+			amount = 5*6.1225 + (m3-5)*10.8320
 		}
 	case "COMMERCIAL":
-		amount = m3 * 7.80
+		amount = m3*18.4500 + 500.0 // service charge
 	case "INDUSTRIAL":
-		amount = m3 * 9.20
+		amount = m3*22.1000 + 1500.0 // service charge
 	case "PUBLIC_GOVT":
-		amount = m3 * 5.40
-	case "STANDPIPE":
-		amount = m3 * 1.80
+		amount = m3*15.7372 + 2000.0 // service charge
+	case "BOTTLED_WATER":
+		amount = m3*32.7858 + 25000.0 // service charge
 	default:
-		amount = m3 * 3.50
+		// Unknown category: use residential tier-2 as conservative estimate
+		amount = m3 * 10.8320
 	}
-	vatAmt = amount * 0.20
+	vatAmt = amount * 0.20 // 20% VAT (PURC 2026)
 	total = amount + vatAmt
 	return
 }

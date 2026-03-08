@@ -32,8 +32,15 @@ import (
 //
 // NRW % = (Water Losses / System Input Volume) × 100
 type IWAWaterBalanceService struct {
-	db     *pgxpool.Pool
-	logger *zap.Logger
+	db        *pgxpool.Pool
+	logger    *zap.Logger
+	tariffCfg *entities.TariffConfig // DB-loaded PURC rates (no hardcoding)
+}
+
+// WithTariffConfig injects the DB-loaded tariff config.
+func (s *IWAWaterBalanceService) WithTariffConfig(cfg *entities.TariffConfig) *IWAWaterBalanceService {
+	s.tariffCfg = cfg
+	return s
 }
 
 // WaterBalanceInput holds the raw data needed to compute the balance
@@ -466,8 +473,14 @@ func (s *IWAWaterBalanceService) compute(input *WaterBalanceInput) *WaterBalance
 	r.IWAGrade = classifyIWAGrade(r.ILI, r.NRWPercent)
 
 	// Revenue recovery estimate (apparent losses only — recoverable)
-	// Using blended tariff of ₵10.83/m³ + 20% VAT
-	r.EstimatedRevenueRecoveryGHS = r.TotalApparentLossesM3 * 10.83 * 1.20
+	// Uses DB-loaded PURC residential blended rate + VAT (no hardcoding)
+	residentialRate := 10.8320 // PURC 2026 tier-2 (fallback only)
+	vatMult         := 1.20    // 20% VAT (fallback only)
+	if s.tariffCfg != nil {
+		residentialRate = s.tariffCfg.BlendedRateForCategory("RESIDENTIAL")
+		vatMult         = s.tariffCfg.VATMultiplier()
+	}
+	r.EstimatedRevenueRecoveryGHS = r.TotalApparentLossesM3 * residentialRate * vatMult
 
 	// Data confidence score (0-100)
 	r.DataConfidenceScore = s.computeConfidenceScore(input)
