@@ -1030,12 +1030,20 @@ func (h *AnomalyFlagHandler) ConfirmAnomaly(c *fiber.Ctx) error {
 		return response.InternalError(c, "Failed to confirm anomaly")
 	}
 
-	// Auto-create revenue_recovery_event for confirmed REVENUE_LEAKAGE flags
-	// (FRAUDULENT_ACCOUNT is GWL internal fraud — no recovery event, escalate instead)
+	// Auto-create revenue_recovery_event for confirmed REVENUE_LEAKAGE flags.
+	// FRAUDULENT_ACCOUNT = GWL internal fraud — no recovery event, escalate to GWL management.
+	// account_id is nullable (migration 032): district-level flags have no account_id.
 	var recoveryEventID *uuid.UUID
 	if req.ConfirmedFraud && leakageCategory == "REVENUE_LEAKAGE" && flag.AnomalyType != "FRAUDULENT_ACCOUNT" {
 		recoveryType := anomalyTypeToRecoveryType(flag.AnomalyType)
 		newID := uuid.New()
+
+		// Resolve account_id: use flag.AccountID if set, otherwise NULL (district-level)
+		var accountIDArg interface{}
+		if flag.AccountID != nil {
+			accountIDArg = *flag.AccountID
+		} // else nil → NULL in DB (allowed since migration 032)
+
 		_, err = h.flagRepo.DB().Exec(ctx, `
 			INSERT INTO revenue_recovery_events (
 				id, anomaly_flag_id, district_id, account_id,
@@ -1053,7 +1061,7 @@ func (h *AnomalyFlagHandler) ConfirmAnomaly(c *fiber.Ctx) error {
 			WHERE NOT EXISTS (
 				SELECT 1 FROM revenue_recovery_events WHERE anomaly_flag_id = $2
 			)`,
-			newID, id, flag.DistrictID, flag.AccountID,
+			newID, id, flag.DistrictID, accountIDArg,
 			confirmedLeakageGHS, recoveryType,
 			leakageCategory,
 		)
@@ -1318,7 +1326,44 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 		}
 	}
 
-	_ = officerID // used for audit trail in production
+	// ── Update revenue_recovery_event to FIELD_VERIFIED ─────────────────────
+	// When a field officer records an outcome that confirms leakage, advance
+	// the recovery event from PENDING → FIELD_VERIFIED and record who verified it.
+	leakageConfirmingOutcomes := map[string]bool{
+		"METER_NOT_FOUND_INSTALL":    true,
+		"ADDRESS_VALID_UNREGISTERED": true,
+		"CATEGORY_MISMATCH_CONFIRMED": true,
+		"ILLEGAL_CONNECTION_FOUND":   true,
+		"METER_FOUND_TAMPERED":       true,
+		"METER_FOUND_FAULTY":         true,
+		"DUPLICATE_METER":            true,
+	}
+	if leakageConfirmingOutcomes[req.Outcome] && anomalyFlagID != nil {
+		// Update the anomaly flag status to ACKNOWLEDGED (field visit done)
+		_, _ = h.flagRepo.DB().Exec(ctx, `
+			UPDATE anomaly_flags
+			SET status     = CASE WHEN status = 'OPEN' THEN 'ACKNOWLEDGED' ELSE status END,
+			    updated_at = NOW()
+			WHERE id = $1`, *anomalyFlagID)
+
+		// Advance recovery event to FIELD_VERIFIED
+		var officerUUID *uuid.UUID
+		if officerID != "" {
+			if oid, parseErr := uuid.Parse(officerID); parseErr == nil {
+				officerUUID = &oid
+			}
+		}
+		_, _ = h.flagRepo.DB().Exec(ctx, `
+			UPDATE revenue_recovery_events
+			SET status             = 'FIELD_VERIFIED',
+			    field_verified_at  = NOW(),
+			    field_verified_by  = $1,
+			    updated_at         = NOW()
+			WHERE anomaly_flag_id = $2
+			  AND status = 'PENDING'`,
+			officerUUID, *anomalyFlagID,
+		)
+	}
 
 	return response.OK(c, fiber.Map{
 		"message":    "Field job outcome recorded",

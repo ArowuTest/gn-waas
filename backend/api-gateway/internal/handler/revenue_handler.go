@@ -224,6 +224,7 @@ func (h *RevenueRecoveryHandler) ListEvents(c *fiber.Ctx) error {
 // ConfirmRecovery godoc
 // PATCH /api/v1/revenue/events/:id/confirm
 // Marks a recovery event as CONFIRMED with the actual recovered amount.
+// Transitions: PENDING | FIELD_VERIFIED → CONFIRMED
 func (h *RevenueRecoveryHandler) ConfirmRecovery(c *fiber.Ctx) error {
 	ctx := c.UserContext()
 	q := h.qCtx(c)
@@ -245,7 +246,7 @@ func (h *RevenueRecoveryHandler) ConfirmRecovery(c *fiber.Ctx) error {
 
 	confirmedBy, _ := c.Locals("user_id").(string)
 
-	_, err = q.Exec(ctx, `
+	tag, err := q.Exec(ctx, `
 		UPDATE revenue_recovery_events
 		SET status        = 'CONFIRMED',
 		    recovered_ghs = $1,
@@ -253,14 +254,87 @@ func (h *RevenueRecoveryHandler) ConfirmRecovery(c *fiber.Ctx) error {
 		    confirmed_by  = $2::uuid,
 		    notes         = COALESCE(NULLIF($3,''), notes),
 		    updated_at    = NOW()
-		WHERE id = $4 AND status = 'PENDING'`,
+		WHERE id = $4
+		  AND status IN ('PENDING', 'FIELD_VERIFIED')`,
 		req.RecoveredGHS, confirmedBy, req.Notes, id,
 	)
 	if err != nil {
 		h.logger.Error("ConfirmRecovery failed", zap.Error(err))
 		return response.InternalError(c, "Failed to confirm recovery")
 	}
-	return response.OK(c, fiber.Map{"message": "Recovery confirmed"})
+	if tag.RowsAffected() == 0 {
+		return response.BadRequest(c, "INVALID_STATE",
+			"Recovery event not found or already past CONFIRMED state")
+	}
+	return response.OK(c, fiber.Map{
+		"message": "Recovery confirmed",
+		"id":      id,
+		"status":  "CONFIRMED",
+	})
+}
+
+// CollectRecovery godoc
+// PATCH /api/v1/revenue/events/:id/collect
+// Marks a recovery event as COLLECTED — money has been physically received.
+// This is the final stage of the revenue leakage pipeline.
+// Transitions: GRA_SIGNED | CONFIRMED → COLLECTED
+func (h *RevenueRecoveryHandler) CollectRecovery(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	q := h.qCtx(c)
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ID", "Invalid event ID")
+	}
+
+	var req struct {
+		CollectedGHS    float64 `json:"collected_ghs"`    // actual amount received
+		PaymentRef      string  `json:"payment_ref"`      // GWL payment reference
+		CollectionNotes string  `json:"collection_notes"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+	if req.CollectedGHS <= 0 {
+		return response.BadRequest(c, "INVALID_AMOUNT", "collected_ghs must be positive")
+	}
+
+	collectedBy, _ := c.Locals("user_id").(string)
+
+	tag, err := q.Exec(ctx, `
+		UPDATE revenue_recovery_events
+		SET status        = 'COLLECTED',
+		    recovered_ghs = $1,
+		    collected_at  = NOW(),
+		    notes         = COALESCE(NULLIF($2,''), NULLIF($3,''), notes),
+		    updated_at    = NOW()
+		WHERE id = $4
+		  AND status IN ('CONFIRMED', 'GRA_SIGNED')`,
+		req.CollectedGHS,
+		req.PaymentRef,
+		req.CollectionNotes,
+		id,
+	)
+	if err != nil {
+		h.logger.Error("CollectRecovery failed", zap.Error(err))
+		return response.InternalError(c, "Failed to mark recovery as collected")
+	}
+	if tag.RowsAffected() == 0 {
+		return response.BadRequest(c, "INVALID_STATE",
+			"Recovery event not found or not in CONFIRMED/GRA_SIGNED state")
+	}
+
+	h.logger.Info("Revenue recovery collected",
+		zap.String("event_id", id.String()),
+		zap.Float64("collected_ghs", req.CollectedGHS),
+		zap.String("collected_by", collectedBy),
+	)
+
+	return response.OK(c, fiber.Map{
+		"message":       "Revenue collected — pipeline complete",
+		"id":            id,
+		"status":        "COLLECTED",
+		"collected_ghs": req.CollectedGHS,
+	})
 }
 
 // GetLeakagePipeline godoc

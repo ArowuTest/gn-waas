@@ -469,10 +469,34 @@ export const handlers = [
   }),
 
   // ── Revenue recovery events confirm ──────────────────────────────────────
-  http.patch(`${BASE}/revenue/events/:id/confirm`, async ({ params }) => {
+  // PENDING | FIELD_VERIFIED → CONFIRMED
+  http.patch(`${BASE}/revenue/events/:id/confirm`, async ({ params, request }) => {
     await d()
+    const body = await request.json() as { recovered_ghs?: number; notes?: string }
     return HttpResponse.json({
-      data: { id: params.id, recovery_status: 'CONFIRMED', confirmed_at: new Date().toISOString() }
+      data: {
+        id: params.id,
+        status: 'CONFIRMED',
+        recovered_ghs: body.recovered_ghs ?? 0,
+        confirmed_at: new Date().toISOString(),
+      }
+    })
+  }),
+
+  // ── Revenue recovery events collect ───────────────────────────────────────
+  // CONFIRMED | GRA_SIGNED → COLLECTED (money physically received)
+  http.patch(`${BASE}/revenue/events/:id/collect`, async ({ params, request }) => {
+    await d()
+    const body = await request.json() as { collected_ghs?: number; payment_ref?: string }
+    return HttpResponse.json({
+      data: {
+        id: params.id,
+        status: 'COLLECTED',
+        collected_ghs: body.collected_ghs ?? 0,
+        payment_ref: body.payment_ref ?? '',
+        collected_at: new Date().toISOString(),
+        message: 'Revenue collected — pipeline complete',
+      }
     })
   }),
 ]

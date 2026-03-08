@@ -98,7 +98,9 @@ func (r *AnomalyFlagRepository) GetByID(ctx context.Context, id uuid.UUID) (*ent
 		       fraud_type, title, description, estimated_loss_ghs,
 		       billing_period_start, billing_period_end,
 		       shadow_bill_id, gwl_bill_id, evidence_data,
-		       status, sentinel_version, detection_hash, created_at
+		       status, sentinel_version, detection_hash, created_at,
+		       leakage_category, monthly_leakage_ghs, annualised_leakage_ghs,
+		       leakage_category, monthly_leakage_ghs, annualised_leakage_ghs
 		FROM anomaly_flags WHERE id = $1`
 
 	row := r.db.QueryRow(ctx, query, id)
@@ -118,7 +120,9 @@ func (r *AnomalyFlagRepository) GetByAccount(ctx context.Context, accountID uuid
 		       fraud_type, title, description, estimated_loss_ghs,
 		       billing_period_start, billing_period_end,
 		       shadow_bill_id, gwl_bill_id, evidence_data,
-		       status, sentinel_version, detection_hash, created_at
+		       status, sentinel_version, detection_hash, created_at,
+		       leakage_category, monthly_leakage_ghs, annualised_leakage_ghs,
+		       leakage_category, monthly_leakage_ghs, annualised_leakage_ghs
 		FROM anomaly_flags
 		WHERE account_id = $1
 		ORDER BY created_at DESC`
@@ -145,7 +149,8 @@ func (r *AnomalyFlagRepository) GetOpenByDistrict(ctx context.Context, districtI
 		       fraud_type, title, description, estimated_loss_ghs,
 		       billing_period_start, billing_period_end,
 		       shadow_bill_id, gwl_bill_id, evidence_data,
-		       status, sentinel_version, detection_hash, created_at
+		       status, sentinel_version, detection_hash, created_at,
+		       leakage_category, monthly_leakage_ghs, annualised_leakage_ghs
 		FROM anomaly_flags
 		WHERE district_id = $1 AND status = 'OPEN'
 		ORDER BY
@@ -222,7 +227,8 @@ func (r *AnomalyFlagRepository) GetByCriteria(ctx context.Context, filter interf
 		       fraud_type, title, description, estimated_loss_ghs,
 		       billing_period_start, billing_period_end,
 		       shadow_bill_id, gwl_bill_id, evidence_data,
-		       status, sentinel_version, detection_hash, created_at
+		       status, sentinel_version, detection_hash, created_at,
+		       leakage_category, monthly_leakage_ghs, annualised_leakage_ghs
 		FROM anomaly_flags WHERE %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
@@ -271,7 +277,7 @@ func (r *AnomalyFlagRepository) GetSummaryByDistrict(ctx context.Context, distri
 			COUNT(*) FILTER (WHERE alert_level = 'HIGH' AND status = 'OPEN'),
 			COUNT(*) FILTER (WHERE alert_level = 'MEDIUM' AND status = 'OPEN'),
 			COUNT(*) FILTER (WHERE alert_level = 'LOW' AND status = 'OPEN'),
-			COALESCE(SUM(estimated_loss_ghs) FILTER (WHERE status = 'OPEN'), 0)
+			COALESCE(SUM(COALESCE(monthly_leakage_ghs, estimated_loss_ghs, 0)) FILTER (WHERE status = 'OPEN'), 0)
 		FROM anomaly_flags
 		WHERE district_id = $1 AND created_at BETWEEN $2 AND $3`,
 		districtID, from, to,
@@ -312,15 +318,20 @@ func (r *AnomalyFlagRepository) ExistsByDetectionHash(ctx context.Context, hash 
 func (r *AnomalyFlagRepository) scanRow(row pgx.Row) (*entities.AnomalyFlag, error) {
 	flag := &entities.AnomalyFlag{}
 	var evidenceJSON []byte
+	var leakageCat *string
 	err := row.Scan(
 		&flag.ID, &flag.AccountID, &flag.DistrictID, &flag.AnomalyType, &flag.AlertLevel,
 		&flag.FraudType, &flag.Title, &flag.Description, &flag.EstimatedLossGHS,
 		&flag.BillingPeriodStart, &flag.BillingPeriodEnd,
 		&flag.ShadowBillID, &flag.GWLBillID, &evidenceJSON,
 		&flag.Status, &flag.SentinelVersion, &flag.DetectionHash, &flag.CreatedAt,
+		&leakageCat, &flag.MonthlyLeakageGHS, &flag.AnnualisedLeakageGHS,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if leakageCat != nil {
+		flag.LeakageCategory = *leakageCat
 	}
 	if len(evidenceJSON) > 0 {
 		_ = json.Unmarshal(evidenceJSON, &flag.EvidenceData)
@@ -333,15 +344,20 @@ func (r *AnomalyFlagRepository) scanRows(rows pgx.Rows) ([]*entities.AnomalyFlag
 	for rows.Next() {
 		flag := &entities.AnomalyFlag{}
 		var evidenceJSON []byte
+		var leakageCat *string
 		err := rows.Scan(
 			&flag.ID, &flag.AccountID, &flag.DistrictID, &flag.AnomalyType, &flag.AlertLevel,
 			&flag.FraudType, &flag.Title, &flag.Description, &flag.EstimatedLossGHS,
 			&flag.BillingPeriodStart, &flag.BillingPeriodEnd,
 			&flag.ShadowBillID, &flag.GWLBillID, &evidenceJSON,
 			&flag.Status, &flag.SentinelVersion, &flag.DetectionHash, &flag.CreatedAt,
+			&leakageCat, &flag.MonthlyLeakageGHS, &flag.AnnualisedLeakageGHS,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan anomaly flag: %w", err)
+		}
+		if leakageCat != nil {
+			flag.LeakageCategory = *leakageCat
 		}
 		if len(evidenceJSON) > 0 {
 			_ = json.Unmarshal(evidenceJSON, &flag.EvidenceData)

@@ -193,14 +193,37 @@ func (r *AuditEventRepository) LockAudit(ctx context.Context, id uuid.UUID, reas
 	return err
 }
 
-// UpdateGRAStatus updates GRA compliance status and QR code details
+// UpdateGRAStatus updates GRA compliance status and QR code details.
+// Also propagates GRA_SIGNED status to the linked revenue_recovery_event
+// (belt-and-suspenders alongside the DB trigger trg_gra_sign_recovery).
 func (r *AuditEventRepository) UpdateGRAStatus(ctx context.Context, id uuid.UUID, sdcID, qrCodeURL string) error {
+	// Step 1: Update the audit event
 	_, err := r.q(ctx).Exec(ctx, `
 		UPDATE audit_events
-		SET gra_status = 'SIGNED', gra_sdc_id = $1, gra_qr_code_url = $2,
-		    gra_signed_at = NOW(), updated_at = NOW()
+		SET gra_status     = 'SIGNED',
+		    gra_sdc_id     = $1,
+		    gra_qr_code_url = $2,
+		    gra_signed_at  = NOW(),
+		    updated_at     = NOW()
 		WHERE id = $3`, sdcID, qrCodeURL, id)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Step 2: Propagate GRA_SIGNED to the linked revenue_recovery_event.
+	// The DB trigger trg_gra_sign_recovery also does this, but we do it here
+	// too so the pipeline view updates immediately within the same transaction.
+	_, _ = r.q(ctx).Exec(ctx, `
+		UPDATE revenue_recovery_events rre
+		SET status     = 'GRA_SIGNED',
+		    updated_at = NOW()
+		FROM audit_events ae
+		WHERE ae.id              = $1
+		  AND rre.anomaly_flag_id = ae.anomaly_flag_id
+		  AND rre.status IN ('PENDING', 'FIELD_VERIFIED', 'CONFIRMED')`,
+		id,
+	)
+	return nil
 }
 
 // GetDashboardStats returns high-level statistics for the dashboard

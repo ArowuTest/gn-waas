@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../lib/api-client'
 import type { AnomalyFlag, AuditEvent, District, DashboardStats, NRWSummary, ApiResponse } from '../types'
 
@@ -279,6 +279,98 @@ export interface RevenueSummary {
     recovered_ghs: number
     success_fee_ghs: number
   }>
+}
+
+// ============================================================
+// REVENUE LEAKAGE MUTATIONS
+// ============================================================
+
+// Confirm an anomaly flag as genuine revenue leakage (or false positive)
+export function useConfirmAnomaly() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: {
+      id: string
+      confirmed_fraud: boolean
+      confirmed_leakage_ghs?: number
+      resolution_notes?: string
+      leakage_category?: string
+    }) => {
+      const { id, ...body } = params
+      const res = await apiClient.patch(`/sentinel/anomalies/${id}/confirm`, body)
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['anomaly-flags'] })
+      queryClient.invalidateQueries({ queryKey: ['leakage-pipeline'] })
+    },
+  })
+}
+
+// Record field job outcome (field officer visit result)
+export function useRecordFieldJobOutcome() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: {
+      jobId: string
+      outcome: string
+      outcome_notes?: string
+      meter_found?: boolean
+      address_confirmed?: boolean
+      recommended_action?: string
+      estimated_monthly_m3?: number
+    }) => {
+      const { jobId, ...body } = params
+      const res = await apiClient.patch(`/field-jobs/${jobId}/outcome`, body)
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['field-jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['anomaly-flags'] })
+      queryClient.invalidateQueries({ queryKey: ['leakage-pipeline'] })
+    },
+  })
+}
+
+// Confirm a revenue recovery event (audit manager sets confirmed amount)
+export function useConfirmRecovery() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: {
+      id: string
+      recovered_ghs: number
+      notes?: string
+    }) => {
+      const { id, ...body } = params
+      const res = await apiClient.patch(`/revenue/events/${id}/confirm`, body)
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['revenue-events'] })
+      queryClient.invalidateQueries({ queryKey: ['leakage-pipeline'] })
+    },
+  })
+}
+
+// Mark a recovery event as COLLECTED (money physically received)
+export function useCollectRecovery() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: {
+      id: string
+      collected_ghs: number
+      payment_ref?: string
+      collection_notes?: string
+    }) => {
+      const { id, ...body } = params
+      const res = await apiClient.patch(`/revenue/events/${id}/collect`, body)
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['revenue-events'] })
+      queryClient.invalidateQueries({ queryKey: ['leakage-pipeline'] })
+    },
+  })
 }
 
 export interface LeakagePipelineStage {

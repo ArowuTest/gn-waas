@@ -615,6 +615,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	revenue.Get("/pipeline",         revenueHandler.GetLeakagePipeline)
 	revenue.Get("/events",           revenueHandler.ListEvents)
 	revenue.Patch("/events/:id/confirm", revenueHandler.ConfirmRecovery)
+	// PATCH /revenue/events/:id/collect — final stage: money physically received
+	revenue.Patch("/events/:id/collect", revenueHandler.CollectRecovery)
 
 	// ── Workforce Oversight (GPS breadcrumbs + active officer tracking) ───────
 	workforce := api.Group("/workforce")
