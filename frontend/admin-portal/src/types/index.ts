@@ -99,6 +99,13 @@ export interface AnomalyFlag {
   title: string
   description: string
   estimated_loss_ghs?: number
+  // Revenue leakage fields (migration 031)
+  leakage_category?: 'REVENUE_LEAKAGE' | 'COMPLIANCE' | 'DATA_QUALITY'
+  monthly_leakage_ghs?: number
+  annualised_leakage_ghs?: number
+  confirmed_leakage_ghs?: number
+  field_outcome?: string
+  confirmed_fraud?: boolean
   evidence_data?: Record<string, unknown>
   status: string
   detection_hash?: string

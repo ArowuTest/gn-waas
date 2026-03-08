@@ -191,6 +191,24 @@ export function useRevenueEvents(filters: { district_id?: string; status?: strin
 }
 
 // ============================================================
+// REVENUE LEAKAGE PIPELINE
+// ============================================================
+// Primary dashboard metric: GHS at each stage of the recovery pipeline.
+// Detected → Field Verified → Confirmed → GRA Signed → Collected
+export function useLeakagePipeline(districtId?: string) {
+  return useQuery({
+    queryKey: ['leakage-pipeline', districtId],
+    queryFn: async () => {
+      const params = districtId ? `?district_id=${districtId}` : ''
+      const res = await apiClient.get(`/revenue/pipeline${params}`)
+      return res.data.data as LeakagePipeline
+    },
+    staleTime: 60 * 1000,
+    refetchInterval: 2 * 60 * 1000,
+  })
+}
+
+// ============================================================
 // WORKFORCE OVERSIGHT
 // ============================================================
 export function useWorkforceSummary() {
@@ -261,6 +279,26 @@ export interface RevenueSummary {
     recovered_ghs: number
     success_fee_ghs: number
   }>
+}
+
+export interface LeakagePipelineStage {
+  count: number
+  ghs: number
+}
+
+export interface LeakagePipeline {
+  detected: LeakagePipelineStage
+  field_verified: LeakagePipelineStage
+  confirmed: LeakagePipelineStage
+  gra_signed: LeakagePipelineStage
+  collected: LeakagePipelineStage
+  compliance_flags_open: number
+  data_quality_flags_open: number
+  total_detected_monthly_ghs: number
+  total_detected_annual_ghs: number
+  total_collected_ghs: number
+  recovery_rate_pct: number
+  district_id?: string
 }
 
 export interface WorkforceSummary {

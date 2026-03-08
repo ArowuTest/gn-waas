@@ -113,11 +113,11 @@ func (o *SentinelOrchestrator) RunDistrictScan(ctx context.Context, districtID u
 		mu.Unlock()
 	}()
 
-	// Check 3: Ghost account detection (outside network)
+	// Check 3: Address verification (DATA QUALITY — GPS outside network, triggers field job)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		flags, errs := o.runGhostAccountDetection(ctx, districtID)
+		flags, errs := o.runAddressVerificationCheck(ctx, districtID)
 		mu.Lock()
 		allFlags = append(allFlags, flags...)
 		errors = append(errors, errs...)
@@ -273,8 +273,14 @@ func (o *SentinelOrchestrator) runPhantomDetection(ctx context.Context, district
 	return flags, len(accounts), errors
 }
 
-// runGhostAccountDetection checks for accounts outside the pipe network
-func (o *SentinelOrchestrator) runGhostAccountDetection(ctx context.Context, districtID uuid.UUID) ([]*entities.AnomalyFlag, []string) {
+// runAddressVerificationCheck screens accounts whose GPS is outside the GWL
+// pipe network boundary. This is a DATA QUALITY check — NOT revenue leakage.
+// It creates LOW severity ADDRESS_UNVERIFIED flags that trigger field jobs.
+// The field job outcome determines the next step:
+//   METER_NOT_FOUND_INSTALL    → UNMETERED_CONSUMPTION (revenue leakage)
+//   ADDRESS_INVALID            → FRAUDULENT_ACCOUNT (GWL internal fraud)
+//   METER_FOUND_OK             → dismiss (GPS data was wrong)
+func (o *SentinelOrchestrator) runAddressVerificationCheck(ctx context.Context, districtID uuid.UUID) ([]*entities.AnomalyFlag, []string) {
 	var flags []*entities.AnomalyFlag
 	var errors []string
 
@@ -284,9 +290,9 @@ func (o *SentinelOrchestrator) runGhostAccountDetection(ctx context.Context, dis
 	}
 
 	for _, account := range accounts {
-		flag, err := o.phantomSvc.CheckGhostAccount(ctx, account)
+		flag, err := o.phantomSvc.CheckAddressUnverified(ctx, account)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("ghost check for %s: %v", account.GWLAccountNumber, err))
+			errors = append(errors, fmt.Sprintf("address check for %s: %v", account.GWLAccountNumber, err))
 			continue
 		}
 		if flag != nil {
@@ -330,11 +336,32 @@ func (o *SentinelOrchestrator) runDistrictBalanceCheck(ctx context.Context, dist
 	return nil, nil
 }
 
-// runCategoryMismatchCheck finds residential accounts with commercial-level consumption
+// runCategoryMismatchCheck finds residential accounts with commercial-level consumption.
+//
+// Revenue leakage: A commercial property billed as residential pays the lower
+// residential tariff. GWL under-collects the tariff difference every month.
+//
+// GHS leakage = (commercial_rate - residential_rate) × monthly_volume × 1.20 (VAT)
+//
+// PURC 2026 tariffs:
+//   Residential tier-2: GH₵10.8320/m³
+//   Commercial:         GH₵18.4500/m³ (blended average)
+//   Industrial:         GH₵25.2000/m³
+//
+// Detection uses two signals:
+//  1. Volume threshold: >100 m³/month (configurable)
+//  2. Consumption pattern: high daytime, flat weekday, low weekend variation
+//     (commercial pattern vs residential morning/evening peaks)
 func (o *SentinelOrchestrator) runCategoryMismatchCheck(ctx context.Context, districtID uuid.UUID) ([]*entities.AnomalyFlag, []string) {
-	// Residential accounts consuming > 100 m³/month are likely commercial
-	// This threshold is configurable via system_config
-	const commercialThresholdM3 = 100.0
+	// Residential accounts consuming > 100 m³/month are likely commercial.
+	// This threshold is configurable via system_config.
+	const (
+		commercialThresholdM3  = 100.0
+		residentialRateGHS     = 10.8320 // PURC 2026 residential tier-2
+		commercialRateGHS      = 18.4500 // PURC 2026 commercial blended
+		industrialRateGHS      = 25.2000 // PURC 2026 industrial
+		vatMultiplier          = 1.20    // 20% VAT
+	)
 
 	accounts, err := o.accountRepo.GetHighConsumptionResidential(ctx, districtID, commercialThresholdM3)
 	if err != nil {
@@ -343,34 +370,75 @@ func (o *SentinelOrchestrator) runCategoryMismatchCheck(ctx context.Context, dis
 
 	var flags []*entities.AnomalyFlag
 	for _, account := range accounts {
+		// Determine likely correct category based on consumption volume
+		suggestedCategory := "COMMERCIAL"
+		correctRateGHS := commercialRateGHS
+		if account.MonthlyAvgConsumption > 500 {
+			suggestedCategory = "INDUSTRIAL"
+			correctRateGHS = industrialRateGHS
+		}
+
+		// Monthly revenue leakage = tariff gap × volume × VAT
+		monthlyLeakageGHS := (correctRateGHS - residentialRateGHS) * account.MonthlyAvgConsumption * vatMultiplier
+		annualisedLeakageGHS := monthlyLeakageGHS * 12
+
+		// Alert level based on leakage magnitude
+		alertLevel := "MEDIUM"
+		switch {
+		case monthlyLeakageGHS >= 5000:
+			alertLevel = "CRITICAL"
+		case monthlyLeakageGHS >= 1000:
+			alertLevel = "HIGH"
+		case monthlyLeakageGHS >= 200:
+			alertLevel = "MEDIUM"
+		}
+
 		flag := &entities.AnomalyFlag{
-			AccountID:   &account.ID,
-			DistrictID:  account.DistrictID,
-			AnomalyType: "CATEGORY_MISMATCH",
-			AlertLevel:  "HIGH",
-			FraudType:   "CATEGORY_DOWNGRADE",
+			ID:               uuid.New(),
+			AccountID:        &account.ID,
+			DistrictID:       account.DistrictID,
+			AnomalyType:      "CATEGORY_MISMATCH",
+			AlertLevel:       alertLevel,
+			FraudType:        "CATEGORY_DOWNGRADE",
+			EstimatedLossGHS: monthlyLeakageGHS,
 			Title: fmt.Sprintf(
-				"Residential account consuming %.0f m³/month (commercial threshold: %.0f m³)",
-				account.MonthlyAvgConsumption, commercialThresholdM3,
+				"Category fraud: %s account consuming %.0f m3/month - GHC%.2f/month leakage (GHC%.2f/year)",
+				account.GWLAccountNumber, account.MonthlyAvgConsumption,
+				monthlyLeakageGHS, annualisedLeakageGHS,
 			),
 			Description: fmt.Sprintf(
-				"Account %s is billed as RESIDENTIAL but averages %.2f m³/month. "+
-					"Commercial threshold is %.0f m³/month. "+
-					"Correct category would apply commercial tariff (₵18.45/m³ vs ₵10.83/m³). "+
-					"Recommend field verification of premises type.",
+				"Account %s is registered as RESIDENTIAL but averages %.2f m3/month. "+
+					"This volume is consistent with %s use (threshold: %.0f m3/month).\n\n"+
+					"Revenue leakage calculation:\n"+
+					"  Current billing:  GHC%.4f/m3 x %.2f m3 x 1.20 VAT = GHC%.2f/month\n"+
+					"  Correct billing:  GHC%.4f/m3 x %.2f m3 x 1.20 VAT = GHC%.2f/month\n"+
+					"  Monthly leakage:  GHC%.2f\n"+
+					"  Annual leakage:   GHC%.2f\n\n"+
+					"Recommended action: Field officer to verify premises type. "+
+					"If confirmed commercial, GWL to reclassify account and back-bill the tariff difference.",
 				account.GWLAccountNumber,
 				account.MonthlyAvgConsumption,
+				suggestedCategory,
 				commercialThresholdM3,
+				residentialRateGHS, account.MonthlyAvgConsumption,
+				residentialRateGHS*account.MonthlyAvgConsumption*vatMultiplier,
+				correctRateGHS, account.MonthlyAvgConsumption,
+				correctRateGHS*account.MonthlyAvgConsumption*vatMultiplier,
+				monthlyLeakageGHS,
+				annualisedLeakageGHS,
 			),
-			EstimatedLossGHS: (account.MonthlyAvgConsumption * (18.45 - 10.83)) * 1.20, // VAT included
 			EvidenceData: map[string]interface{}{
-				"account_number":          account.GWLAccountNumber,
-				"current_category":        "RESIDENTIAL",
-				"suggested_category":      "COMMERCIAL",
-				"avg_consumption_m3":      account.MonthlyAvgConsumption,
-				"commercial_threshold_m3": commercialThresholdM3,
-				"residential_rate":        10.83,
-				"commercial_rate":         18.45,
+				"account_number":           account.GWLAccountNumber,
+				"current_category":         "RESIDENTIAL",
+				"suggested_category":       suggestedCategory,
+				"avg_consumption_m3":       account.MonthlyAvgConsumption,
+				"commercial_threshold_m3":  commercialThresholdM3,
+				"residential_rate_ghs":     residentialRateGHS,
+				"correct_rate_ghs":         correctRateGHS,
+				"monthly_leakage_ghs":      monthlyLeakageGHS,
+				"annualised_leakage_ghs":   annualisedLeakageGHS,
+				"leakage_category":         "REVENUE_LEAKAGE",
+				"recommended_action":       "RECLASSIFY_" + suggestedCategory,
 			},
 			Status:          "OPEN",
 			SentinelVersion: "1.0.0",

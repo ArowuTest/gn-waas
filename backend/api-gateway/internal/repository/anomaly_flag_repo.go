@@ -31,10 +31,20 @@ type AnomalyFlag struct {
 	ResolvedAt          *time.Time `json:"resolved_at,omitempty"`
 	ResolutionNotes     *string    `json:"resolution_notes,omitempty"`
 	FalsePositive       *bool      `json:"false_positive,omitempty"`
-	ConfirmedFraud      *bool      `json:"confirmed_fraud,omitempty"`
-	RecoveredAmountGHS  *float64   `json:"recovered_amount_ghs,omitempty"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
+	ConfirmedFraud         *bool      `json:"confirmed_fraud,omitempty"`
+	RecoveredAmountGHS     *float64   `json:"recovered_amount_ghs,omitempty"`
+	LeakageCategory        *string    `json:"leakage_category,omitempty"`
+	MonthlyLeakageGHS      *float64   `json:"monthly_leakage_ghs,omitempty"`
+	AnnualisedLeakageGHS   *float64   `json:"annualised_leakage_ghs,omitempty"`
+	ConfirmedLeakageGHS    *float64   `json:"confirmed_leakage_ghs,omitempty"`
+	FieldOutcome           *string    `json:"field_outcome,omitempty"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+}
+
+// DB returns the underlying connection pool (for direct queries in handlers).
+func (r *AnomalyFlagRepository) DB() *pgxpool.Pool {
+	return r.db
 }
 
 // AnomalyFlagRepository handles anomaly flag queries

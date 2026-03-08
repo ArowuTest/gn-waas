@@ -30,7 +30,19 @@ func NewNightFlowAnalyser(logger *zap.Logger, nightFlowThresholdPct float64) *Ni
 }
 
 // AnalyseDistrictBalance performs statistical night-flow equivalent analysis
-// using production vs billing records (software-only mode, no IoT)
+// using production vs billing records (software-only mode, no IoT).
+//
+// Revenue leakage calculation:
+//   Unaccounted water = production - billed
+//   After subtracting estimated real losses (IWA standard: 15% of production),
+//   the remainder is APPARENT LOSS = unregistered consumption = revenue leakage.
+//
+//   Monthly leakage GHS = apparent_loss_m3 × district_avg_tariff × 1.20 (VAT)
+//
+// This is the district-level signal. Account-level signals come from:
+//   - SHADOW_BILL_VARIANCE (individual bill reconciliation)
+//   - CATEGORY_MISMATCH (individual account category check)
+//   - ADDRESS_UNVERIFIED → UNMETERED_CONSUMPTION (field verification)
 func (n *NightFlowAnalyser) AnalyseDistrictBalance(
 	ctx context.Context,
 	district *entities.District,
@@ -58,7 +70,25 @@ func (n *NightFlowAnalyser) AnalyseDistrictBalance(
 		return nil, nil // Within acceptable range
 	}
 
-	// Classify severity
+	// IWA/AWWA standard: ~15% of production is acceptable real loss (physical leakage).
+	// Anything above that is apparent loss = revenue leakage.
+	const (
+		realLossBaselinePct  = 15.0  // IWA standard baseline for Ghana infrastructure
+		districtAvgTariffGHS = 10.83 // PURC 2026 residential tier-2 (conservative)
+		vatMultiplier        = 1.20
+	)
+
+	realLossM3 := productionM3 * (realLossBaselinePct / 100.0)
+	apparentLossM3 := unaccountedM3 - realLossM3
+	if apparentLossM3 < 0 {
+		apparentLossM3 = 0
+	}
+
+	// Monthly revenue leakage = apparent loss × tariff × VAT
+	monthlyLeakageGHS := apparentLossM3 * districtAvgTariffGHS * vatMultiplier
+	annualisedLeakageGHS := monthlyLeakageGHS * 12
+
+	// Classify severity based on unaccounted percentage
 	alertLevel := "LOW"
 	switch {
 	case unaccountedPct >= 70:
@@ -70,36 +100,55 @@ func (n *NightFlowAnalyser) AnalyseDistrictBalance(
 	}
 
 	return &entities.AnomalyFlag{
-		ID:          uuid.New(),
-		DistrictID:  district.ID,
-		AnomalyType: "DISTRICT_IMBALANCE",
-		AlertLevel:  alertLevel,
-		FraudType:   "DISTRICT_IMBALANCE",
+		ID:               uuid.New(),
+		DistrictID:       district.ID,
+		AnomalyType:      "DISTRICT_IMBALANCE",
+		AlertLevel:       alertLevel,
+		FraudType:        "DISTRICT_IMBALANCE",
+		EstimatedLossGHS: monthlyLeakageGHS,
 		Title: fmt.Sprintf(
-			"%s: %.1f%% of water produced is unaccounted",
-			district.DistrictName, unaccountedPct,
+			"%s: %.1f%% unaccounted water - GHC%.2f/month apparent loss (GHC%.2f/year)",
+			district.DistrictName, unaccountedPct, monthlyLeakageGHS, annualisedLeakageGHS,
 		),
 		Description: fmt.Sprintf(
-			"District %s produced %.2f m³ but only %.2f m³ was billed (%.1f%% unaccounted). "+
-				"This exceeds the %.1f%% threshold. Possible causes: "+
-				"(1) Phantom billing in unserved areas, "+
-				"(2) Commercial accounts billed as residential, "+
-				"(3) Physical leakage, "+
-				"(4) Meter tampering. "+
-				"Recommend field audit of top 20 accounts by consumption.",
+			"District %s produced %.2f m3 but only %.2f m3 was billed (%.1f%% unaccounted). "+
+				"This exceeds the %.1f%% threshold.\n\n"+
+				"Revenue leakage breakdown (IWA/AWWA method):\n"+
+				"  Total unaccounted:    %.2f m3 (%.1f%% of production)\n"+
+				"  Real loss baseline:  %.2f m3 (%.0f%% IWA standard)\n"+
+				"  Apparent loss:       %.2f m3 (unregistered consumption)\n"+
+				"  Monthly leakage:     GHC%.2f (%.2f m3 x GHC%.2f/m3 x 1.20 VAT)\n"+
+				"  Annual leakage:      GHC%.2f\n\n"+
+				"Possible causes:\n"+
+				"  (1) Unregistered connections - addresses consuming with no billing account\n"+
+				"  (2) Category fraud - commercial premises billed as residential\n"+
+				"  (3) Meter tampering - readings manipulated below actual consumption\n"+
+				"  (4) Physical leakage above IWA baseline (infrastructure issue)\n\n"+
+				"Recommended action: Field audit of top 20 accounts by consumption in this district.",
 			district.DistrictName, productionM3, billedM3, unaccountedPct, n.nightFlowThreshold,
+			unaccountedM3, unaccountedPct,
+			realLossM3, realLossBaselinePct,
+			apparentLossM3,
+			monthlyLeakageGHS, apparentLossM3, districtAvgTariffGHS,
+			annualisedLeakageGHS,
 		),
 		EvidenceData: map[string]interface{}{
-			"district_code":    district.DistrictCode,
-			"district_name":    district.DistrictName,
-			"production_m3":    productionM3,
-			"billed_m3":        billedM3,
-			"unaccounted_m3":   unaccountedM3,
-			"unaccounted_pct":  unaccountedPct,
-			"threshold_pct":    n.nightFlowThreshold,
-			"analysis_period":  period.Format("2006-01"),
-			"analysis_type":    "STATISTICAL_BALANCE",
-			"iot_available":    false,
+			"district_code":           district.DistrictCode,
+			"district_name":           district.DistrictName,
+			"production_m3":           productionM3,
+			"billed_m3":               billedM3,
+			"unaccounted_m3":          unaccountedM3,
+			"unaccounted_pct":         unaccountedPct,
+			"real_loss_baseline_m3":   realLossM3,
+			"apparent_loss_m3":        apparentLossM3,
+			"monthly_leakage_ghs":     monthlyLeakageGHS,
+			"annualised_leakage_ghs":  annualisedLeakageGHS,
+			"district_avg_tariff_ghs": districtAvgTariffGHS,
+			"threshold_pct":           n.nightFlowThreshold,
+			"analysis_period":         period.Format("2006-01"),
+			"analysis_type":           "STATISTICAL_BALANCE",
+			"iot_available":           false,
+			"leakage_category":        "REVENUE_LEAKAGE",
 		},
 		Status:          "OPEN",
 		SentinelVersion: "1.0.0",

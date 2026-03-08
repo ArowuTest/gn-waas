@@ -33,6 +33,11 @@ func (r *FieldJobRepository) q(ctx context.Context) Querier {
 	return r.db
 }
 
+// DB returns the underlying connection pool (for direct queries in handlers).
+func (r *FieldJobRepository) DB() *pgxpool.Pool {
+	return r.db
+}
+
 func (r *FieldJobRepository) Create(ctx context.Context, job *domain.FieldJob) (*domain.FieldJob, error) {
 	// Generate job reference: FJ-2026-XXXXXX
 	job.JobReference = fmt.Sprintf("FJ-%s-%s", time.Now().Format("2006"), uuid.New().String()[:6])

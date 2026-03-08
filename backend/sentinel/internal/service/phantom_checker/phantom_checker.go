@@ -11,14 +11,25 @@ import (
 	"go.uber.org/zap"
 )
 
-// PhantomCheckerService detects phantom meters and ghost accounts
-// Implements two checks:
-// 1. Phantom Meter: Identical readings for N consecutive months
-// 2. Ghost Account: Account GPS outside GWL pipe network boundary
+// PhantomCheckerService detects phantom meters and unverified addresses.
+//
+// Revenue leakage detection:
+//  1. Phantom Meter: Identical/fabricated readings → GWL under-collecting
+//  2. Address Unverified: GPS outside network → DATA QUALITY flag → field job
+//     (NOT a revenue leakage flag until field officer confirms outcome)
+//
+// The distinction matters:
+//   - Phantom meter = revenue leakage (GHS calculable from shadow bill)
+//   - Address unverified = data quality (GHS unknown until field visit)
+//     → If field finds no meter: UNMETERED_CONSUMPTION (revenue leakage)
+//     → If field finds no address: FRAUDULENT_ACCOUNT (GWL internal fraud)
 type PhantomCheckerService struct {
-	logger              *zap.Logger
-	phantomMonths       int     // Months of identical readings = phantom (from system_config)
+	logger               *zap.Logger
+	phantomMonths        int     // Months of identical readings = phantom
 	roundNumberTolerance float64 // Tolerance for "suspiciously round" readings
+	// District average tariff for estimating unmetered consumption leakage
+	// Loaded from system_config; defaults to residential tier-2 rate
+	districtAvgTariffGHS float64
 }
 
 func NewPhantomCheckerService(logger *zap.Logger, phantomMonths int) *PhantomCheckerService {
@@ -26,10 +37,12 @@ func NewPhantomCheckerService(logger *zap.Logger, phantomMonths int) *PhantomChe
 		logger:               logger,
 		phantomMonths:        phantomMonths,
 		roundNumberTolerance: 0.01,
+		districtAvgTariffGHS: 10.83, // PURC 2026 residential tier-2 default
 	}
 }
 
-// CheckPhantomMeter analyses billing history for phantom meter patterns
+// CheckPhantomMeter analyses billing history for phantom meter patterns.
+// Returns a REVENUE_LEAKAGE flag with estimated monthly GHS loss.
 func (p *PhantomCheckerService) CheckPhantomMeter(
 	ctx context.Context,
 	account *entities.WaterAccount,
@@ -58,44 +71,74 @@ func (p *PhantomCheckerService) CheckPhantomMeter(
 	return nil, nil
 }
 
-// CheckGhostAccount verifies account is within the GWL pipe network boundary
-func (p *PhantomCheckerService) CheckGhostAccount(
+// CheckAddressUnverified screens accounts whose GPS is outside the GWL pipe
+// network boundary. This is a DATA QUALITY screening signal — NOT a revenue
+// leakage flag. It creates a LOW severity flag that triggers a field job.
+//
+// The field job outcome determines the next step:
+//   - METER_NOT_FOUND_INSTALL      → UNMETERED_CONSUMPTION (revenue leakage)
+//   - ADDRESS_VALID_UNREGISTERED   → UNMETERED_CONSUMPTION (revenue leakage)
+//   - ADDRESS_INVALID              → FRAUDULENT_ACCOUNT (GWL internal fraud)
+//   - METER_FOUND_OK               → dismiss flag (GPS data was wrong)
+func (p *PhantomCheckerService) CheckAddressUnverified(
 	ctx context.Context,
 	account *entities.WaterAccount,
 ) (*entities.AnomalyFlag, error) {
 
-	// If network check has been done and account is outside
-	if account.IsWithinNetwork != nil && !*account.IsWithinNetwork {
-		return &entities.AnomalyFlag{
-			ID:          uuid.New(),
-			AccountID:   &account.ID,
-			DistrictID:  account.DistrictID,
-			AnomalyType: "GHOST_ACCOUNT",
-			AlertLevel:  "HIGH",
-			FraudType:   "OUTSIDE_NETWORK_BILLING",
-			Title:       "Account billed outside GWL pipe network boundary",
-			Description: fmt.Sprintf(
-				"Account %s (GPS: %.6f, %.6f) is located outside the GWL pipe network boundary. "+
-					"This account may be a ghost account generating fraudulent revenue.",
-				account.GWLAccountNumber,
-				account.GPSLatitude,
-				account.GPSLongitude,
-			),
-			EvidenceData: map[string]interface{}{
-				"account_number":    account.GWLAccountNumber,
-				"gps_latitude":      account.GPSLatitude,
-				"gps_longitude":     account.GPSLongitude,
-				"network_check_date": account.NetworkCheckDate,
-				"is_within_network": false,
-			},
-			Status:          "OPEN",
-			SentinelVersion: "1.0.0",
-			CreatedAt:       time.Now().UTC(),
-		}, nil
+	if account.IsWithinNetwork == nil || *account.IsWithinNetwork {
+		return nil, nil // Within network or not yet checked — skip
 	}
 
-	return nil, nil
+	return &entities.AnomalyFlag{
+		ID:         uuid.New(),
+		AccountID:  &account.ID,
+		DistrictID: account.DistrictID,
+
+		// DATA_QUALITY — not revenue leakage until field verified
+		AnomalyType: "ADDRESS_UNVERIFIED",
+		AlertLevel:  "LOW", // Low severity — most are GPS data errors
+		FraudType:   "OUTSIDE_NETWORK_BILLING",
+
+		Title: fmt.Sprintf(
+			"Account %s: GPS coordinates outside GWL pipe network — field verification required",
+			account.GWLAccountNumber,
+		),
+		Description: fmt.Sprintf(
+			"Account %s has GPS coordinates (%.6f, %.6f) that fall outside the known GWL "+
+				"pipe network boundary. This is a data quality screening flag. "+
+				"A field officer must visit the address to determine the correct action:\n"+
+				"• If address is real with no meter → recommend meter installation (revenue leakage)\n"+
+				"• If address does not exist → escalate as fraudulent account (GWL internal fraud)\n"+
+				"• If GPS data is wrong → update coordinates and dismiss flag",
+			account.GWLAccountNumber,
+			account.GPSLatitude,
+			account.GPSLongitude,
+		),
+
+		// No GHS value — unknown until field verification
+		EstimatedLossGHS: 0,
+
+		EvidenceData: map[string]interface{}{
+			"account_number":     account.GWLAccountNumber,
+			"gps_latitude":       account.GPSLatitude,
+			"gps_longitude":      account.GPSLongitude,
+			"network_check_date": account.NetworkCheckDate,
+			"is_within_network":  false,
+			"leakage_category":   "DATA_QUALITY",
+			"required_action":    "FIELD_VERIFICATION",
+			"possible_outcomes": []string{
+				"METER_NOT_FOUND_INSTALL → UNMETERED_CONSUMPTION (revenue leakage)",
+				"ADDRESS_INVALID → FRAUDULENT_ACCOUNT (GWL internal fraud)",
+				"METER_FOUND_OK → dismiss (GPS data error)",
+			},
+		},
+		Status:          "OPEN",
+		SentinelVersion: "1.0.0",
+		CreatedAt:       time.Now().UTC(),
+	}, nil
 }
+
+// ─── Private helpers ──────────────────────────────────────────────────────────
 
 func (p *PhantomCheckerService) checkIdenticalReadings(
 	account *entities.WaterAccount,
@@ -106,7 +149,6 @@ func (p *PhantomCheckerService) checkIdenticalReadings(
 		return nil
 	}
 
-	// Check last N months for identical consumption
 	recentHistory := history[len(history)-p.phantomMonths:]
 	firstConsumption := recentHistory[0].ConsumptionM3
 	identicalCount := 1
@@ -119,33 +161,53 @@ func (p *PhantomCheckerService) checkIdenticalReadings(
 		}
 	}
 
-	if identicalCount >= p.phantomMonths {
-		return &entities.AnomalyFlag{
-			ID:          uuid.New(),
-			AccountID:   &account.ID,
-			DistrictID:  account.DistrictID,
-			AnomalyType: "PHANTOM_METER",
-			AlertLevel:  "HIGH",
-			FraudType:   "PHANTOM_METER",
-			Title:       fmt.Sprintf("Phantom meter: identical readings for %d consecutive months", identicalCount),
-			Description: fmt.Sprintf(
-				"Account %s has reported identical consumption of %.2f m³ for %d consecutive months. "+
-					"Real meters show natural variation. This meter likely does not exist physically.",
-				account.GWLAccountNumber, firstConsumption, identicalCount,
-			),
-			EvidenceData: map[string]interface{}{
-				"account_number":    account.GWLAccountNumber,
-				"identical_months":  identicalCount,
-				"consumption_m3":    firstConsumption,
-				"threshold_months":  p.phantomMonths,
-			},
-			Status:          "OPEN",
-			SentinelVersion: "1.0.0",
-			CreatedAt:       time.Now().UTC(),
-		}
+	if identicalCount < p.phantomMonths {
+		return nil
 	}
 
-	return nil
+	// Revenue leakage: fabricated readings are typically set low.
+	// Estimate monthly leakage as the difference between district average
+	// and the suspiciously identical reading.
+	estimatedActualM3 := account.MonthlyAvgConsumption
+	if estimatedActualM3 <= firstConsumption {
+		estimatedActualM3 = firstConsumption * 1.5 // conservative: assume 50% under-reading
+	}
+	monthlyLeakageGHS := (estimatedActualM3 - firstConsumption) * p.districtAvgTariffGHS * 1.20 // +VAT
+
+	return &entities.AnomalyFlag{
+		ID:               uuid.New(),
+		AccountID:        &account.ID,
+		DistrictID:       account.DistrictID,
+		AnomalyType:      "PHANTOM_METER",
+		AlertLevel:       "HIGH",
+		FraudType:        "PHANTOM_METER",
+		EstimatedLossGHS: monthlyLeakageGHS,
+		Title: fmt.Sprintf(
+			"Phantom meter: identical %.2f m³ reading for %d consecutive months — GH₵%.2f/month leakage",
+			firstConsumption, identicalCount, monthlyLeakageGHS,
+		),
+		Description: fmt.Sprintf(
+			"Account %s has reported identical consumption of %.2f m³ for %d consecutive months. "+
+				"Real meters show natural variation. This meter likely does not exist physically "+
+				"or readings are being fabricated. "+
+				"Estimated monthly revenue leakage: GH₵%.2f (%.2f m³ under-reported × GH₵%.2f/m³ + 20%% VAT).",
+			account.GWLAccountNumber, firstConsumption, identicalCount,
+			monthlyLeakageGHS, estimatedActualM3-firstConsumption, p.districtAvgTariffGHS,
+		),
+		EvidenceData: map[string]interface{}{
+			"account_number":       account.GWLAccountNumber,
+			"identical_months":     identicalCount,
+			"consumption_m3":       firstConsumption,
+			"threshold_months":     p.phantomMonths,
+			"estimated_actual_m3":  estimatedActualM3,
+			"monthly_leakage_ghs":  monthlyLeakageGHS,
+			"annualised_leakage_ghs": monthlyLeakageGHS * 12,
+			"leakage_category":     "REVENUE_LEAKAGE",
+		},
+		Status:          "OPEN",
+		SentinelVersion: "1.0.0",
+		CreatedAt:       time.Now().UTC(),
+	}
 }
 
 func (p *PhantomCheckerService) checkRoundNumbers(
@@ -155,40 +217,51 @@ func (p *PhantomCheckerService) checkRoundNumbers(
 
 	roundCount := 0
 	for _, record := range history {
-		// Check if consumption is a suspiciously round number (e.g., 5.00, 10.00, 15.00)
 		if math.Mod(record.ConsumptionM3, 1.0) < p.roundNumberTolerance {
 			roundCount++
 		}
 	}
 
 	roundPct := float64(roundCount) / float64(len(history)) * 100
-	if roundPct >= 90 && len(history) >= 6 {
-		return &entities.AnomalyFlag{
-			ID:          uuid.New(),
-			AccountID:   &account.ID,
-			DistrictID:  account.DistrictID,
-			AnomalyType: "PHANTOM_METER",
-			AlertLevel:  "MEDIUM",
-			FraudType:   "PHANTOM_METER",
-			Title:       fmt.Sprintf("Suspicious round-number readings: %.0f%% of bills", roundPct),
-			Description: fmt.Sprintf(
-				"Account %s has suspiciously round consumption figures in %.0f%% of %d billing records. "+
-					"Real meter readings are rarely whole numbers. Possible manual fabrication.",
-				account.GWLAccountNumber, roundPct, len(history),
-			),
-			EvidenceData: map[string]interface{}{
-				"account_number": account.GWLAccountNumber,
-				"round_count":    roundCount,
-				"total_records":  len(history),
-				"round_pct":      roundPct,
-			},
-			Status:          "OPEN",
-			SentinelVersion: "1.0.0",
-			CreatedAt:       time.Now().UTC(),
-		}
+	if roundPct < 90 || len(history) < 6 {
+		return nil
 	}
 
-	return nil
+	// Conservative leakage estimate: assume 20% under-reading on average
+	avgConsumption := account.MonthlyAvgConsumption
+	monthlyLeakageGHS := avgConsumption * 0.20 * p.districtAvgTariffGHS * 1.20
+
+	return &entities.AnomalyFlag{
+		ID:               uuid.New(),
+		AccountID:        &account.ID,
+		DistrictID:       account.DistrictID,
+		AnomalyType:      "PHANTOM_METER",
+		AlertLevel:       "MEDIUM",
+		FraudType:        "PHANTOM_METER",
+		EstimatedLossGHS: monthlyLeakageGHS,
+		Title: fmt.Sprintf(
+			"Suspicious round-number readings: %.0f%% of bills — GH₵%.2f/month estimated leakage",
+			roundPct, monthlyLeakageGHS,
+		),
+		Description: fmt.Sprintf(
+			"Account %s has suspiciously round consumption figures in %.0f%% of %d billing records. "+
+				"Real meter readings are rarely whole numbers. Possible manual fabrication. "+
+				"Estimated monthly revenue leakage: GH₵%.2f (assuming 20%% under-reading).",
+			account.GWLAccountNumber, roundPct, len(history), monthlyLeakageGHS,
+		),
+		EvidenceData: map[string]interface{}{
+			"account_number":         account.GWLAccountNumber,
+			"round_count":            roundCount,
+			"total_records":          len(history),
+			"round_pct":              roundPct,
+			"monthly_leakage_ghs":    monthlyLeakageGHS,
+			"annualised_leakage_ghs": monthlyLeakageGHS * 12,
+			"leakage_category":       "REVENUE_LEAKAGE",
+		},
+		Status:          "OPEN",
+		SentinelVersion: "1.0.0",
+		CreatedAt:       time.Now().UTC(),
+	}
 }
 
 func (p *PhantomCheckerService) checkZeroVariance(
@@ -200,7 +273,6 @@ func (p *PhantomCheckerService) checkZeroVariance(
 		return nil
 	}
 
-	// Calculate standard deviation of consumption
 	var sum float64
 	for _, r := range history {
 		sum += r.ConsumptionM3
@@ -215,33 +287,42 @@ func (p *PhantomCheckerService) checkZeroVariance(
 	variance /= float64(len(history))
 	stdDev := math.Sqrt(variance)
 
-	// If std dev is less than 0.5% of mean, flag as suspicious
-	if mean > 0 && (stdDev/mean) < 0.005 {
-		return &entities.AnomalyFlag{
-			ID:          uuid.New(),
-			AccountID:   &account.ID,
-			DistrictID:  account.DistrictID,
-			AnomalyType: "PHANTOM_METER",
-			AlertLevel:  "MEDIUM",
-			FraudType:   "PHANTOM_METER",
-			Title:       "Near-zero consumption variance detected",
-			Description: fmt.Sprintf(
-				"Account %s shows near-zero variance (std dev: %.4f m³) over %d months. "+
-					"Natural water consumption always varies. Possible phantom meter.",
-				account.GWLAccountNumber, stdDev, len(history),
-			),
-			EvidenceData: map[string]interface{}{
-				"account_number": account.GWLAccountNumber,
-				"mean_m3":        mean,
-				"std_dev_m3":     stdDev,
-				"cv_pct":         (stdDev / mean) * 100,
-				"months_analysed": len(history),
-			},
-			Status:          "OPEN",
-			SentinelVersion: "1.0.0",
-			CreatedAt:       time.Now().UTC(),
-		}
+	if mean <= 0 || (stdDev/mean) >= 0.005 {
+		return nil
 	}
 
-	return nil
+	monthlyLeakageGHS := mean * 0.20 * p.districtAvgTariffGHS * 1.20
+
+	return &entities.AnomalyFlag{
+		ID:               uuid.New(),
+		AccountID:        &account.ID,
+		DistrictID:       account.DistrictID,
+		AnomalyType:      "PHANTOM_METER",
+		AlertLevel:       "MEDIUM",
+		FraudType:        "PHANTOM_METER",
+		EstimatedLossGHS: monthlyLeakageGHS,
+		Title: fmt.Sprintf(
+			"Near-zero consumption variance (std dev: %.4f m³) — GH₵%.2f/month estimated leakage",
+			stdDev, monthlyLeakageGHS,
+		),
+		Description: fmt.Sprintf(
+			"Account %s shows near-zero variance (std dev: %.4f m³, CV: %.3f%%) over %d months. "+
+				"Natural water consumption always varies. Possible phantom meter or fabricated readings. "+
+				"Estimated monthly revenue leakage: GH₵%.2f (assuming 20%% under-reading).",
+			account.GWLAccountNumber, stdDev, (stdDev/mean)*100, len(history), monthlyLeakageGHS,
+		),
+		EvidenceData: map[string]interface{}{
+			"account_number":         account.GWLAccountNumber,
+			"mean_m3":                mean,
+			"std_dev_m3":             stdDev,
+			"cv_pct":                 (stdDev / mean) * 100,
+			"months_analysed":        len(history),
+			"monthly_leakage_ghs":    monthlyLeakageGHS,
+			"annualised_leakage_ghs": monthlyLeakageGHS * 12,
+			"leakage_category":       "REVENUE_LEAKAGE",
+		},
+		Status:          "OPEN",
+		SentinelVersion: "1.0.0",
+		CreatedAt:       time.Now().UTC(),
+	}
 }

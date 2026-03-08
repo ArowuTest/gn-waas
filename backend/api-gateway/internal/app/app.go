@@ -90,15 +90,15 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	}
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
+	flagRepo        := repository.NewAnomalyFlagRepository(db, logger)
 	auditHandler    := handler.NewAuditHandler(auditRepo, fieldJobRepo, userRepo, logger)
-	fieldJobHandler := handler.NewFieldJobHandler(fieldJobRepo, auditRepo, sosNotifier, evidenceStorage, logger)
+	fieldJobHandler := handler.NewFieldJobHandler(fieldJobRepo, flagRepo, auditRepo, sosNotifier, evidenceStorage, logger)
 	districtHandler := handler.NewDistrictHandler(districtRepo, logger)
 	userHandler     := handler.NewUserHandler(userRepo, logger)
 	configHandler   := handler.NewSystemConfigHandler(configRepo, logger)
 	accountHandler  := handler.NewAccountHandler(accountRepo, logger)
 	nrwHandler      := handler.NewNRWHandler(nrwRepo, logger)
 	dataHandler     := handler.NewDataHandler(db, logger)
-	flagRepo        := repository.NewAnomalyFlagRepository(db, logger)
 	flagHandler     := handler.NewAnomalyFlagHandler(flagRepo, logger)
 	gwlCaseRepo     := repository.NewGWLCaseRepository(db, logger)
 	gwlHandler       := handler.NewGWLHandler(gwlCaseRepo, logger)
@@ -431,6 +431,15 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// Flutter's MeterCaptureScreen calls POST /field-jobs/:id/submit after
 	// capturing photos, computing SHA-256 hashes, and uploading to MinIO.
 	// The handler verifies hashes, updates job status, and writes the audit record.
+	// PATCH /api/v1/field-jobs/:id/outcome
+	// Records structured field officer outcome. Drives auto-escalation:
+	//   METER_NOT_FOUND_INSTALL → UNMETERED_CONSUMPTION (revenue leakage)
+	//   ADDRESS_INVALID         → FRAUDULENT_ACCOUNT (GWL internal fraud)
+	//   METER_FOUND_OK          → dismiss ADDRESS_UNVERIFIED flag
+	fieldJobs.Patch("/:id/outcome",
+		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR", "SYSTEM_ADMIN"),
+		fieldJobHandler.RecordFieldJobOutcome,
+	)
 	fieldJobs.Post("/:id/submit",
 		middleware.RequireRoles("FIELD_OFFICER"),
 		fieldJobHandler.SubmitJobEvidence,
@@ -459,6 +468,12 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	sentinel.Get("/anomalies", flagHandler.ListAnomalyFlags)
 	sentinel.Post("/anomalies", flagHandler.CreateAnomalyFlag)
 	sentinel.Get("/anomalies/:id", flagHandler.GetAnomalyFlag)
+	// PATCH /api/v1/sentinel/anomalies/:id/confirm
+	// Confirms anomaly as genuine revenue leakage. Auto-creates revenue_recovery_event.
+	sentinel.Patch("/anomalies/:id/confirm",
+		middleware.RequireRoles("SYSTEM_ADMIN", "AUDIT_MANAGER", "GRA_AUDITOR"),
+		flagHandler.ConfirmAnomaly,
+	)
 	sentinel.Get("/summary/:district_id", flagHandler.GetDistrictSummary)
 	sentinel.Post("/scan/:district_id",
 		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR"),
@@ -595,6 +610,9 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	revenueRoles := middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GWL_MANAGER", "GWL_EXECUTIVE")
 	revenue := api.Group("/revenue", revenueRoles)
 	revenue.Get("/summary",          revenueHandler.GetSummary)
+	// GET /api/v1/revenue/pipeline — primary dashboard metric
+	// Shows full GHS pipeline: Detected → Field Verified → Confirmed → GRA Signed → Collected
+	revenue.Get("/pipeline",         revenueHandler.GetLeakagePipeline)
 	revenue.Get("/events",           revenueHandler.ListEvents)
 	revenue.Patch("/events/:id/confirm", revenueHandler.ConfirmRecovery)
 

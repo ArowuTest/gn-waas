@@ -89,12 +89,22 @@ export function AnomaliesPage() {
             onChange={e => setFilters(f => ({ ...f, anomaly_type: e.target.value, offset: 0 }))}
           >
             <option value="">All Types</option>
-            <option value="SHADOW_BILL_VARIANCE">Shadow Bill Variance</option>
-            <option value="PHANTOM_METER">Phantom Meter</option>
-            <option value="GHOST_ACCOUNT">Ghost Account</option>
-            <option value="CATEGORY_MISMATCH">Category Mismatch</option>
-            <option value="DISTRICT_BALANCE">District Balance</option>
-            <option value="ZERO_CONSUMPTION">Zero Consumption</option>
+            <optgroup label="── Revenue Leakage ──">
+              <option value="SHADOW_BILL_VARIANCE">Shadow Bill Variance</option>
+              <option value="PHANTOM_METER">Phantom Meter</option>
+              <option value="CATEGORY_MISMATCH">Category Mismatch</option>
+              <option value="DISTRICT_IMBALANCE">District Imbalance</option>
+              <option value="UNMETERED_CONSUMPTION">Unmetered Consumption</option>
+              <option value="UNAUTHORISED_CONSUMPTION">Unauthorised Connection</option>
+              <option value="VAT_DISCREPANCY">VAT Discrepancy</option>
+            </optgroup>
+            <optgroup label="── Data Quality ──">
+              <option value="ADDRESS_UNVERIFIED">Address Unverified (GPS check)</option>
+              <option value="FRAUDULENT_ACCOUNT">Fraudulent Account (GWL fraud)</option>
+            </optgroup>
+            <optgroup label="── Compliance ──">
+              <option value="OUTAGE_CONSUMPTION">Outage Consumption (PURC violation)</option>
+            </optgroup>
           </select>
 
           <select
@@ -137,6 +147,8 @@ export function AnomaliesPage() {
                 <th>Level</th>
                 <th>Type</th>
                 <th>Est. Loss (GHS)</th>
+                <th>Category</th>
+                <th>Monthly Leakage</th>
                 <th>Status</th>
                 <th>Detected</th>
                 <th></th>
@@ -161,8 +173,25 @@ export function AnomaliesPage() {
                       {flag.anomaly_type}
                     </span>
                   </td>
-                  <td className="font-mono text-sm font-medium text-danger">
-                    {flag.estimated_loss_ghs ? formatCurrency(flag.estimated_loss_ghs) : '—'}
+                  <td>
+                    {flag.anomaly_type === 'OUTAGE_CONSUMPTION' ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">Compliance</span>
+                    ) : flag.anomaly_type === 'ADDRESS_UNVERIFIED' ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-50 text-gray-600">Data Quality</span>
+                    ) : flag.anomaly_type === 'FRAUDULENT_ACCOUNT' ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700">Internal Fraud</span>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">Revenue Leakage</span>
+                    )}
+                  </td>
+                  <td className="font-mono text-sm font-medium">
+                    {flag.anomaly_type === 'ADDRESS_UNVERIFIED' ? (
+                      <span className="text-gray-400 text-xs">Pending field visit</span>
+                    ) : flag.anomaly_type === 'OUTAGE_CONSUMPTION' ? (
+                      <span className="text-blue-600 text-xs">PURC violation</span>
+                    ) : (flag.monthly_leakage_ghs ?? flag.estimated_loss_ghs) ? (
+                      <span className="text-red-700">{formatCurrency(flag.monthly_leakage_ghs ?? flag.estimated_loss_ghs ?? 0)}/mo</span>
+                    ) : '—'}
                   </td>
                   <td><StatusBadge status={flag.status} /></td>
                   <td className="text-gray-400 text-xs">{formatRelativeTime(flag.created_at)}</td>

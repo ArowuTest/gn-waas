@@ -10,7 +10,7 @@ import { AlertLevelBadge, StatusBadge } from '../components/ui/Badge'
 import {
   useDashboardStats, useAnomalies, useDistricts,
   useWaterBalance, useRevenueSummary, useWorkforceSummary,
-  useActiveOfficers,
+  useActiveOfficers, useLeakagePipeline,
 } from '../hooks/useQueries'
 import { formatCurrency, formatRelativeTime, formatNumber } from '../lib/utils'
 import {
@@ -276,8 +276,23 @@ export function DashboardPage() {
     status: 'OPEN',
   })
   const { data: waterBalance } = useWaterBalance(selectedDistrict || undefined)
+  const { data: pipeline } = useLeakagePipeline(selectedDistrict || undefined)
 
   const anomalies = anomaliesData?.data || []
+
+  // Separate revenue leakage from compliance flags for display
+  const revenueLeakageAnomalies = anomalies.filter(a =>
+    !['OUTAGE_CONSUMPTION', 'ADDRESS_UNVERIFIED'].includes(a.anomaly_type)
+  )
+  const complianceAnomalies = anomalies.filter(a => a.anomaly_type === 'OUTAGE_CONSUMPTION')
+  const dataQualityAnomalies = anomalies.filter(a => a.anomaly_type === 'ADDRESS_UNVERIFIED')
+
+  // Sort anomalies by monthly leakage GHS (highest first) — revenue impact ordering
+  const sortedAnomalies = [...anomalies].sort((a, b) => {
+    const aGHS = a.monthly_leakage_ghs ?? a.estimated_loss_ghs ?? 0
+    const bGHS = b.monthly_leakage_ghs ?? b.estimated_loss_ghs ?? 0
+    return bGHS - aGHS
+  })
 
   const anomalyBreakdown = [
     { name: 'Critical', value: anomalies.filter(a => a.alert_level === 'CRITICAL').length, color: '#dc2626' },
@@ -320,12 +335,65 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* ── KPI Row 1 — Audit Operations ────────────────────────────────────── */}
+      {/* ── Revenue Leakage Pipeline — PRIMARY MISSION METRIC ─────────────── */}
+      {/* Every GHS figure = money GWL should be collecting but isn't.         */}
+      {/* Pipeline: Detected → Field Verified → Confirmed → GRA Signed → Collected */}
+      <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-100 rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-sm font-bold text-red-900 flex items-center gap-2">
+              <TrendingDown size={16} className="text-red-600" />
+              Revenue Leakage Pipeline
+            </h2>
+            <p className="text-xs text-red-600 mt-0.5">
+              Monthly GHS being lost at each stage — GWL is delivering water but not collecting payment
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-500">Annual exposure</p>
+            <p className="text-xl font-black text-red-700">
+              {formatCurrency((pipeline?.total_detected_annual_ghs ?? 0))}
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-5 gap-2">
+          {[
+            { label: 'Detected', count: pipeline?.detected?.count ?? 0, ghs: pipeline?.detected?.ghs ?? 0, color: 'bg-red-500', textColor: 'text-red-700', desc: 'Open flags' },
+            { label: 'Field Verified', count: pipeline?.field_verified?.count ?? 0, ghs: pipeline?.field_verified?.ghs ?? 0, color: 'bg-orange-500', textColor: 'text-orange-700', desc: 'Outcome recorded' },
+            { label: 'Confirmed', count: pipeline?.confirmed?.count ?? 0, ghs: pipeline?.confirmed?.ghs ?? 0, color: 'bg-amber-500', textColor: 'text-amber-700', desc: 'Fraud confirmed' },
+            { label: 'GRA Signed', count: pipeline?.gra_signed?.count ?? 0, ghs: pipeline?.gra_signed?.ghs ?? 0, color: 'bg-blue-500', textColor: 'text-blue-700', desc: 'Legally binding' },
+            { label: 'Collected', count: pipeline?.collected?.count ?? 0, ghs: pipeline?.collected?.ghs ?? 0, color: 'bg-emerald-500', textColor: 'text-emerald-700', desc: 'Money recovered' },
+          ].map((stage, i) => (
+            <div key={stage.label} className="bg-white rounded-xl p-3 text-center shadow-sm">
+              <div className={`w-2 h-2 rounded-full ${stage.color} mx-auto mb-1.5`} />
+              <p className={`text-lg font-black ${stage.textColor}`}>{formatCurrency(stage.ghs)}</p>
+              <p className="text-xs font-bold text-gray-700">{stage.label}</p>
+              <p className="text-xs text-gray-400">{stage.count} flags</p>
+              <p className="text-xs text-gray-400 mt-0.5">{stage.desc}</p>
+            </div>
+          ))}
+        </div>
+        {/* Compliance and data quality flags — separate from revenue leakage */}
+        {((pipeline?.compliance_flags_open ?? 0) > 0 || (pipeline?.data_quality_flags_open ?? 0) > 0) && (
+          <div className="mt-3 pt-3 border-t border-red-100 flex items-center gap-4 text-xs text-gray-500">
+            <span className="flex items-center gap-1">
+              <Shield size={12} className="text-blue-500" />
+              <strong className="text-blue-700">{pipeline?.compliance_flags_open ?? 0}</strong> compliance flags (PURC violations — not revenue leakage)
+            </span>
+            <span className="flex items-center gap-1">
+              <MapPin size={12} className="text-gray-400" />
+              <strong className="text-gray-600">{pipeline?.data_quality_flags_open ?? 0}</strong> address verification pending (field job required)
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── KPI Row — Audit Operations ──────────────────────────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
-          title="Open Anomalies"
-          value={statsLoading ? '—' : formatNumber(stats?.pending ?? 0)}
-          subtitle="Requiring investigation"
+          title="Revenue Leakage Flags"
+          value={statsLoading ? '—' : formatNumber(revenueLeakageAnomalies.length)}
+          subtitle="Sorted by GHS impact"
           icon={<AlertTriangle size={18} />}
           variant="danger"
         />
@@ -337,50 +405,18 @@ export function DashboardPage() {
           variant="warning"
         />
         <StatCard
-          title="Confirmed Revenue Loss"
-          value={statsLoading ? '—' : formatCurrency(stats?.total_confirmed_loss_ghs ?? 0)}
-          subtitle="This period"
-          icon={<TrendingDown size={18} />}
-          variant="danger"
-        />
-        <StatCard
-          title="GRA Signed Audits"
-          value={statsLoading ? '—' : formatNumber(stats?.gra_signed ?? 0)}
-          subtitle="Legally binding"
-          icon={<Shield size={18} />}
-          variant="success"
-        />
-      </div>
-
-      {/* ── KPI Row 2 — Revenue Recovery ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard
-          title="Success Fees Earned"
-          value={statsLoading ? '—' : formatCurrency(stats?.total_success_fees_ghs ?? 0)}
-          subtitle="3% of recovered revenue"
+          title="Confirmed & Collected"
+          value={statsLoading ? '—' : formatCurrency(pipeline?.total_collected_ghs ?? 0)}
+          subtitle="Money actually recovered"
           icon={<DollarSign size={18} />}
           variant="success"
         />
         <StatCard
-          title="Completed Audits"
-          value={statsLoading ? '—' : formatNumber(stats?.completed ?? 0)}
-          subtitle="All time"
-          icon={<CheckCircle size={18} />}
+          title="Recovery Rate"
+          value={statsLoading ? '—' : `${(pipeline?.recovery_rate_pct ?? 0).toFixed(1)}%`}
+          subtitle="Collected / confirmed"
+          icon={<TrendingUp size={18} />}
           variant="success"
-        />
-        <StatCard
-          title="Total Audits"
-          value={statsLoading ? '—' : formatNumber(stats?.total ?? 0)}
-          subtitle="All statuses"
-          icon={<BarChart2 size={18} />}
-          variant="default"
-        />
-        <StatCard
-          title="Pending Assignment"
-          value={statsLoading ? '—' : formatNumber(stats?.pending_assignment ?? 0)}
-          subtitle="Awaiting field officer"
-          icon={<Clock size={18} />}
-          variant="warning"
         />
       </div>
 
@@ -486,8 +522,8 @@ export function DashboardPage() {
 
         {/* Recent anomalies table */}
         <Card
-          title="Recent Open Anomalies"
-          subtitle="Latest flags requiring attention"
+          title="Revenue Leakage Flags"
+          subtitle="Sorted by monthly GHS impact — highest first"
           className="xl:col-span-2"
           noPadding
           action={

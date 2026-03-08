@@ -77,7 +77,7 @@ func TestCheckPhantomMeter_IdenticalReadings_Flagged(t *testing.T) {
 		t.Errorf("Expected PHANTOM_METER anomaly type, got %s", flag.AnomalyType)
 	}
 	if flag.AlertLevel != "HIGH" {
-		t.Errorf("Expected HIGH alert level, got %s", flag.AlertLevel)
+		t.Errorf("Expected HIGH alert level for PHANTOM_METER (revenue leakage), got %s", flag.AlertLevel)
 	}
 	if flag.Status != "OPEN" {
 		t.Errorf("Expected OPEN status, got %s", flag.Status)
@@ -192,7 +192,7 @@ func TestCheckPhantomMeter_MixedRoundAndReal_NotFlagged(t *testing.T) {
 // Ghost Account Tests
 // ============================================================
 
-func TestCheckGhostAccount_OutsideNetwork_Flagged(t *testing.T) {
+func TestCheckAddressUnverified_OutsideNetwork_Flagged(t *testing.T) {
 	svc := newPhantomChecker(3)
 
 	withinNetwork := false
@@ -208,31 +208,31 @@ func TestCheckGhostAccount_OutsideNetwork_Flagged(t *testing.T) {
 		NetworkCheckDate: &checkDate,
 	}
 
-	flag, err := svc.CheckGhostAccount(context.Background(), account)
+	flag, err := svc.CheckAddressUnverified(context.Background(), account)
 	if err != nil {
 		t.Fatalf("CheckGhostAccount failed: %v", err)
 	}
 	if flag == nil {
-		t.Fatal("Expected ghost account flag for outside-network account, got nil")
+		t.Fatal("Expected ADDRESS_UNVERIFIED flag for outside-network account, got nil")
 	}
-	if flag.AnomalyType != "GHOST_ACCOUNT" {
-		t.Errorf("Expected GHOST_ACCOUNT anomaly type, got %s", flag.AnomalyType)
+	if flag.AnomalyType != "ADDRESS_UNVERIFIED" {
+		t.Errorf("Expected ADDRESS_UNVERIFIED anomaly type, got %s", flag.AnomalyType)
 	}
-	if flag.AlertLevel != "HIGH" {
-		t.Errorf("Expected HIGH alert level, got %s", flag.AlertLevel)
+	if flag.AlertLevel != "LOW" {
+		t.Errorf("Expected LOW alert level for ADDRESS_UNVERIFIED (data quality flag), got %s", flag.AlertLevel)
 	}
 	if flag.FraudType != "OUTSIDE_NETWORK_BILLING" {
 		t.Errorf("Expected OUTSIDE_NETWORK_BILLING fraud type, got %s", flag.FraudType)
 	}
 }
 
-func TestCheckGhostAccount_InsideNetwork_NotFlagged(t *testing.T) {
+func TestCheckAddressUnverified_InsideNetwork_NotFlagged(t *testing.T) {
 	svc := newPhantomChecker(3)
 
 	withinNetwork := true
 	account := makeAccount("GWL-ACC-VALID-001", &withinNetwork)
 
-	flag, err := svc.CheckGhostAccount(context.Background(), account)
+	flag, err := svc.CheckAddressUnverified(context.Background(), account)
 	if err != nil {
 		t.Fatalf("CheckGhostAccount failed: %v", err)
 	}
@@ -241,13 +241,13 @@ func TestCheckGhostAccount_InsideNetwork_NotFlagged(t *testing.T) {
 	}
 }
 
-func TestCheckGhostAccount_NetworkNotChecked_NotFlagged(t *testing.T) {
+func TestCheckAddressUnverified_NetworkNotChecked_NotFlagged(t *testing.T) {
 	svc := newPhantomChecker(3)
 
 	// IsWithinNetwork is nil — not yet checked
 	account := makeAccount("GWL-ACC-UNCHECKED-001", nil)
 
-	flag, err := svc.CheckGhostAccount(context.Background(), account)
+	flag, err := svc.CheckAddressUnverified(context.Background(), account)
 	if err != nil {
 		t.Fatalf("CheckGhostAccount failed: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestCheckGhostAccount_NetworkNotChecked_NotFlagged(t *testing.T) {
 // Evidence Data Tests
 // ============================================================
 
-func TestCheckGhostAccount_EvidenceContainsGPS(t *testing.T) {
+func TestCheckAddressUnverified_EvidenceContainsGPS(t *testing.T) {
 	svc := newPhantomChecker(3)
 
 	withinNetwork := false
@@ -276,12 +276,12 @@ func TestCheckGhostAccount_EvidenceContainsGPS(t *testing.T) {
 		NetworkCheckDate: &checkDate,
 	}
 
-	flag, err := svc.CheckGhostAccount(context.Background(), account)
+	flag, err := svc.CheckAddressUnverified(context.Background(), account)
 	if err != nil {
 		t.Fatalf("CheckGhostAccount failed: %v", err)
 	}
 	if flag == nil {
-		t.Fatal("Expected ghost account flag, got nil")
+		t.Fatal("Expected ADDRESS_UNVERIFIED flag, got nil")
 	}
 
 	if _, ok := flag.EvidenceData["gps_latitude"]; !ok {

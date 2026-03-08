@@ -262,3 +262,149 @@ func (h *RevenueRecoveryHandler) ConfirmRecovery(c *fiber.Ctx) error {
 	}
 	return response.OK(c, fiber.Map{"message": "Recovery confirmed"})
 }
+
+// GetLeakagePipeline godoc
+// GET /api/v1/revenue/pipeline?district_id=
+//
+// Returns the full revenue leakage pipeline in GHS at each stage:
+//   Detected → Field Verified → Confirmed → GRA Signed → Collected
+//
+// This is the primary dashboard metric for GN-WAAS.
+// Every GHS figure represents money GWL should be collecting but isn't.
+//
+// Also returns compliance flags (OUTAGE_CONSUMPTION) separately —
+// these are PURC violations, not revenue leakage.
+func (h *RevenueRecoveryHandler) GetLeakagePipeline(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	q := h.qCtx(c)
+
+	districtFilter := c.Query("district_id")
+
+	type PipelineStage struct {
+		Count  int     `json:"count"`
+		GHS    float64 `json:"ghs"`
+	}
+
+	type Pipeline struct {
+		// Revenue leakage pipeline (primary mission)
+		Detected      PipelineStage `json:"detected"`
+		FieldVerified PipelineStage `json:"field_verified"`
+		Confirmed     PipelineStage `json:"confirmed"`
+		GRASigned     PipelineStage `json:"gra_signed"`
+		Collected     PipelineStage `json:"collected"`
+
+		// Compliance flags (separate — not revenue leakage)
+		ComplianceOpen    int `json:"compliance_flags_open"`
+		DataQualityOpen   int `json:"data_quality_flags_open"`
+
+		// Summary
+		TotalDetectedMonthlyGHS    float64 `json:"total_detected_monthly_ghs"`
+		TotalDetectedAnnualGHS     float64 `json:"total_detected_annual_ghs"`
+		TotalCollectedGHS          float64 `json:"total_collected_ghs"`
+		RecoveryRatePct            float64 `json:"recovery_rate_pct"`
+		DistrictID                 *string `json:"district_id,omitempty"`
+	}
+
+	var p Pipeline
+	if districtFilter != "" {
+		p.DistrictID = &districtFilter
+	}
+
+	// Use the v_leakage_pipeline view if district filter is provided,
+	// otherwise aggregate across all districts
+	var whereClause string
+	var args []interface{}
+	if districtFilter != "" {
+		if _, err := uuid.Parse(districtFilter); err == nil {
+			whereClause = "WHERE district_id = $1"
+			args = append(args, districtFilter)
+		}
+	}
+
+	// Stage 1: Detected (open revenue leakage flags)
+	q.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COALESCE(SUM(monthly_leakage_ghs), 0)
+		FROM anomaly_flags
+		`+whereClause+`
+		`+func() string {
+		if whereClause == "" {
+			return "WHERE leakage_category = 'REVENUE_LEAKAGE' AND status = 'OPEN'"
+		}
+		return "AND leakage_category = 'REVENUE_LEAKAGE' AND status = 'OPEN'"
+	}(), args...,
+	).Scan(&p.Detected.Count, &p.Detected.GHS)
+
+	// Stage 2: Field verified (field outcome recorded, not yet confirmed)
+	q.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COALESCE(SUM(confirmed_leakage_ghs), 0)
+		FROM anomaly_flags
+		`+whereClause+`
+		`+func() string {
+		if whereClause == "" {
+			return "WHERE leakage_category = 'REVENUE_LEAKAGE' AND field_outcome IS NOT NULL AND confirmed_fraud IS NULL"
+		}
+		return "AND leakage_category = 'REVENUE_LEAKAGE' AND field_outcome IS NOT NULL AND confirmed_fraud IS NULL"
+	}(), args...,
+	).Scan(&p.FieldVerified.Count, &p.FieldVerified.GHS)
+
+	// Stage 3: Confirmed (confirmed_fraud = TRUE)
+	q.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COALESCE(SUM(confirmed_leakage_ghs), 0)
+		FROM anomaly_flags
+		`+whereClause+`
+		`+func() string {
+		if whereClause == "" {
+			return "WHERE confirmed_fraud = TRUE AND leakage_category = 'REVENUE_LEAKAGE'"
+		}
+		return "AND confirmed_fraud = TRUE AND leakage_category = 'REVENUE_LEAKAGE'"
+	}(), args...,
+	).Scan(&p.Confirmed.Count, &p.Confirmed.GHS)
+
+	// Stages 4 & 5: GRA signed and collected (from revenue_recovery_events)
+	var rreArgs []interface{}
+	var rreWhere string
+	if districtFilter != "" {
+		if _, err := uuid.Parse(districtFilter); err == nil {
+			rreWhere = "WHERE district_id = $1"
+			rreArgs = append(rreArgs, districtFilter)
+		}
+	}
+
+	q.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE status IN ('GRA_SIGNED', 'COLLECTED'))::int,
+			COALESCE(SUM(recovered_ghs) FILTER (WHERE status IN ('GRA_SIGNED', 'COLLECTED')), 0),
+			COUNT(*) FILTER (WHERE status = 'COLLECTED')::int,
+			COALESCE(SUM(recovered_ghs) FILTER (WHERE status = 'COLLECTED'), 0)
+		FROM revenue_recovery_events
+		`+rreWhere, rreArgs...,
+	).Scan(
+		&p.GRASigned.Count, &p.GRASigned.GHS,
+		&p.Collected.Count, &p.Collected.GHS,
+	)
+
+	// Compliance and data quality flags
+	q.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE leakage_category = 'COMPLIANCE' AND status = 'OPEN')::int,
+			COUNT(*) FILTER (WHERE leakage_category = 'DATA_QUALITY' AND status = 'OPEN')::int
+		FROM anomaly_flags
+		`+whereClause, args...,
+	).Scan(&p.ComplianceOpen, &p.DataQualityOpen)
+
+	// Summary calculations
+	p.TotalDetectedMonthlyGHS = p.Detected.GHS
+	p.TotalDetectedAnnualGHS = p.Detected.GHS * 12
+	p.TotalCollectedGHS = p.Collected.GHS
+	if p.Confirmed.GHS > 0 {
+		p.RecoveryRatePct = (p.Collected.GHS / p.Confirmed.GHS) * 100
+	}
+
+	return response.OK(c, p)
+}
