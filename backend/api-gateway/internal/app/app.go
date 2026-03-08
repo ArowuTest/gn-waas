@@ -209,7 +209,38 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	var authMW fiber.Handler
 	if cfg.Server.DevMode {
 		logger.Warn("DEVELOPMENT MODE: JWT validation bypassed — DO NOT USE IN PRODUCTION")
-		authMW = middleware.DevAuthMiddleware(logger)
+		devMW := middleware.DevAuthMiddleware(logger)
+		// BUG-V30-04 fix: DevAuthMiddleware sets rls_district_id to the zero UUID for all
+		// roles, which causes district-scoped RLS policies to return empty results for
+		// non-admin roles (GWL_MANAGER, FIELD_SUPERVISOR, FIELD_OFFICER, GWL_SUPERVISOR).
+		// This wrapper runs after DevAuthMiddleware and replaces the zero UUID with the
+		// first active district from the database for district-scoped roles.
+		authMW = func(c *fiber.Ctx) error {
+			if err := devMW(c); err != nil {
+				return err
+			}
+			// Admin roles bypass district filtering — zero UUID is correct for them.
+			devRole := c.Get("X-Dev-Role", "SUPER_ADMIN")
+			adminRoles := map[string]bool{
+				"SUPER_ADMIN":  true,
+				"SYSTEM_ADMIN": true,
+				"MOF_AUDITOR":  true,
+			}
+			if adminRoles[devRole] {
+				return c.Next()
+			}
+			// For district-scoped roles, look up the first active district.
+			var realDistrictID string
+			err := db.QueryRow(c.Context(),
+				"SELECT id::text FROM districts WHERE is_active = true ORDER BY district_name LIMIT 1",
+			).Scan(&realDistrictID)
+			if err == nil && realDistrictID != "" {
+				c.Locals("rls_district_id", realDistrictID)
+			}
+			// If lookup fails (empty DB), keep the zero UUID — queries return empty results
+			// which is safe and expected on a fresh installation.
+			return c.Next()
+		}
 	} else {
 		authMW = middleware.AuthMiddleware(authCfg, logger)
 	}
@@ -764,15 +795,15 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		err := db.QueryRow(c.Context(), fmt.Sprintf(`
 			SELECT
 				COUNT(ae.id)                                                    AS total_gaps,
-				COALESCE(SUM(ae.variance_amount_ghs), 0)                        AS total_gap_value,
-				COALESCE(SUM(rre.recovered_amount_ghs), 0)                      AS total_recovered,
-				COALESCE(SUM(ae.variance_amount_ghs) - SUM(rre.recovered_amount_ghs), 0) AS total_pending,
-				CASE WHEN SUM(ae.variance_amount_ghs) > 0
-					THEN ROUND((SUM(rre.recovered_amount_ghs) / SUM(ae.variance_amount_ghs)) * 100, 2)
+				COALESCE(SUM(ae.confirmed_loss_ghs), 0)                        AS total_gap_value,
+				COALESCE(SUM(rre.recovered_ghs), 0)                      AS total_recovered,
+				COALESCE(SUM(ae.confirmed_loss_ghs) - SUM(rre.recovered_ghs), 0) AS total_pending,
+				CASE WHEN SUM(ae.confirmed_loss_ghs) > 0
+					THEN ROUND((SUM(rre.recovered_ghs) / SUM(ae.confirmed_loss_ghs)) * 100, 2)
 					ELSE 0 END                                                  AS recovery_rate,
 				COALESCE(SUM(rre.success_fee_ghs), 0)                           AS success_fees,
-				COUNT(CASE WHEN ae.gra_compliance_status = 'SIGNED' THEN 1 END) AS gra_signed,
-				COUNT(CASE WHEN ae.gra_compliance_status = 'PROVISIONAL' THEN 1 END) AS gra_provisional,
+				COUNT(CASE WHEN ae.gra_status = 'SIGNED' THEN 1 END) AS gra_signed,
+				COUNT(CASE WHEN ae.gra_status = 'PROVISIONAL' THEN 1 END) AS gra_provisional,
 				COALESCE(AVG(
 					EXTRACT(EPOCH FROM (rre.confirmed_at - ae.created_at)) / 86400
 				), 0)                                                           AS avg_days
@@ -816,13 +847,13 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 				ae.account_id,
 				wa.gwl_account_number,
 				wa.customer_name,
-				ae.anomaly_type,
-				ae.variance_amount_ghs,
-				ae.gra_compliance_status::text,
+				COALESCE(af.anomaly_type::text, 'UNKNOWN') AS anomaly_type,
+				ae.confirmed_loss_ghs,
+				ae.gra_status::text,
 				ae.gra_sdc_id,
 				ae.created_at,
 				rre.id                    AS recovery_id,
-				rre.recovered_amount_ghs,
+				rre.recovered_ghs,
 				rre.success_fee_ghs,
 				rre.status                AS recovery_status,
 				rre.confirmed_at
@@ -830,6 +861,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			JOIN districts d ON d.id = ae.district_id
 			LEFT JOIN water_accounts wa ON wa.id = ae.account_id
 			LEFT JOIN revenue_recovery_events rre ON rre.audit_event_id = ae.id
+			LEFT JOIN anomaly_flags af ON af.id = ae.anomaly_flag_id
 			ORDER BY ae.created_at DESC
 			LIMIT $1 OFFSET $2
 		`, limit, offset)

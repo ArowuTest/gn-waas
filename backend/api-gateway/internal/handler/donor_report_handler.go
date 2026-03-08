@@ -148,9 +148,9 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 
 	// Recovery from revenue_recovery_events
 	h.db.QueryRow(c.Context(), `
-		SELECT COALESCE(SUM(amount_recovered_ghs), 0)
+		SELECT COALESCE(SUM(recovered_ghs), 0)
 		FROM revenue_recovery_events
-		WHERE recovery_date BETWEEN $1 AND $2
+		WHERE COALESCE(confirmed_at, created_at) BETWEEN $1 AND $2
 		  AND status = 'CONFIRMED'
 	`, periodStart, periodEnd).Scan(&revenueKPIs.RecoveredGHS)
 
@@ -161,7 +161,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 
 	// Current GHS/USD rate
 	h.db.QueryRow(c.Context(), `
-		SELECT rate_ghs_per_usd FROM exchange_rates
+		SELECT ghs_per_usd FROM exchange_rates
 		WHERE currency_pair = 'GHS/USD'
 		ORDER BY effective_date DESC LIMIT 1
 	`).Scan(&revenueKPIs.GHSUSDRate)
@@ -349,9 +349,9 @@ func (h *DonorReportHandler) GetTrend(c *fiber.Ctx) error {
 
 		// Recovery
 		h.db.QueryRow(c.Context(), `
-			SELECT COALESCE(SUM(amount_recovered_ghs), 0)
+			SELECT COALESCE(SUM(recovered_ghs), 0)
 			FROM revenue_recovery_events
-			WHERE recovery_date BETWEEN $1 AND $2 AND status = 'CONFIRMED'
+			WHERE COALESCE(confirmed_at, created_at) BETWEEN $1 AND $2 AND status = 'CONFIRMED'
 		`, start, end).Scan(&pt.RecoveredGHS)
 
 		// Audits
