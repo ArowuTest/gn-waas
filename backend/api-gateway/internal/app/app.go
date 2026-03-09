@@ -879,12 +879,12 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			AccountNumber       *string  `json:"account_number"`
 			CustomerName        *string  `json:"customer_name"`
 			AnomalyType         string   `json:"anomaly_type"`
-			VarianceAmountGHS   float64  `json:"variance_amount_ghs"`
-			GRAStatus           string   `json:"gra_compliance_status"`
+			VarianceAmountGHS   float64  `json:"confirmed_loss_ghs"`
+			GRAStatus           string   `json:"gra_status"`
 			GRASDCID            *string  `json:"gra_sdc_id"`
 			CreatedAt           string   `json:"created_at"`
 			RecoveryID          *string  `json:"recovery_id"`
-			RecoveredAmountGHS  *float64 `json:"recovered_amount_ghs"`
+			RecoveredAmountGHS  *float64 `json:"recovered_ghs"`
 			SuccessFeeGHS       *float64 `json:"success_fee_ghs"`
 			RecoveryStatus      *string  `json:"recovery_status"`
 			ConfirmedAt         *string  `json:"confirmed_at"`

@@ -9,6 +9,9 @@ const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'gnwaas'
 const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'authority-portal'
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true'
 
+// Whether to show the Keycloak SSO button (production with Keycloak configured)
+const USE_KEYCLOAK = !DEV_MODE && Boolean(KEYCLOAK_URL)
+
 function generateCodeVerifier(): string {
   const array = new Uint8Array(32)
   crypto.getRandomValues(array)
@@ -58,9 +61,12 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleDevLogin = async (e: React.FormEvent) => {
+  // Unified login handler — works in both dev mode and production (without Keycloak).
+  // v30-02 fix: removed the `if (!DEV_MODE) return` guard that made this handler
+  // unreachable when DEV_MODE=false and KEYCLOAK_URL was not set, causing the portal
+  // to display a dead-end "Configuration Required" message with no way to log in.
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!DEV_MODE) return
     setLoading(true)
     setError('')
     try {
@@ -106,7 +112,7 @@ export default function LoginPage() {
             </div>
             <div>
               <p className="text-white font-bold text-lg leading-tight">GN-WAAS</p>
-              <p className="text-gray-400 text-xs">Ghana National Water Audit & Assurance System</p>
+              <p className="text-gray-400 text-xs">Ghana National Water Audit &amp; Assurance System</p>
             </div>
           </div>
 
@@ -164,20 +170,24 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {!DEV_MODE && KEYCLOAK_URL ? (
+            {/* ── Auth method selection ──────────────────────────────────────
+                Priority:
+                  1. Keycloak SSO  — when VITE_KEYCLOAK_URL is set and DEV_MODE=false
+                  2. Email/password form — all other cases (dev mode, staging,
+                     or production without Keycloak configured).
+                     Previously this fell through to a dead-end "Configuration Required"
+                     message when DEV_MODE=false and KEYCLOAK_URL was empty.
+                     Fixed: always show the email/password form as the fallback.
+            ─────────────────────────────────────────────────────────────── */}
+            {USE_KEYCLOAK ? (
               <button
                 onClick={initiateKeycloakLogin}
                 className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors shadow-sm"
               >
                 Sign in with Keycloak
               </button>
-            ) : !DEV_MODE && !KEYCLOAK_URL ? (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
-                <p className="font-semibold">Configuration Required</p>
-                <p className="mt-1 text-xs">Set VITE_KEYCLOAK_URL to enable authentication.</p>
-              </div>
             ) : (
-              <form onSubmit={handleDevLogin} className="space-y-5">
+              <form onSubmit={handleLogin} className="space-y-5">
                 <div>
                   <label className="label">Email address</label>
                   <input
@@ -231,25 +241,27 @@ export default function LoginPage() {
                   ) : 'Sign in'}
                 </button>
 
-                <div className="pt-4 border-t border-gray-100">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                    Development Quick Login
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {DEV_ACCOUNTS.map(acc => (
-                      <button
-                        key={acc.role}
-                        type="button"
-                        onClick={() => handleQuickLogin(acc.email, acc.role)}
-                        disabled={loading}
-                        className="text-left px-3 py-2 rounded-xl border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 transition-colors group"
-                      >
-                        <p className="text-xs font-semibold text-gray-700 group-hover:text-emerald-700">{acc.label}</p>
-                        <p className="text-[10px] text-gray-400 truncate">{acc.email}</p>
-                      </button>
-                    ))}
+                {DEV_MODE && (
+                  <div className="pt-4 border-t border-gray-100">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                      Development Quick Login
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {DEV_ACCOUNTS.map(acc => (
+                        <button
+                          key={acc.role}
+                          type="button"
+                          onClick={() => handleQuickLogin(acc.email, acc.role)}
+                          disabled={loading}
+                          className="text-left px-3 py-2 rounded-xl border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 transition-colors group"
+                        >
+                          <p className="text-xs font-semibold text-gray-700 group-hover:text-emerald-700">{acc.label}</p>
+                          <p className="text-[10px] text-gray-400 truncate">{acc.email}</p>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </form>
             )}
           </div>

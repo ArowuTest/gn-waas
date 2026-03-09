@@ -22,12 +22,12 @@ interface GapRow {
   account_number: string | null;
   customer_name: string | null;
   anomaly_type: string;
-  variance_amount_ghs: number;
-  gra_compliance_status: string;
+  confirmed_loss_ghs: number;
+  gra_status: string;
   gra_sdc_id: string | null;
   created_at: string;
   recovery_id: string | null;
-  recovered_amount_ghs: number | null;
+  recovered_ghs: number | null;
   success_fee_ghs: number | null;
   recovery_status: string | null;
   confirmed_at: string | null;
@@ -232,18 +232,18 @@ export default function GapTrackingPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-red-600">
-                      {fmt(gap.variance_amount_ghs)}
+                      {fmt(gap.confirmed_loss_ghs)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${graStatusBadge(gap.gra_compliance_status)}`}>
-                        {gap.gra_compliance_status}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${graStatusBadge(gap.gra_status)}`}>
+                        {gap.gra_status}
                       </span>
                       {gap.gra_sdc_id && (
                         <div className="text-xs text-gray-400 mt-0.5 font-mono">{gap.gra_sdc_id.slice(0, 16)}…</div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-green-600">
-                      {gap.recovered_amount_ghs != null ? fmt(gap.recovered_amount_ghs) : '—'}
+                      {gap.recovered_ghs != null ? fmt(gap.recovered_ghs) : '—'}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {gap.recovery_status ? (
