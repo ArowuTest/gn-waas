@@ -52,7 +52,7 @@ func NewOfflineSyncHandler(db *pgxpool.Pool, logger *zap.Logger) *OfflineSyncHan
 
 // ── PULL: GET /api/v1/sync/pull ───────────────────────────────────────────────
 // Returns all data the field officer needs for offline work:
-//   - Assigned field jobs (pending/in-progress)
+//   - Assigned field jobs (active/non-terminal statuses)
 //   - Account data for those jobs
 //   - Config (GPS fence radius, thresholds)
 //   - Any server-side updates since last_sync
@@ -83,25 +83,46 @@ func (h *OfflineSyncHandler) Pull(c *fiber.Ctx) error {
 		`, userID, deviceID)
 	}
 
-	// 1. Fetch assigned field jobs
+	// 1. Fetch assigned field jobs.
+	//
+	// BUG-SYNC-01 fixes applied here:
+	//   - fj.assigned_officer_id (was: fj.assigned_to — column does not exist)
+	//   - wa.account_holder_name (was: wa.customer_name — column does not exist)
+	//   - wa.meter_serial        (was: wa.meter_serial_number — column does not exist)
+	//   - fj.gps_fence_radius_m  (was: wa.gps_fence_radius_m — wrong table;
+	//                             gps_fence_radius_m lives on field_jobs, not water_accounts)
+	//   - wa.calibration_factor  (now exists via migration 036)
+	//   - fj.job_type            (now exists via migration 036)
+	//   - fj.scheduled_date      (now exists via migration 036)
+	//   - fj.instructions        (now exists via migration 036)
+	//
+	// BUG-ENUM-01 fix:
+	//   - Active statuses corrected to valid field_job_status enum values.
+	//     'PENDING' and 'IN_PROGRESS' are NOT in the enum.
+	//     Valid non-terminal statuses: QUEUED, ASSIGNED, DISPATCHED, EN_ROUTE, ON_SITE
 	jobRows, err := h.db.Query(c.Context(), `
 		SELECT
-			fj.id, fj.job_reference, fj.job_type, fj.status,
+			fj.id, fj.job_reference,
+			COALESCE(fj.job_type, 'METER_READING')  AS job_type,
+			fj.status,
 			fj.account_id, fj.district_id,
-			fj.scheduled_date, fj.priority, fj.instructions,
-			wa.gwl_account_number, wa.customer_name,
+			fj.scheduled_date, fj.priority,
+			COALESCE(fj.instructions, '')            AS instructions,
+			wa.gwl_account_number,
+			wa.account_holder_name                   AS customer_name,
 			wa.address_line1, wa.address_line2,
 			wa.gps_latitude, wa.gps_longitude,
-			wa.gps_fence_radius_m,
-			wa.meter_serial_number, wa.calibration_factor,
+			fj.gps_fence_radius_m,
+			wa.meter_serial                          AS meter_serial_number,
+			wa.calibration_factor,
 			d.district_name, d.district_code
 		FROM field_jobs fj
 		JOIN water_accounts wa ON wa.id = fj.account_id
 		JOIN districts d ON d.id = fj.district_id
-		WHERE fj.assigned_to = $1
-		  AND fj.status IN ('PENDING', 'IN_PROGRESS')
-		  AND (fj.updated_at >= $2 OR fj.status = 'PENDING')
-		ORDER BY fj.priority DESC, fj.scheduled_date ASC
+		WHERE fj.assigned_officer_id = $1
+		  AND fj.status IN ('QUEUED', 'ASSIGNED', 'DISPATCHED', 'EN_ROUTE', 'ON_SITE')
+		  AND (fj.updated_at >= $2 OR fj.status IN ('QUEUED', 'ASSIGNED'))
+		ORDER BY fj.priority DESC, COALESCE(fj.scheduled_date, fj.created_at::date) ASC
 		LIMIT 100
 	`, userID, lastSync)
 	if err != nil {
@@ -118,7 +139,7 @@ func (h *OfflineSyncHandler) Pull(c *fiber.Ctx) error {
 		AccountID        string   `json:"account_id"`
 		DistrictID       string   `json:"district_id"`
 		ScheduledDate    string   `json:"scheduled_date"`
-		Priority         string   `json:"priority"`
+		Priority         int      `json:"priority"`
 		Instructions     string   `json:"instructions"`
 		AccountNumber    string   `json:"account_number"`
 		CustomerName     string   `json:"customer_name"`
@@ -137,7 +158,7 @@ func (h *OfflineSyncHandler) Pull(c *fiber.Ctx) error {
 	for jobRows.Next() {
 		var j jobPayload
 		var jobID, accountID, districtID uuid.UUID
-		var scheduledDate time.Time
+		var scheduledDate *time.Time
 		var fenceRadius *float64
 		var calibFactor *float64
 
@@ -151,12 +172,15 @@ func (h *OfflineSyncHandler) Pull(c *fiber.Ctx) error {
 			&j.MeterSerial, &calibFactor,
 			&j.DistrictName, &j.DistrictCode,
 		); err != nil {
+			h.logger.Warn("Pull: failed to scan job row", zap.Error(err))
 			continue
 		}
 		j.ID = jobID.String()
 		j.AccountID = accountID.String()
 		j.DistrictID = districtID.String()
-		j.ScheduledDate = scheduledDate.Format("2006-01-02")
+		if scheduledDate != nil {
+			j.ScheduledDate = scheduledDate.Format("2006-01-02")
+		}
 		if fenceRadius != nil {
 			j.GPSFenceRadiusM = *fenceRadius
 		} else {
@@ -221,13 +245,13 @@ func (h *OfflineSyncHandler) Pull(c *fiber.Ctx) error {
 	`, userID).Scan(&pendingCount)
 
 	return c.JSON(fiber.Map{
-		"sync_timestamp":   time.Now().UTC().Format(time.RFC3339),
-		"jobs":             jobs,
-		"jobs_count":       len(jobs),
-		"config":           config,
-		"seasonal":         seasonalAdj,
-		"pending_actions":  pendingCount,
-		"last_sync":        lastSync.Format(time.RFC3339),
+		"sync_timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"jobs":            jobs,
+		"jobs_count":      len(jobs),
+		"config":          config,
+		"seasonal":        seasonalAdj,
+		"pending_actions": pendingCount,
+		"last_sync":       lastSync.Format(time.RFC3339),
 	})
 }
 
@@ -331,11 +355,11 @@ func (h *OfflineSyncHandler) Push(c *fiber.Ctx) error {
 	)
 
 	return c.JSON(fiber.Map{
-		"batch_id":    batchID.String(),
-		"total":       len(req.Actions),
-		"applied":     applied,
-		"results":     results,
-		"synced_at":   time.Now().UTC().Format(time.RFC3339),
+		"batch_id":  batchID.String(),
+		"total":     len(req.Actions),
+		"applied":   applied,
+		"results":   results,
+		"synced_at": time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
@@ -369,16 +393,17 @@ func (h *OfflineSyncHandler) applyJobUpdate(
 	payload map[string]interface{},
 	clientTS time.Time,
 ) (string, string) {
-	// Check job belongs to this user
-	var assignedTo uuid.UUID
+	// BUG-SYNC-02 fix: assigned_to → assigned_officer_id
+	// field_jobs has no 'assigned_to' column; the correct column is 'assigned_officer_id'.
+	var assignedOfficerID uuid.UUID
 	var serverUpdatedAt time.Time
 	err := h.db.QueryRow(c.Context(),
-		`SELECT assigned_to, updated_at FROM field_jobs WHERE id = $1`, jobID,
-	).Scan(&assignedTo, &serverUpdatedAt)
+		`SELECT assigned_officer_id, updated_at FROM field_jobs WHERE id = $1`, jobID,
+	).Scan(&assignedOfficerID, &serverUpdatedAt)
 	if err != nil {
 		return "REJECTED", "job not found"
 	}
-	if assignedTo != userID {
+	if assignedOfficerID != userID {
 		return "REJECTED", "job not assigned to this user"
 	}
 
@@ -396,7 +421,8 @@ func (h *OfflineSyncHandler) applyJobUpdate(
 		notes, _ := payload["notes"].(string)
 		_, err = h.db.Exec(c.Context(), `
 			UPDATE field_jobs SET
-				status = $1, notes = COALESCE($2, notes),
+				status     = $1::field_job_status,
+				notes      = COALESCE(NULLIF($2, ''), notes),
 				updated_at = NOW()
 			WHERE id = $3
 		`, status, notes, jobID)
@@ -426,7 +452,6 @@ func (h *OfflineSyncHandler) applyGPSConfirm(
 			gps_longitude       = $2,
 			gps_source          = 'FIELD_CONFIRMED'::gps_source_type,
 			gps_geocode_quality = 99.0,
-			gps_fence_radius_m  = 5.0,
 			gps_confirmed_at    = NOW(),
 			gps_confirmed_by    = $3,
 			updated_at          = NOW()
@@ -454,7 +479,8 @@ func (h *OfflineSyncHandler) applyMeterReading(
 		return "REJECTED", "reading_m3 must be positive"
 	}
 
-	// Apply calibration factor
+	// BUG-SYNC-03 fix: calibration_factor now exists on water_accounts (migration 036).
+	// Default 1.0 is safe if the row is not found (no calibration applied).
 	var calibFactor float64 = 1.0
 	h.db.QueryRow(c.Context(),
 		`SELECT calibration_factor FROM water_accounts WHERE id = $1`, accountID,
@@ -462,19 +488,40 @@ func (h *OfflineSyncHandler) applyMeterReading(
 
 	adjustedReading := reading * calibFactor
 
+	// BUG-SYNC-03 fixes applied to the INSERT:
+	//   - adjusted_reading_m3        now exists (migration 036)
+	//   - calibration_factor_applied now exists (migration 036)
+	//   - ocr_reading_m3             now exists (migration 036)
+	//   - reader_id                  (was: read_by — column does not exist;
+	//                                 meter_readings uses reader_id for the UUID FK)
+	//   - reading_date               (was: read_at — column does not exist;
+	//                                 meter_readings uses reading_date DATE;
+	//                                 clientTS is truncated to date for the unique key)
+	//   - ON CONFLICT (account_id, reading_date)
+	//                                (was: ON CONFLICT (account_id, read_at) — wrong;
+	//                                 the unique constraint is on reading_date, not read_at)
+	readingDate := clientTS.Truncate(24 * time.Hour)
 	_, err := h.db.Exec(c.Context(), `
 		INSERT INTO meter_readings (
-			account_id, reading_m3, adjusted_reading_m3,
-			calibration_factor_applied, photo_url,
-			ocr_reading_m3, ocr_confidence,
-			read_by, read_at, read_method
+			account_id, reading_date, reading_m3,
+			adjusted_reading_m3, calibration_factor_applied,
+			photo_url, ocr_reading_m3, ocr_confidence,
+			reader_id, read_method
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'FIELD_OFFICER')
-		ON CONFLICT (account_id, read_at) DO NOTHING
+		ON CONFLICT (account_id, reading_date) DO UPDATE SET
+			reading_m3                  = EXCLUDED.reading_m3,
+			adjusted_reading_m3         = EXCLUDED.adjusted_reading_m3,
+			calibration_factor_applied  = EXCLUDED.calibration_factor_applied,
+			photo_url                   = EXCLUDED.photo_url,
+			ocr_reading_m3              = EXCLUDED.ocr_reading_m3,
+			ocr_confidence              = EXCLUDED.ocr_confidence,
+			reader_id                   = EXCLUDED.reader_id,
+			read_method                 = EXCLUDED.read_method
 	`,
-		accountID, reading, adjustedReading,
-		calibFactor, photoURL,
-		ocrReading, ocrConfidence,
-		userID, clientTS,
+		accountID, readingDate, reading,
+		adjustedReading, calibFactor,
+		photoURL, ocrReading, ocrConfidence,
+		userID,
 	)
 	if err != nil {
 		return "REJECTED", "failed to save reading: " + err.Error()
@@ -502,10 +549,10 @@ func (h *OfflineSyncHandler) applyAnomalyReport(
 
 	_, err := h.db.Exec(c.Context(), `
 		INSERT INTO anomaly_flags (
-			account_id, district_id, anomaly_type, severity,
-			description, detected_at, reported_by, status
-		) VALUES ($1,$2,$3,$4,$5,NOW(),$6,'OPEN')
-	`, accountID, districtID, anomalyType, severity, description, userID)
+			account_id, district_id, anomaly_type, alert_level,
+			description, created_at
+		) VALUES ($1,$2,$3::anomaly_type,$4::alert_level,$5,NOW())
+	`, accountID, districtID, anomalyType, severity, description)
 	if err != nil {
 		return "REJECTED", "failed to save anomaly: " + err.Error()
 	}
