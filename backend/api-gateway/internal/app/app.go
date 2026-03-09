@@ -209,36 +209,52 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	var authMW fiber.Handler
 	if cfg.Server.DevMode {
 		logger.Warn("DEVELOPMENT MODE: JWT validation bypassed — DO NOT USE IN PRODUCTION")
-		devMW := middleware.DevAuthMiddleware(logger)
-		// BUG-V30-04 fix: DevAuthMiddleware sets rls_district_id to the zero UUID for all
-		// roles, which causes district-scoped RLS policies to return empty results for
-		// non-admin roles (GWL_MANAGER, FIELD_SUPERVISOR, FIELD_OFFICER, GWL_SUPERVISOR).
-		// This wrapper runs after DevAuthMiddleware and replaces the zero UUID with the
-		// first active district from the database for district-scoped roles.
+		// BUG-V30-04 fix: DevAuthMiddleware calls c.Next() internally. Wrapping it and
+		// calling c.Next() again causes a double-advance of the Fiber middleware chain,
+		// resulting in 404 for all authenticated routes. Fix: inline the dev auth setup
+		// directly in a single middleware that calls c.Next() exactly once.
 		authMW = func(c *fiber.Ctx) error {
-			if err := devMW(c); err != nil {
-				return err
-			}
-			// Admin roles bypass district filtering — zero UUID is correct for them.
 			devRole := c.Get("X-Dev-Role", "SUPER_ADMIN")
+			devEmail := "dev-" + strings.ToLower(devRole) + "@gnwaas.gov.gh"
+			devName := "Dev User (" + devRole + ")"
+
+			c.Locals("user_id", "a0000001-0000-0000-0000-000000000001")
+			c.Locals("user_email", devEmail)
+			c.Locals("user_name", devName)
+			c.Locals("user_roles", []string{devRole})
+			c.Locals("claims", &middleware.Claims{
+				Sub:   "a0000001-0000-0000-0000-000000000001",
+				Email: devEmail,
+				Name:  devName,
+				RealmAccess: middleware.RealmAccess{
+					Roles: []string{devRole},
+				},
+			})
+
+			// Set RLS locals
+			c.Locals("rls_user_role", devRole)
+			c.Locals("rls_user_id", "a0000001-0000-0000-0000-000000000001")
+
+			// BUG-V30-04: For district-scoped roles, replace zero UUID with a real district.
 			adminRoles := map[string]bool{
 				"SUPER_ADMIN":  true,
 				"SYSTEM_ADMIN": true,
 				"MOF_AUDITOR":  true,
 			}
 			if adminRoles[devRole] {
-				return c.Next()
+				c.Locals("rls_district_id", "00000000-0000-0000-0000-000000000000")
+			} else {
+				var realDistrictID string
+				err := db.QueryRow(c.Context(),
+					"SELECT id::text FROM districts WHERE is_active = true ORDER BY district_name LIMIT 1",
+				).Scan(&realDistrictID)
+				if err == nil && realDistrictID != "" {
+					c.Locals("rls_district_id", realDistrictID)
+				} else {
+					c.Locals("rls_district_id", "00000000-0000-0000-0000-000000000000")
+				}
 			}
-			// For district-scoped roles, look up the first active district.
-			var realDistrictID string
-			err := db.QueryRow(c.Context(),
-				"SELECT id::text FROM districts WHERE is_active = true ORDER BY district_name LIMIT 1",
-			).Scan(&realDistrictID)
-			if err == nil && realDistrictID != "" {
-				c.Locals("rls_district_id", realDistrictID)
-			}
-			// If lookup fails (empty DB), keep the zero UUID — queries return empty results
-			// which is safe and expected on a fresh installation.
+
 			return c.Next()
 		}
 	} else {
@@ -846,7 +862,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 				d.district_name,
 				ae.account_id,
 				wa.gwl_account_number,
-				wa.customer_name,
+				wa.account_holder_name,
 				COALESCE(af.anomaly_type::text, 'UNKNOWN') AS anomaly_type,
 				ae.confirmed_loss_ghs,
 				ae.gra_status::text,

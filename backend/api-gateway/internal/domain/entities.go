@@ -123,7 +123,7 @@ type District struct {
 	TotalConnections    int       `db:"total_connections" json:"total_connections"`
 	SupplyStatus        string    `db:"supply_status" json:"supply_status"`
 	ZoneType            string    `db:"zone_type" json:"zone_type"`
-	GeographicZone      string    `db:"geographic_zone" json:"geographic_zone"`
+	GeographicZone      *string   `db:"geographic_zone" json:"geographic_zone,omitempty"`
 	LossRatioPct        *float64  `db:"loss_ratio_pct" json:"loss_ratio_pct,omitempty"`
 	DataConfidenceGrade *int      `db:"data_confidence_grade" json:"data_confidence_grade,omitempty"`
 	IsPilotDistrict     bool      `db:"is_pilot_district" json:"is_pilot_district"`

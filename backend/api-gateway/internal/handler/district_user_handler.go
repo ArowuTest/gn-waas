@@ -43,6 +43,7 @@ func (h *DistrictHandler) logAdminAction(ctx context.Context, actorID, entityTyp
 func (h *DistrictHandler) ListDistricts(c *fiber.Ctx) error {
 	districts, err := h.districtRepo.GetAll(c.UserContext())
 	if err != nil {
+		h.logger.Error("GetAll districts failed", zap.Error(err))
 		return response.InternalError(c, "Failed to fetch districts")
 	}
 	return response.OK(c, districts)
