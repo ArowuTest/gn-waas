@@ -673,117 +673,416 @@
     .fs { width: 16px; height: 6px; border-radius: 1px; }
 
     /* ── RESPONSIVE ─────────────────────────────────────────── */
-/* ═══════════════════════════════════════════════════════════
-   RESPONSIVE — TABLET  (≤ 900px)
-   ═══════════════════════════════════════════════════════════ */
-    @media (max-width: 900px) {
-      /* Header */
-      .header-nav { display: none; }
-      .hamburger  { display: flex; }
-
-      /* Hero */
-      .hero-inner { grid-template-columns: 1fr; gap: 32px; }
-      .access-card { display: none; }
-      .hero-text h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); }
-
-      /* Sections */
-      .pillars-grid       { grid-template-columns: 1fr; }
-      .oversight-grid     { grid-template-columns: 1fr; }
-      .portal-dir-grid    { grid-template-columns: 1fr; }
-      .impact-grid        { grid-template-columns: repeat(2, 1fr); }
-      .footer-top         { grid-template-columns: 1fr; gap: 24px; }
+/* ══════════════════════════════════════════════════════════
+       WHISTLEBLOWER / REPORT FRAUD SECTION
+       ══════════════════════════════════════════════════════════ */
+    .wb-section {
+      background: linear-gradient(160deg, #0a1628 0%, #0f1f3d 50%, #0a1628 100%);
+      padding: 80px 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .wb-section::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--gh-red) 33.3%, var(--gh-gold) 33.3% 66.6%, var(--gh-green) 66.6%);
+    }
+    .wb-section::after {
+      content: '';
+      position: absolute;
+      bottom: -120px; right: -120px;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(206,17,38,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .wb-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+    .wb-layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 48px;
+      align-items: start;
     }
 
-/* ═══════════════════════════════════════════════════════════
-   RESPONSIVE — MOBILE  (≤ 640px)
-   ═══════════════════════════════════════════════════════════ */
-    @media (max-width: 640px) {
-      /* Gov bar */
-      .gov-bar { font-size: 0.65rem; padding: 5px 1rem; gap: 6px; flex-wrap: wrap; }
-      .gov-bar a { display: none; }
-
-      /* Header */
-      header { padding: 0 1rem; }
-      .header-inner { height: 56px; }
-      .system-name  { font-size: 1rem; }
-      .system-sub   { display: none; }
-
-      /* Hero */
-      .hero { padding: 40px 1rem 40px; }
-      .hero-text h1 { font-size: 1.75rem; line-height: 1.2; }
-      .hero-text p  { font-size: 0.95rem; }
-      .hero-badges  { flex-wrap: wrap; gap: 8px; }
-      .hero-badge   { font-size: 0.7rem; padding: 4px 10px; }
-      .hero-cta     { flex-direction: column; gap: 10px; }
-      .hero-cta a   { width: 100%; text-align: center; box-sizing: border-box; }
-
-      /* Impact stats */
-      .impact-grid  { grid-template-columns: repeat(2, 1fr); gap: 1px; }
-      .impact-stat  { padding: 20px 12px; }
-      .impact-stat .stat-value { font-size: 1.6rem; }
-
-      /* Sections */
-      .section      { padding: 40px 1rem; }
-      .section-title { font-size: 1.4rem; }
-      .section-sub  { font-size: 0.9rem; }
-
-      /* Pillars */
-      .pillar-card  { padding: 20px; }
-
-      /* Portal directory cards */
-      .portal-dir-grid { grid-template-columns: 1fr; }
-      .portal-dir-card { padding: 20px; }
-      .portal-card-header { flex-direction: column; align-items: flex-start; gap: 8px; }
-      .portal-badge { font-size: 0.65rem; }
-
-      /* Portal directory */
-      .portal-dir-card { padding: 20px; }
-
-      /* Oversight */
-      .oversight-grid { gap: 24px; }
-
-      /* Footer */
-      .footer-top   { gap: 20px; }
-      .footer-bottom { flex-direction: column; gap: 8px; text-align: center; font-size: 0.75rem; }
-      .footer-legal { flex-wrap: wrap; justify-content: center; gap: 8px; }
-
-      /* Whistleblower */
-      .wb-form-grid { grid-template-columns: 1fr; }
-      .wb-header h2 { font-size: 1.4rem; }
-      .wb-tabs      { flex-direction: column; gap: 4px; }
-      .wb-tab       { width: 100%; text-align: center; }
-      .wb-card      { padding: 20px; }
-      .wb-section   { padding: 40px 1rem; }
+    /* ── Left panel: info ── */
+    .wb-info {
+      position: sticky;
+      top: 100px;
     }
-
-/* ═══════════════════════════════════════════════════════════
-   RESPONSIVE — SMALL MOBILE  (≤ 400px)
-   ═══════════════════════════════════════════════════════════ */
-    @media (max-width: 400px) {
-      .impact-grid  { grid-template-columns: 1fr; }
-      .wb-stats     { grid-template-columns: 1fr; }
-      .hero-text h1 { font-size: 1.5rem; }
-      .impact-stat .stat-value { font-size: 1.4rem; }
+    .wb-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(206,17,38,0.12);
+      border: 1px solid rgba(206,17,38,0.3);
+      border-radius: 4px;
+      padding: 5px 12px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #ff6b7a;
+      margin-bottom: 20px;
+    }
+    .wb-eyebrow-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #ff6b7a;
+      animation: wbPulse 2s ease-in-out infinite;
+    }
+    @keyframes wbPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+    .wb-info h2 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: white;
+      line-height: 1.2;
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+    .wb-info h2 span {
+      color: var(--gh-gold);
+    }
+    .wb-info > p {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.7;
+      margin-bottom: 28px;
+    }
+    .wb-shield {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 28px;
+    }
+    .wb-shield-icon {
+      font-size: 1.4rem;
+      flex-shrink: 0;
+    }
+    .wb-shield-text {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.7);
+      line-height: 1.5;
+    }
+    .wb-shield-text strong {
+      color: white;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .wb-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 28px;
     }
     .wb-stat {
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 12px;
-      padding: 1rem;
+      padding: 16px;
       text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .wb-stat:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(252,209,22,0.2);
     }
     .wb-stat-val {
-      font-size: 1.5rem;
+      font-size: 1.6rem;
       font-weight: 800;
-      color: #FCD116;
-      margin-bottom: 2px;
+      color: var(--gh-gold);
+      line-height: 1;
+      margin-bottom: 4px;
     }
     .wb-stat-label {
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.5);
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.45);
       font-weight: 500;
+      line-height: 1.4;
     }
-  
+    .wb-categories {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .wb-cat-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.55);
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .wb-cat-item:last-child { border-bottom: none; }
+    .wb-cat-icon { font-size: 1rem; flex-shrink: 0; }
+
+    /* ── Right panel: form card ── */
+    .wb-form-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+    .wb-tabs {
+      display: flex;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.2);
+    }
+    .wb-tab {
+      flex: 1;
+      padding: 16px 20px;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.45);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: color 0.2s, background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: inherit;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .wb-tab:hover { color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.03); }
+    .wb-tab.active {
+      color: white;
+      border-bottom-color: var(--gh-gold);
+      background: rgba(252,209,22,0.05);
+    }
+    .wb-tab-icon { font-size: 1rem; }
+    .wb-card {
+      padding: 32px;
+    }
+
+    /* ── Form elements ── */
+    .wb-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .wb-field { display: flex; flex-direction: column; gap: 6px; }
+    .wb-field.full { grid-column: 1 / -1; }
+    .wb-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 0.02em;
+    }
+    .wb-optional {
+      font-weight: 400;
+      color: rgba(255,255,255,0.3);
+      font-size: 0.72rem;
+    }
+    .wb-input,
+    .wb-select,
+    .wb-textarea {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: white;
+      font-size: 0.88rem;
+      font-family: inherit;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+      outline: none;
+      width: 100%;
+    }
+    .wb-input::placeholder,
+    .wb-textarea::placeholder { color: rgba(255,255,255,0.25); }
+    .wb-input:focus,
+    .wb-select:focus,
+    .wb-textarea:focus {
+      border-color: var(--gh-gold);
+      background: rgba(255,255,255,0.09);
+      box-shadow: 0 0 0 3px rgba(252,209,22,0.1);
+    }
+    .wb-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+      cursor: pointer;
+    }
+    .wb-select option { background: #1e293b; color: white; }
+    .wb-textarea {
+      resize: vertical;
+      min-height: 110px;
+      line-height: 1.6;
+    }
+    .wb-char-count {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.3);
+      text-align: right;
+      margin-top: -2px;
+    }
+    .wb-char-count.ok { color: #4ade80; }
+
+    /* ── Reward notice ── */
+    .wb-reward-notice {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: rgba(252,209,22,0.06);
+      border: 1px solid rgba(252,209,22,0.15);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+    }
+    .wb-reward-notice p {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.6;
+    }
+    .wb-reward-notice strong { color: var(--gh-gold); }
+
+    /* ── Submit button ── */
+    .wb-submit-btn {
+      width: 100%;
+      padding: 14px 24px;
+      background: linear-gradient(135deg, #CE1126 0%, #a50e1e 100%);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      letter-spacing: 0.01em;
+    }
+    .wb-submit-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(206,17,38,0.35);
+    }
+    .wb-submit-btn:active { transform: translateY(0); }
+    .wb-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    /* ── Error / Success states ── */
+    .wb-error {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #fca5a5;
+      font-size: 0.82rem;
+      margin-bottom: 16px;
+    }
+    .wb-success {
+      text-align: center;
+      padding: 16px 0;
+    }
+    .wb-success-icon { font-size: 3rem; margin-bottom: 12px; }
+    .wb-success h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 8px;
+    }
+    .wb-success p {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .wb-ref-box {
+      background: rgba(252,209,22,0.08);
+      border: 1px solid rgba(252,209,22,0.25);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+    .wb-ref-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 6px;
+    }
+    .wb-ref-number {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--gh-gold);
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+    }
+    .wb-success-note {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 20px;
+    }
+    .wb-new-tip-btn {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: white;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .wb-new-tip-btn:hover { background: rgba(255,255,255,0.12); }
+
+    /* ── Status check panel ── */
+    .wb-status-form { display: flex; flex-direction: column; gap: 16px; }
+    .wb-status-result {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .wb-status-result h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: rgba(255,255,255,0.7);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 14px;
+    }
+    .wb-status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.82rem;
+    }
+    .wb-status-row:last-child { border-bottom: none; }
+    .wb-status-key { color: rgba(255,255,255,0.4); }
+    .wb-status-val { color: white; font-weight: 500; }
+    .wb-privacy-note {
+      text-align: center;
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.25);
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+
     /* ── Hamburger + Mobile Nav ─────────────────────────────── */
     .hamburger {
       display: none;
@@ -854,20 +1153,121 @@
       transition: background 0.15s;
     }
     .mobile-nav-panel a:hover { background: #f0faf5; color: var(--gh-green); }
-    .mobile-nav-panel .mobile-nav-divider {
+    .mobile-nav-divider {
       height: 1px;
       background: #e5e7eb;
       margin: 8px 0;
     }
-    .mobile-nav-panel .mobile-nav-cta {
+    .mobile-nav-cta {
       margin-top: 12px;
-      background: var(--gh-green);
+      background: var(--gh-green) !important;
       color: white !important;
       text-align: center;
       border-radius: 8px;
-      font-weight: 600;
+      font-weight: 600 !important;
     }
-    .mobile-nav-panel .mobile-nav-cta:hover { background: #005230 !important; }
+    .mobile-nav-cta:hover { background: #005230 !important; }
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — TABLET  (≤ 900px)
+   ═══════════════════════════════════════════════════════════ */
+    @media (max-width: 900px) {
+      /* Header */
+      .header-nav { display: none; }
+      .hamburger  { display: flex; }
+
+      /* Hero */
+      .hero-inner { grid-template-columns: 1fr; gap: 32px; }
+      .access-card { display: none; }
+      .hero-text h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); }
+
+      /* Sections */
+      .pillars-grid       { grid-template-columns: 1fr; }
+      .oversight-grid     { grid-template-columns: 1fr; }
+      .portal-dir-grid    { grid-template-columns: 1fr; }
+      .impact-grid        { grid-template-columns: repeat(2, 1fr); }
+      .footer-top         { grid-template-columns: 1fr; gap: 24px; }
+    }
+
+      /* Whistleblower */
+      .wb-layout    { grid-template-columns: 1fr; gap: 32px; }
+      .wb-info      { position: static; }
+      .wb-categories { display: none; }
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE  (≤ 640px)
+   ═══════════════════════════════════════════════════════════ */
+    @media (max-width: 640px) {
+      /* Gov bar */
+      .gov-bar { font-size: 0.65rem; padding: 5px 1rem; gap: 6px; flex-wrap: wrap; }
+      .gov-bar a { display: none; }
+
+      /* Header */
+      header { padding: 0 1rem; }
+      .header-inner { height: 56px; }
+      .system-name  { font-size: 1rem; }
+      .system-sub   { display: none; }
+
+      /* Hero */
+      .hero { padding: 40px 1rem 40px; }
+      .hero-text h1 { font-size: 1.75rem; line-height: 1.2; }
+      .hero-text p  { font-size: 0.95rem; }
+      .hero-badges  { flex-wrap: wrap; gap: 8px; }
+      .hero-badge   { font-size: 0.7rem; padding: 4px 10px; }
+      .hero-cta     { flex-direction: column; gap: 10px; }
+      .hero-cta a   { width: 100%; text-align: center; box-sizing: border-box; }
+
+      /* Impact stats */
+      .impact-grid  { grid-template-columns: repeat(2, 1fr); gap: 1px; }
+      .impact-stat  { padding: 20px 12px; }
+      .impact-stat .stat-value { font-size: 1.6rem; }
+
+      /* Sections */
+      .section      { padding: 40px 1rem; }
+      .section-title { font-size: 1.4rem; }
+      .section-sub  { font-size: 0.9rem; }
+
+      /* Pillars */
+      .pillar-card  { padding: 20px; }
+
+      /* Portal directory cards */
+      .portal-dir-grid { grid-template-columns: 1fr; }
+      .portal-dir-card { padding: 20px; }
+      .portal-card-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .portal-badge { font-size: 0.65rem; }
+
+      /* Portal directory */
+      .portal-dir-card { padding: 20px; }
+
+      /* Oversight */
+      .oversight-grid { gap: 24px; }
+
+      /* Footer */
+      .footer-top   { gap: 20px; }
+      .footer-bottom { flex-direction: column; gap: 8px; text-align: center; font-size: 0.75rem; }
+      .footer-legal { flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+      /* Whistleblower */
+      .wb-section   { padding: 48px 1rem; }
+      .wb-layout    { grid-template-columns: 1fr; gap: 32px; }
+      .wb-info      { position: static; }
+      .wb-info h2   { font-size: 1.6rem; }
+      .wb-stats     { grid-template-columns: repeat(2, 1fr); }
+      .wb-form-grid { grid-template-columns: 1fr; }
+      .wb-card      { padding: 20px; }
+      .wb-categories { display: none; }
+    }
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — SMALL MOBILE  (≤ 400px)
+   ═══════════════════════════════════════════════════════════ */
+    @media (max-width: 400px) {
+      .impact-grid  { grid-template-columns: 1fr; }
+      .wb-stats     { grid-template-columns: 1fr 1fr; }
+      .wb-card      { padding: 16px; }
+      .hero-text h1 { font-size: 1.5rem; }
+      .impact-stat .stat-value { font-size: 1.4rem; }
+    }
 
     </style>
 </head>
@@ -1261,191 +1661,209 @@
 <!-- Whistleblower / Anonymous Tip Section -->
 <section class="wb-section" id="report-fraud">
   <div class="wb-inner">
+    <div class="wb-layout">
 
-    <!-- Header -->
-    <div class="wb-header">
-      <div class="wb-badge">
-        <span class="wb-dot"></span>
-        Confidential &amp; Anonymous
-      </div>
-      <h2>Report Water <span>Fraud &amp; Corruption</span></h2>
-      <p>
-        Know about ghost accounts, meter tampering, billing manipulation, or staff collusion?
-        Submit an anonymous tip. Your identity is never stored — only a privacy hash of your connection.
-        Confirmed tips earn a <strong style="color:#FCD116">3% reward</strong> of the recovered amount.
-      </p>
-      <div class="wb-confidential">
-        🔒 &nbsp; Your identity is fully protected — no login required
-      </div>
-    </div>
-
-    <!-- Stats strip -->
-    <div class="wb-stats">
-      <div class="wb-stat">
-        <div class="wb-stat-val">100%</div>
-        <div class="wb-stat-label">Anonymous — no account needed</div>
-      </div>
-      <div class="wb-stat">
-        <div class="wb-stat-val">3%</div>
-        <div class="wb-stat-label">Reward of recovered amount</div>
-      </div>
-      <div class="wb-stat">
-        <div class="wb-stat-val">8</div>
-        <div class="wb-stat-label">Fraud categories covered</div>
-      </div>
-    </div>
-
-    <!-- Tabs -->
-    <div class="wb-tabs">
-      <button class="wb-tab active" id="wb-tab-submit" onclick="wbShowTab('submit')">
-        📝 &nbsp; Submit a Tip
-      </button>
-      <button class="wb-tab" id="wb-tab-status" onclick="wbShowTab('status')">
-        🔍 &nbsp; Check Tip Status
-      </button>
-    </div>
-
-    <!-- Submit Tip Panel -->
-    <div class="wb-card" id="wb-panel-submit">
-
-      <!-- Success state (hidden by default) -->
-      <div class="wb-success" id="wb-success" style="display:none">
-        <div class="wb-success-icon">✅</div>
-        <h3>Tip Received — Thank You</h3>
-        <p>Your report has been securely submitted to the GN-WAAS audit team.<br>Save your reference number to track the investigation.</p>
-        <div class="wb-ref-box">
-          <div class="wb-ref-label">Your Reference Number</div>
-          <div class="wb-ref-number" id="wb-ref-display">TIP-2026-000000</div>
+      <!-- ── LEFT: Info Panel ─────────────────────────────── -->
+      <div class="wb-info">
+        <div class="wb-eyebrow">
+          <span class="wb-eyebrow-dot"></span>
+          Confidential &amp; Anonymous
         </div>
-        <p class="wb-success-note" id="wb-reward-note"></p>
-        <button class="wb-new-tip-btn" onclick="wbResetForm()">Submit Another Tip</button>
-      </div>
-
-      <!-- Form (shown by default) -->
-      <form id="wb-form" onsubmit="wbSubmit(event)">
-        <div class="wb-form-grid">
-
-          <!-- Category -->
-          <div class="wb-field">
-            <label class="wb-label" for="wb-category">Fraud Category</label>
-            <select class="wb-select" id="wb-category" required>
-              <option value="">— Select category —</option>
-              <option value="GHOST_ACCOUNT">👻 Ghost Account</option>
-              <option value="PHANTOM_METER">📟 Phantom Meter</option>
-              <option value="BILLING_MANIPULATION">🧾 Billing Manipulation</option>
-              <option value="METER_TAMPERING">🔧 Meter Tampering</option>
-              <option value="COLLUSION">🤝 Staff Collusion / Bribery</option>
-              <option value="ILLEGAL_CONNECTION">⚡ Illegal Connection</option>
-              <option value="FIELD_OFFICER_FRAUD">👷 Field Officer Fraud</option>
-              <option value="OTHER">📋 Other</option>
-            </select>
-          </div>
-
-          <!-- Language -->
-          <div class="wb-field">
-            <label class="wb-label" for="wb-language">Language <span class="wb-optional">(optional)</span></label>
-            <select class="wb-select" id="wb-language">
-              <option value="en">🇬🇧 English</option>
-              <option value="tw">🇬🇭 Twi (Akan)</option>
-              <option value="ga">🇬🇭 Ga</option>
-              <option value="ee">🇬🇭 Ewe</option>
-              <option value="ha">🇬🇭 Hausa</option>
-            </select>
-          </div>
-
-          <!-- GWL Account Number -->
-          <div class="wb-field">
-            <label class="wb-label" for="wb-account">GWL Account Number <span class="wb-optional">(optional)</span></label>
-            <input class="wb-input" type="text" id="wb-account"
-              placeholder="e.g. ACC-00847" maxlength="50" />
-          </div>
-
-          <!-- District -->
-          <div class="wb-field">
-            <label class="wb-label" for="wb-district">District <span class="wb-optional">(optional)</span></label>
-            <select class="wb-select" id="wb-district">
-              <option value="">— Select district —</option>
-            </select>
-          </div>
-
-          <!-- Description -->
-          <div class="wb-field full">
-            <label class="wb-label" for="wb-description">
-              Description <span style="color:#ef4444;margin-left:2px">*</span>
-            </label>
-            <textarea class="wb-textarea" id="wb-description" required
-              placeholder="Describe what you observed. Include dates, locations, names (if known), and any other relevant details. Minimum 20 characters."
-              oninput="wbUpdateCharCount(this)"></textarea>
-            <div class="wb-char-count" id="wb-char-count">0 / 20 minimum</div>
-          </div>
-
-          <!-- Contact Phone -->
-          <div class="wb-field">
-            <label class="wb-label" for="wb-phone">
-              Contact Phone <span class="wb-optional">(optional — for reward)</span>
-            </label>
-            <input class="wb-input" type="tel" id="wb-phone"
-              placeholder="+233 XX XXX XXXX" maxlength="20"
-              oninput="wbToggleContactMethod()" />
-          </div>
-
-          <!-- Contact Method -->
-          <div class="wb-field" id="wb-contact-method-field" style="display:none">
-            <label class="wb-label" for="wb-contact-method">Preferred Contact Method</label>
-            <select class="wb-select" id="wb-contact-method">
-              <option value="SMS">📱 SMS</option>
-              <option value="PHONE">📞 Phone Call</option>
-              <option value="NONE">🚫 Do not contact me</option>
-            </select>
-          </div>
-
-        </div>
-
-        <!-- Reward notice -->
-        <div class="wb-reward-notice" style="margin-top:1rem">
-          <span style="font-size:1.2rem;flex-shrink:0">💰</span>
-          <p>
-            <strong>Earn a reward:</strong> If your tip leads to confirmed fraud recovery,
-            you are eligible for <strong>3% of the recovered amount</strong> (paid via Mobile Money).
-            Providing a contact phone is optional but required to receive a reward.
-          </p>
-        </div>
-
-        <!-- Error display -->
-        <div class="wb-error" id="wb-error" style="display:none"></div>
-
-        <button type="submit" class="wb-submit-btn" id="wb-submit-btn">
-          🔒 &nbsp; Submit Anonymous Tip
-        </button>
-
-        <p style="text-align:center;font-size:0.72rem;color:rgba(255,255,255,0.3);margin-top:0.75rem">
-          Your IP address is never stored. Only a one-way cryptographic hash is recorded for abuse prevention.
-          This system is operated under the Data Protection Act, 2012 (Act 843).
+        <h2>Report Water<br><span>Fraud &amp; Corruption</span></h2>
+        <p>
+          Know about ghost accounts, meter tampering, billing manipulation, or staff collusion?
+          Submit an anonymous tip to the GN-WAAS audit team. Your identity is never stored.
         </p>
-      </form>
-    </div>
 
-    <!-- Check Status Panel (hidden by default) -->
-    <div class="wb-card" id="wb-panel-status" style="display:none">
-      <div class="wb-status-form">
-        <div class="wb-field">
-          <label class="wb-label" for="wb-ref-input">Your Tip Reference Number</label>
-          <input class="wb-input" type="text" id="wb-ref-input"
-            placeholder="e.g. TIP-2026-123456" maxlength="20"
-            style="font-size:1rem;font-weight:600;letter-spacing:0.05em" />
+        <div class="wb-shield">
+          <div class="wb-shield-icon">🔒</div>
+          <div class="wb-shield-text">
+            <strong>Your identity is fully protected</strong>
+            No login required. Only a one-way cryptographic hash of your connection is recorded for abuse prevention, under Act 843.
+          </div>
         </div>
-        <div class="wb-error" id="wb-status-error" style="display:none"></div>
-        <button class="wb-submit-btn" id="wb-check-btn" onclick="wbCheckStatus()">
-          🔍 &nbsp; Check Tip Status
-        </button>
-        <div id="wb-status-result" style="display:none" class="wb-status-result">
-          <h4>Tip Investigation Status</h4>
-          <div id="wb-status-rows"></div>
+
+        <div class="wb-stats">
+          <div class="wb-stat">
+            <div class="wb-stat-val">100%</div>
+            <div class="wb-stat-label">Anonymous — no account needed</div>
+          </div>
+          <div class="wb-stat">
+            <div class="wb-stat-val">3%</div>
+            <div class="wb-stat-label">Reward of recovered amount</div>
+          </div>
+          <div class="wb-stat">
+            <div class="wb-stat-val">8</div>
+            <div class="wb-stat-label">Fraud categories covered</div>
+          </div>
+          <div class="wb-stat">
+            <div class="wb-stat-val">GHS</div>
+            <div class="wb-stat-label">Mobile Money reward payout</div>
+          </div>
+        </div>
+
+        <div class="wb-categories">
+          <div class="wb-cat-item"><span class="wb-cat-icon">👻</span> Ghost Account / Phantom Billing</div>
+          <div class="wb-cat-item"><span class="wb-cat-icon">📟</span> Phantom Meter</div>
+          <div class="wb-cat-item"><span class="wb-cat-icon">🧾</span> Billing Manipulation</div>
+          <div class="wb-cat-item"><span class="wb-cat-icon">🔧</span> Meter Tampering</div>
+          <div class="wb-cat-item"><span class="wb-cat-icon">🤝</span> Staff Collusion / Bribery</div>
+          <div class="wb-cat-item"><span class="wb-cat-icon">⚡</span> Illegal Connection</div>
+          <div class="wb-cat-item"><span class="wb-cat-icon">👷</span> Field Officer Fraud</div>
+          <div class="wb-cat-item"><span class="wb-cat-icon">📋</span> Other</div>
         </div>
       </div>
-    </div>
 
-  </div>
+      <!-- ── RIGHT: Form Card ──────────────────────────────── -->
+      <div class="wb-form-card">
+
+        <!-- Tabs -->
+        <div class="wb-tabs">
+          <button class="wb-tab active" id="wb-tab-submit" onclick="wbShowTab('submit')">
+            <span class="wb-tab-icon">📝</span> Submit a Tip
+          </button>
+          <button class="wb-tab" id="wb-tab-status" onclick="wbShowTab('status')">
+            <span class="wb-tab-icon">🔍</span> Check Tip Status
+          </button>
+        </div>
+
+        <!-- Submit Tip Panel -->
+        <div class="wb-card" id="wb-panel-submit">
+
+          <!-- Success state -->
+          <div class="wb-success" id="wb-success" style="display:none">
+            <div class="wb-success-icon">✅</div>
+            <h3>Tip Received — Thank You</h3>
+            <p>Your report has been securely submitted to the GN-WAAS audit team.<br>Save your reference number to track the investigation.</p>
+            <div class="wb-ref-box">
+              <div class="wb-ref-label">Your Reference Number</div>
+              <div class="wb-ref-number" id="wb-ref-display">TIP-2026-000000</div>
+            </div>
+            <p class="wb-success-note" id="wb-reward-note"></p>
+            <button class="wb-new-tip-btn" onclick="wbResetForm()">Submit Another Tip</button>
+          </div>
+
+          <!-- Form -->
+          <form id="wb-form" onsubmit="wbSubmit(event)">
+            <div class="wb-form-grid">
+
+              <div class="wb-field">
+                <label class="wb-label" for="wb-category">Fraud Category <span style="color:#ef4444">*</span></label>
+                <select class="wb-select" id="wb-category" required>
+                  <option value="">— Select category —</option>
+                  <option value="GHOST_ACCOUNT">👻 Ghost Account</option>
+                  <option value="PHANTOM_METER">📟 Phantom Meter</option>
+                  <option value="BILLING_MANIPULATION">🧾 Billing Manipulation</option>
+                  <option value="METER_TAMPERING">🔧 Meter Tampering</option>
+                  <option value="COLLUSION">🤝 Staff Collusion / Bribery</option>
+                  <option value="ILLEGAL_CONNECTION">⚡ Illegal Connection</option>
+                  <option value="FIELD_OFFICER_FRAUD">👷 Field Officer Fraud</option>
+                  <option value="OTHER">📋 Other</option>
+                </select>
+              </div>
+
+              <div class="wb-field">
+                <label class="wb-label" for="wb-district">District <span class="wb-optional">(optional)</span></label>
+                <select class="wb-select" id="wb-district">
+                  <option value="">— Select district —</option>
+                </select>
+              </div>
+
+              <div class="wb-field">
+                <label class="wb-label" for="wb-account">GWL Account No. <span class="wb-optional">(optional)</span></label>
+                <input class="wb-input" type="text" id="wb-account"
+                  placeholder="e.g. ACC-00847" maxlength="50" />
+              </div>
+
+              <div class="wb-field">
+                <label class="wb-label" for="wb-language">Language <span class="wb-optional">(optional)</span></label>
+                <select class="wb-select" id="wb-language">
+                  <option value="en">🇬🇧 English</option>
+                  <option value="tw">🇬🇭 Twi (Akan)</option>
+                  <option value="ga">🇬🇭 Ga</option>
+                  <option value="ee">🇬🇭 Ewe</option>
+                  <option value="ha">🇬🇭 Hausa</option>
+                </select>
+              </div>
+
+              <div class="wb-field full">
+                <label class="wb-label" for="wb-description">
+                  Description <span style="color:#ef4444">*</span>
+                </label>
+                <textarea class="wb-textarea" id="wb-description" required
+                  placeholder="Describe what you observed. Include dates, locations, names (if known), and any other relevant details. Minimum 20 characters."
+                  oninput="wbUpdateCharCount(this)"></textarea>
+                <div class="wb-char-count" id="wb-char-count">0 / 20 minimum</div>
+              </div>
+
+              <div class="wb-field">
+                <label class="wb-label" for="wb-phone">
+                  Contact Phone <span class="wb-optional">(optional — for reward)</span>
+                </label>
+                <input class="wb-input" type="tel" id="wb-phone"
+                  placeholder="+233 XX XXX XXXX" maxlength="20"
+                  oninput="wbToggleContactMethod()" />
+              </div>
+
+              <div class="wb-field" id="wb-contact-method-field" style="display:none">
+                <label class="wb-label" for="wb-contact-method">Preferred Contact</label>
+                <select class="wb-select" id="wb-contact-method">
+                  <option value="SMS">📱 SMS</option>
+                  <option value="PHONE">📞 Phone Call</option>
+                  <option value="NONE">🚫 Do not contact me</option>
+                </select>
+              </div>
+
+            </div>
+
+            <div class="wb-reward-notice">
+              <span style="font-size:1.3rem;flex-shrink:0">💰</span>
+              <p>
+                <strong>Earn a reward:</strong> Confirmed fraud recovery earns you
+                <strong>3% of the recovered amount</strong> via Mobile Money.
+                Providing a contact phone is optional but required to receive a reward.
+              </p>
+            </div>
+
+            <div class="wb-error" id="wb-error" style="display:none"></div>
+
+            <button type="submit" class="wb-submit-btn" id="wb-submit-btn">
+              🔒 &nbsp; Submit Anonymous Tip
+            </button>
+
+            <p class="wb-privacy-note">
+              Your IP address is never stored. Only a one-way cryptographic hash is recorded for abuse prevention.<br>
+              Operated under the Data Protection Act, 2012 (Act 843).
+            </p>
+          </form>
+        </div>
+
+        <!-- Check Status Panel -->
+        <div class="wb-card" id="wb-panel-status" style="display:none">
+          <div class="wb-status-form">
+            <div class="wb-field">
+              <label class="wb-label" for="wb-ref-input">Your Tip Reference Number</label>
+              <input class="wb-input" type="text" id="wb-ref-input"
+                placeholder="e.g. TIP-2026-123456" maxlength="20"
+                style="font-size:1rem;font-weight:600;letter-spacing:0.05em" />
+            </div>
+            <div class="wb-error" id="wb-status-error" style="display:none"></div>
+            <button class="wb-submit-btn" id="wb-check-btn" onclick="wbCheckStatus()">
+              🔍 &nbsp; Check Tip Status
+            </button>
+            <div id="wb-status-result" style="display:none" class="wb-status-result">
+              <h4>Tip Investigation Status</h4>
+              <div id="wb-status-rows"></div>
+            </div>
+            <p class="wb-privacy-note">
+              Enter the reference number you received when you submitted your tip.
+            </p>
+          </div>
+        </div>
+
+      </div><!-- /.wb-form-card -->
+    </div><!-- /.wb-layout -->
+  </div><!-- /.wb-inner -->
 </section>
 
 
@@ -1754,3 +2172,4 @@
 
 </body>
 </html>
+    
