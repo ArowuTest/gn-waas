@@ -6,7 +6,12 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/privacy-policy",   "destination": "/privacy-policy.html" },
+    { "source": "/terms-of-use",     "destination": "/terms-of-use.html" },
+    { "source": "/data-protection",  "destination": "/data-protection.html" },
+    { "source": "/evat-compliance",  "destination": "/evat-compliance.html" },
+    { "source": "/accessibility",    "destination": "/accessibility.html" },
+    { "source": "/(.*)",             "destination": "/index.html" }
   ],
   "headers": [
     {
