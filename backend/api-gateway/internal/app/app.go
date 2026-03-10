@@ -545,11 +545,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		fieldJobHandler.AssignOfficer,
 	)
 	fieldJobs.Patch("/:id/status",
-		middleware.RequireRoles("SUPER_ADMIN", "FIELD_OFFICER", "FIELD_SUPERVISOR"),
+		middleware.RequireRoles("SUPER_ADMIN", "FIELD_OFFICER", "FIELD_SUPERVISOR", "GRA_OFFICER"),
 		fieldJobHandler.UpdateJobStatus,
 	)
 	fieldJobs.Post("/:id/sos",
-		middleware.RequireRoles("FIELD_OFFICER"),
+		middleware.RequireRoles("FIELD_OFFICER", "GRA_OFFICER"),
 		fieldJobHandler.TriggerSOS,
 	)
 	// Core field-officer workflow: submit completed meter reading evidence.
@@ -562,11 +562,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	//   ADDRESS_INVALID         → FRAUDULENT_ACCOUNT (GWL internal fraud)
 	//   METER_FOUND_OK          → dismiss ADDRESS_UNVERIFIED flag
 	fieldJobs.Patch("/:id/outcome",
-		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR", "SYSTEM_ADMIN"),
+		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR", "SYSTEM_ADMIN", "GRA_OFFICER"),
 		fieldJobHandler.RecordFieldJobOutcome,
 	)
 	fieldJobs.Post("/:id/submit",
-		middleware.RequireRoles("FIELD_OFFICER"),
+		middleware.RequireRoles("FIELD_OFFICER", "GRA_OFFICER"),
 		fieldJobHandler.SubmitJobEvidence,
 	)
 	// FIO-004: Illegal connection reporting — field officers submit evidence

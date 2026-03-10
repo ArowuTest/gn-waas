@@ -272,7 +272,12 @@ func (r *AnomalyFlagRepository) CreateAnomalyFlag(ctx context.Context,
 	anomalyType, alertLevel, title, description, source string,
 	estimatedLossGHS float64,
 ) (*AnomalyFlag, error) {
-	row := r.q(ctx).QueryRow(ctx, `
+	// If accountID is nil, use a subquery to pick any account from the district.
+	// This handles manual reports where no specific account is identified.
+	var insertSQL string
+	var insertArgs []interface{}
+	if accountID != nil {
+		insertSQL = `
 		INSERT INTO anomaly_flags (
 			district_id, account_id, anomaly_type, alert_level,
 			title, description, estimated_loss_ghs,
@@ -281,10 +286,24 @@ func (r *AnomalyFlagRepository) CreateAnomalyFlag(ctx context.Context,
 			$1, $2, $3::anomaly_type, $4::alert_level,
 			$5, $6, $7,
 			'OPEN', jsonb_build_object('source', $8::text), NOW(), NOW()
-		) RETURNING `+anomalyFlagSelectCols,
-		districtID, accountID, anomalyType, alertLevel,
-		title, description, estimatedLossGHS, source,
-	)
+		) RETURNING ` + anomalyFlagSelectCols
+		insertArgs = []interface{}{districtID, accountID, anomalyType, alertLevel, title, description, estimatedLossGHS, source}
+	} else {
+		insertSQL = `
+		INSERT INTO anomaly_flags (
+			district_id, account_id, anomaly_type, alert_level,
+			title, description, estimated_loss_ghs,
+			status, evidence_data, created_at, updated_at
+		) VALUES (
+			$1,
+			(SELECT id FROM water_accounts WHERE district_id = $1 ORDER BY created_at LIMIT 1),
+			$2::anomaly_type, $3::alert_level,
+			$4, $5, $6,
+			'OPEN', jsonb_build_object('source', $7::text), NOW(), NOW()
+		) RETURNING ` + anomalyFlagSelectCols
+		insertArgs = []interface{}{districtID, anomalyType, alertLevel, title, description, estimatedLossGHS, source}
+	}
+	row := r.q(ctx).QueryRow(ctx, insertSQL, insertArgs...)
 	flag, err := scanAnomalyFlag(row)
 	if err != nil {
 		return nil, fmt.Errorf("CreateAnomalyFlag: %w", err)

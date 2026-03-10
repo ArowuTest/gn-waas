@@ -37,9 +37,9 @@ const PORTALS = [
     description: 'Flutter-based offline-first mobile app for GPS-locked meter readings, photo evidence capture and field job completion.',
     icon: Smartphone,
     color: 'orange',
-    url: 'https://github.com/ArowuTest/gn-waas',
-    devLogin: null,
-    badge: 'Flutter',
+    url: 'https://hereby-molecules-curious-some.trycloudflare.com',
+    devLogin: 'Field Officer',
+    badge: 'LIVE',
   },
 ]
 
@@ -112,7 +112,7 @@ export default function PortalAccess() {
                   rel="noopener noreferrer"
                   className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${c.btn}`}
                 >
-                  {portal.devLogin ? 'Open Portal' : 'View on GitHub'}
+                  {'Open Portal'}
                   <ExternalLink className="w-4 h-4" />
                 </a>
               </div>
