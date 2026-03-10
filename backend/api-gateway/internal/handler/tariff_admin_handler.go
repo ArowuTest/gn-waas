@@ -119,7 +119,7 @@ func (h *TariffAdminHandler) ListTariffRates(c *fiber.Ctx) error {
 // date and deactivate the old ones using PATCH /api/v1/admin/tariffs/:id/deactivate.
 func (h *TariffAdminHandler) CreateTariffRate(c *fiber.Ctx) error {
 	type createReq struct {
-		Category         string   `json:"category"`          // RESIDENTIAL | COMMERCIAL | INDUSTRIAL | GOVERNMENT
+		Category         string   `json:"category"`          // RESIDENTIAL | COMMERCIAL | INDUSTRIAL | PUBLIC_GOVT | BOTTLED_WATER
 		TierName         string   `json:"tier_name"`         // e.g. "Tier 1 (0-5 m³)"
 		MinVolumeM3      float64  `json:"min_volume_m3"`
 		MaxVolumeM3      *float64 `json:"max_volume_m3"`     // null = unlimited
@@ -135,8 +135,15 @@ func (h *TariffAdminHandler) CreateTariffRate(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid request body"})
 	}
 
+	validCategories := map[string]bool{
+		"RESIDENTIAL": true, "COMMERCIAL": true, "INDUSTRIAL": true,
+		"PUBLIC_GOVT": true, "BOTTLED_WATER": true,
+	}
 	if req.Category == "" || req.TierName == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "category and tier_name are required"})
+	}
+	if !validCategories[req.Category] {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid category: must be RESIDENTIAL, COMMERCIAL, INDUSTRIAL, PUBLIC_GOVT, or BOTTLED_WATER"})
 	}
 	if req.RatePerM3 <= 0 {
 		return c.Status(400).JSON(fiber.Map{"error": "rate_per_m3 must be positive"})

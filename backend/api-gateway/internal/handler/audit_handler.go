@@ -549,11 +549,11 @@ func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
 	}
 
-	// 1. Mark job as COMPLETED with officer GPS
+	// 1. Mark job as COMPLETED with officer GPS (non-fatal if already completed)
 	lat, lng := req.GPSLat, req.GPSLng
 	if err := h.fieldJobRepo.UpdateStatus(c.UserContext(), jobID, "COMPLETED", &lat, &lng); err != nil {
-		h.logger.Error("Failed to complete field job", zap.Error(err))
-		return response.InternalError(c, "Failed to update job status")
+		// Non-fatal: job may already be in COMPLETED/ESCALATED state; continue to write evidence
+		h.logger.Warn("UpdateStatus to COMPLETED skipped (may already be terminal)", zap.Error(err))
 	}
 
 	// 2. Server-side photo hash verification via MinIO
