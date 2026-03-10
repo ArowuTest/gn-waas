@@ -188,15 +188,15 @@ func (r *GWLCaseRepository) GetCaseSummary(ctx context.Context, districtID *uuid
 
 	query := fmt.Sprintf(`
 		SELECT
-			COUNT(*) FILTER (WHERE af.gwl_status NOT IN ('CORRECTED','CLOSED'))                    AS total_open,
-			COUNT(*) FILTER (WHERE af.alert_level = 'CRITICAL' AND af.gwl_status NOT IN ('CORRECTED','CLOSED')) AS critical_open,
-			COUNT(*) FILTER (WHERE af.gwl_status = 'PENDING_REVIEW')                               AS pending_review,
-			COUNT(*) FILTER (WHERE af.gwl_status = 'FIELD_ASSIGNED')                               AS field_assigned,
+			COUNT(*) FILTER (WHERE COALESCE(af.gwl_status,'PENDING_REVIEW') NOT IN ('CORRECTED','CLOSED'))                    AS total_open,
+			COUNT(*) FILTER (WHERE af.alert_level::text = 'CRITICAL' AND COALESCE(af.gwl_status,'PENDING_REVIEW') NOT IN ('CORRECTED','CLOSED')) AS critical_open,
+			COUNT(*) FILTER (WHERE COALESCE(af.gwl_status,'PENDING_REVIEW') = 'PENDING_REVIEW')                               AS pending_review,
+			COUNT(*) FILTER (WHERE COALESCE(af.gwl_status,'PENDING_REVIEW') = 'FIELD_ASSIGNED')                               AS field_assigned,
 			COUNT(*) FILTER (WHERE af.gwl_resolved_at >= date_trunc('month', NOW()))                AS resolved_this_month,
-			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.gwl_status NOT IN ('CORRECTED','CLOSED')), 0) AS total_loss,
-			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.anomaly_type IN ('BILLING_VARIANCE','PHANTOM_METER','NRW_SPIKE') AND af.gwl_status NOT IN ('CORRECTED','CLOSED')), 0) AS underbilling,
-			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.anomaly_type = 'OVERBILLING' AND af.gwl_status NOT IN ('CORRECTED','CLOSED')), 0) AS overbilling,
-			COUNT(*) FILTER (WHERE af.anomaly_type = 'CATEGORY_MISMATCH' AND af.gwl_status NOT IN ('CORRECTED','CLOSED')) AS misclassified
+			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE COALESCE(af.gwl_status,'PENDING_REVIEW') NOT IN ('CORRECTED','CLOSED')), 0) AS total_loss,
+			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.anomaly_type::text IN ('BILLING_VARIANCE','PHANTOM_METER','NRW_SPIKE') AND COALESCE(af.gwl_status,'PENDING_REVIEW') NOT IN ('CORRECTED','CLOSED')), 0) AS underbilling,
+			COALESCE(SUM(af.estimated_loss_ghs) FILTER (WHERE af.anomaly_type::text = 'OVERBILLING' AND COALESCE(af.gwl_status,'PENDING_REVIEW') NOT IN ('CORRECTED','CLOSED')), 0) AS overbilling,
+			COUNT(*) FILTER (WHERE af.anomaly_type::text = 'CATEGORY_MISMATCH' AND COALESCE(af.gwl_status,'PENDING_REVIEW') NOT IN ('CORRECTED','CLOSED')) AS misclassified
 		FROM anomaly_flags af
 		WHERE %s
 	`, districtFilter)

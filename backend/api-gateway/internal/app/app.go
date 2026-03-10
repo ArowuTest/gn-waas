@@ -574,7 +574,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// Admin/supervisor: list all field jobs with optional status/alert_level/district_id filters.
 	// Used by admin portal FieldJobsPage to display the full job queue.
 	fieldJobs.Get("/",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "GRA_OFFICER"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "GRA_OFFICER", "FIELD_OFFICER", "AUDIT_MANAGER"),
 		fieldJobHandler.ListAllJobs,
 	)
 	// Admin/supervisor: create a new field job dispatch.
