@@ -1051,6 +1051,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// recovery status. This is the "audit trail" for the managed-service model.
 	gapRoles := middleware.RequireRoles(
 		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GWL_EXECUTIVE", "GWL_MANAGER",
+		"AUDIT_MANAGER", "GRA_AUDITOR", "GRA_OFFICER",
 	)
 	gaps := api.Group("/gaps", gapRoles)
 
@@ -1099,13 +1100,13 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 				COUNT(ae.id)                                                    AS total_gaps,
 				COALESCE(SUM(ae.confirmed_loss_ghs), 0)                        AS total_gap_value,
 				COALESCE(SUM(rre.recovered_ghs), 0)                      AS total_recovered,
-				COALESCE(SUM(ae.confirmed_loss_ghs) - SUM(rre.recovered_ghs), 0) AS total_pending,
-				CASE WHEN SUM(ae.confirmed_loss_ghs) > 0
-					THEN ROUND((SUM(rre.recovered_ghs) / SUM(ae.confirmed_loss_ghs)) * 100, 2)
+				COALESCE(SUM(ae.confirmed_loss_ghs), 0) - COALESCE(SUM(rre.recovered_ghs), 0) AS total_pending,
+				CASE WHEN COALESCE(SUM(ae.confirmed_loss_ghs), 0) > 0
+					THEN ROUND((COALESCE(SUM(rre.recovered_ghs), 0) / SUM(ae.confirmed_loss_ghs)) * 100, 2)
 					ELSE 0 END                                                  AS recovery_rate,
 				COALESCE(SUM(rre.success_fee_ghs), 0)                           AS success_fees,
 				COUNT(CASE WHEN ae.gra_status = 'SIGNED' THEN 1 END) AS gra_signed,
-				COUNT(CASE WHEN ae.gra_status = 'PROVISIONAL' THEN 1 END) AS gra_provisional,
+				COUNT(CASE WHEN ae.gra_status = 'RETRYING'    THEN 1 END) AS gra_provisional,
 				COALESCE(AVG(
 					EXTRACT(EPOCH FROM (rre.confirmed_at - ae.created_at)) / 86400
 				), 0)                                                           AS avg_days
