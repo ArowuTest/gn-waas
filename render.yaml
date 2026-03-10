@@ -1,373 +1,114 @@
-# ============================================================
-# GN-WAAS Render Blueprint (render.yaml)
-# ============================================================
-# Deploys the full GN-WAAS backend stack on Render for staging/live testing.
-#
-# HOW TO DEPLOY:
-#   1. Connect github.com/ArowuTest/gn-waas to Render
-#   2. Render Dashboard → New → Blueprint → select this repo
-#   3. Render creates all services automatically
-#   4. Trigger the migration job manually (see step 5 below)
-#   5. Set CORS_ALLOWED_ORIGINS after Vercel deploy (see step 6)
-#
-# AFTER BLUEPRINT CREATES SERVICES — set these in Render Dashboard:
-#   Service: gnwaas-api
-#     GNWAAS_APP_PASSWORD  — must match what migrate job sets for gnwaas_app role
-#     REDIS_PASSWORD       — strong random password
-#     CORS_ALLOWED_ORIGINS — set after Vercel deploy (comma-separated URLs)
-#
-#   Service: gnwaas-migrate (and all other services sharing DB):
-#     GNWAAS_APP_PASSWORD  — same value as above
-#
-# STEP 5 — Run migrations + seeds:
-#   Render Dashboard → gnwaas-migrate → Manual Run
-#   This runs all 33 migrations and seeds demo data.
-#   Re-running is safe (all migrations are idempotent).
-#
-# STEP 6 — Wire Vercel frontends:
-#   After Vercel deploys, copy the URLs and set:
-#   CORS_ALLOWED_ORIGINS=https://gn-waas-admin.vercel.app,https://gn-waas-gwl.vercel.app,...
-#   in the gnwaas-api service environment variables.
-#
-# AUTH NOTE:
-#   DEV_MODE=true bypasses Keycloak for staging. Use the dev-login endpoint:
-#   POST /api/v1/auth/dev-login  { "role": "SYSTEM_ADMIN" }
-#   Returns a JWT that works with all API endpoints.
-#   Available roles: SYSTEM_ADMIN, GWL_MANAGER, FIELD_OFFICER, GRA_OFFICER,
-#                    MOF_AUDITOR, GWL_ANALYST, FIELD_SUPERVISOR, GWL_EXECUTIVE
-# ============================================================
+# GN-WAAS Render Infrastructure-as-Code
+# Deploy with: render blueprint apply
 
 databases:
-  # ── PostgreSQL 16 ─────────────────────────────────────────────────────────
-  # Render managed Postgres. Free tier: 1GB storage, 97 connection limit.
-  # Note: TimescaleDB extension is NOT available on Render managed Postgres.
-  # Migrations use CREATE EXTENSION IF NOT EXISTS — they skip gracefully.
   - name: gnwaas-postgres
     databaseName: gnwaas
-    user: gnwaas_user
+    user: gnwaas_app
     plan: free
     region: oregon
-    postgresMajorVersion: "16"
+    postgresMajorVersion: 16
 
 services:
-  # ── Redis ─────────────────────────────────────────────────────────────────
-  # Used by api-gateway for session caching and rate limiting.
-  # Free tier: 25MB RAM, no persistence (acceptable for staging).
-  - type: redis
-    name: gnwaas-redis
-    plan: free
-    region: oregon
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []  # Internal Render network only
-
-  # ── Database Migration + Seed Runner ─────────────────────────────────────
-  # Runs all 33 migrations and seeds demo data.
-  # Trigger manually: Render Dashboard → gnwaas-migrate → Manual Run
-  # Safe to re-run: all migrations use IF NOT EXISTS / DROP IF EXISTS guards.
-  - type: cron
-    name: gnwaas-migrate
-    region: oregon
-    plan: free
-    # Scheduled far in future — use Manual Run in Render dashboard
-    schedule: "0 3 1 1 *"
-    dockerfilePath: ./database/Dockerfile.migrate
-    dockerContext: .
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: gnwaas-postgres
-          property: connectionString
-      - key: GNWAAS_APP_PASSWORD
-        sync: false  # Set in Render dashboard — used to create gnwaas_app role
-      - key: SKIP_SEEDS
-        value: "false"  # Set to "true" to run migrations only (no demo data)
-
-  # ── API Gateway ───────────────────────────────────────────────────────────
-  # Main backend — all frontend portals connect here.
-  # Exposes: https://gnwaas-api.onrender.com
+  # ── API Gateway ──────────────────────────────────────────────────────────────
   - type: web
-    name: gnwaas-api
+    name: gnwaas-api-gateway
+    runtime: go
     region: oregon
     plan: free
-    dockerfilePath: ./backend/api-gateway/Dockerfile.workspace
-    dockerContext: .
+    rootDir: backend/api-gateway
+    buildCommand: go build -o api-gateway ./cmd/main.go
+    startCommand: ./api-gateway
     healthCheckPath: /health
     envVars:
-      # ── App ──────────────────────────────────────────────────────────────
       - key: APP_ENV
         value: production
-      - key: APP_PORT
-        value: "3000"
-      # DEV_MODE=true: bypasses Keycloak, enables /auth/dev-login endpoint.
-      # Set to false only when Keycloak is configured.
-      - key: DEV_MODE
-        value: "true"
-      - key: GRA_SANDBOX_MODE
-        value: "true"  # Use GRA sandbox (no real invoices) for staging
-
-      # ── Database (Render injects DATABASE_URL automatically) ─────────────
-      # The api-gateway config.go parses DATABASE_URL if set.
-      # Individual DB_* vars are kept as fallback.
+      - key: PORT
+        value: 10000
       - key: DATABASE_URL
         fromDatabase:
           name: gnwaas-postgres
           property: connectionString
-      - key: DB_HOST
-        fromDatabase:
-          name: gnwaas-postgres
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: gnwaas-postgres
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: gnwaas-postgres
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: gnwaas-postgres
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: gnwaas-postgres
-          property: password
-      - key: DB_SSL_MODE
+      - key: DB_SSLMODE
         value: require
-
-      # ── Redis ─────────────────────────────────────────────────────────────
-      - key: REDIS_HOST
-        fromService:
-          name: gnwaas-redis
-          type: redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          name: gnwaas-redis
-          type: redis
-          property: port
-      - key: REDIS_PASSWORD
-        fromService:
-          name: gnwaas-redis
-          type: redis
-          property: password
-
-      # ── Internal services ─────────────────────────────────────────────────
+      - key: DEV_MODE
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
       - key: SENTINEL_SERVICE_URL
         fromService:
           name: gnwaas-sentinel
-          type: pserv
+          type: web
           property: hostport
-      - key: TARIFF_SERVICE_URL
+      - key: TARIFF_ENGINE_URL
         fromService:
           name: gnwaas-tariff-engine
-          type: pserv
+          type: web
           property: hostport
-      - key: GRA_SERVICE_URL
+      - key: GRA_BRIDGE_URL
         fromService:
           name: gnwaas-gra-bridge
-          type: pserv
+          type: web
           property: hostport
-      - key: OCR_SERVICE_URL
-        fromService:
-          name: gnwaas-ocr-service
-          type: pserv
-          property: hostport
-
-      # ── CORS ──────────────────────────────────────────────────────────────
-      # Set this AFTER Vercel deploy with your actual Vercel URLs, e.g.:
-      # https://gn-waas-admin.vercel.app,https://gn-waas-gwl.vercel.app,https://gn-waas-authority.vercel.app
-      - key: CORS_ALLOWED_ORIGINS
-        sync: false  # Set manually after Vercel deploy
-
-      # ── MinIO (disabled for staging — photo uploads return graceful error) ─
-      - key: MINIO_ENDPOINT
-        value: ""
-      - key: MINIO_ACCESS_KEY
-        value: ""
-      - key: MINIO_SECRET_KEY
-        value: ""
-
-      # ── Keycloak (not needed when DEV_MODE=true) ──────────────────────────
       - key: KEYCLOAK_URL
-        value: ""
+        value: https://auth.gnwaas.nita.gov.gh
       - key: KEYCLOAK_REALM
         value: gnwaas
       - key: KEYCLOAK_CLIENT_ID
         value: gnwaas-api
+      - key: MIGRATIONS_DIR
+        value: ./migrations
 
-  # ── Sentinel (fraud detection engine) ────────────────────────────────────
-  # Private service — not publicly accessible, called by api-gateway only.
-  - type: pserv
+  # ── Sentinel Engine ──────────────────────────────────────────────────────────
+  - type: web
     name: gnwaas-sentinel
+    runtime: go
     region: oregon
     plan: free
-    dockerfilePath: ./backend/sentinel/Dockerfile.workspace
-    dockerContext: .
+    rootDir: backend/sentinel
+    buildCommand: go build -o sentinel ./cmd/main.go
+    startCommand: ./sentinel
+    healthCheckPath: /health
     envVars:
       - key: APP_ENV
         value: production
-      - key: APP_PORT
-        value: "3002"
+      - key: PORT
+        value: 10000
       - key: DATABASE_URL
         fromDatabase:
           name: gnwaas-postgres
           property: connectionString
-      - key: DB_HOST
-        fromDatabase:
-          name: gnwaas-postgres
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: gnwaas-postgres
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: gnwaas-postgres
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: gnwaas-postgres
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: gnwaas-postgres
-          property: password
-      - key: DB_SSL_MODE
-        value: require
-      - key: REDIS_HOST
-        fromService:
-          name: gnwaas-redis
-          type: redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          name: gnwaas-redis
-          type: redis
-          property: port
-      - key: REDIS_PASSWORD
-        fromService:
-          name: gnwaas-redis
-          type: redis
-          property: password
-      - key: NATS_URL
-        value: ""  # NATS not deployed on free tier; sentinel uses polling
 
-  # ── Tariff Engine ─────────────────────────────────────────────────────────
-  - type: pserv
+  # ── Tariff Engine ────────────────────────────────────────────────────────────
+  - type: web
     name: gnwaas-tariff-engine
+    runtime: go
     region: oregon
     plan: free
-    dockerfilePath: ./backend/tariff-engine/Dockerfile.workspace
-    dockerContext: .
+    rootDir: backend/tariff-engine
+    buildCommand: go build -o tariff-engine ./cmd/main.go
+    startCommand: ./tariff-engine
+    healthCheckPath: /health
     envVars:
       - key: APP_ENV
         value: production
-      - key: APP_PORT
-        value: "3003"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: gnwaas-postgres
-          property: connectionString
-      - key: DB_HOST
-        fromDatabase:
-          name: gnwaas-postgres
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: gnwaas-postgres
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: gnwaas-postgres
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: gnwaas-postgres
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: gnwaas-postgres
-          property: password
-      - key: DB_SSL_MODE
-        value: require
+      - key: PORT
+        value: 10000
 
-  # ── GRA Bridge ────────────────────────────────────────────────────────────
-  - type: pserv
+  # ── GRA Bridge ───────────────────────────────────────────────────────────────
+  - type: web
     name: gnwaas-gra-bridge
+    runtime: go
     region: oregon
     plan: free
-    dockerfilePath: ./backend/gra-bridge/Dockerfile.workspace
-    dockerContext: .
+    rootDir: backend/gra-bridge
+    buildCommand: go build -o gra-bridge ./cmd/main.go
+    startCommand: ./gra-bridge
+    healthCheckPath: /health
     envVars:
       - key: APP_ENV
         value: production
-      - key: APP_PORT
-        value: "3004"
+      - key: PORT
+        value: 10000
       - key: GRA_SANDBOX_MODE
         value: "true"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: gnwaas-postgres
-          property: connectionString
-      - key: DB_HOST
-        fromDatabase:
-          name: gnwaas-postgres
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: gnwaas-postgres
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: gnwaas-postgres
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: gnwaas-postgres
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: gnwaas-postgres
-          property: password
-      - key: DB_SSL_MODE
-        value: require
-
-  # ── OCR Service ───────────────────────────────────────────────────────────
-  - type: pserv
-    name: gnwaas-ocr-service
-    region: oregon
-    plan: free
-    dockerfilePath: ./backend/ocr-service/Dockerfile.workspace
-    dockerContext: .
-    envVars:
-      - key: APP_ENV
-        value: production
-      - key: APP_PORT
-        value: "3005"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: gnwaas-postgres
-          property: connectionString
-      - key: DB_HOST
-        fromDatabase:
-          name: gnwaas-postgres
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: gnwaas-postgres
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: gnwaas-postgres
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: gnwaas-postgres
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: gnwaas-postgres
-          property: password
-      - key: DB_SSL_MODE
-        value: require
