@@ -233,17 +233,22 @@ func parseDBURL(rawURL string) (map[string]string, error) {
 func (c *Config) Validate() error {
 	var missing []string
 
-	if c.Database.Host == "" {
-		missing = append(missing, "DB_HOST")
-	}
-	if c.Database.Name == "" {
-		missing = append(missing, "DB_NAME")
-	}
-	if c.Database.User == "" {
-		missing = append(missing, "DB_USER")
-	}
-	if c.Database.Password == "" {
-		missing = append(missing, "DB_PASSWORD")
+	// Skip individual DB field checks when DATABASE_URL is provided directly
+	// (Render, Railway, Heroku etc. inject DATABASE_URL as a single connection string)
+	hasDatabaseURL := os.Getenv("DATABASE_URL") != ""
+	if !hasDatabaseURL {
+		if c.Database.Host == "" {
+			missing = append(missing, "DB_HOST")
+		}
+		if c.Database.Name == "" {
+			missing = append(missing, "DB_NAME")
+		}
+		if c.Database.User == "" {
+			missing = append(missing, "DB_USER")
+		}
+		if c.Database.Password == "" {
+			missing = append(missing, "DB_PASSWORD")
+		}
 	}
 
 	// Keycloak is only required when DEV_MODE=false.

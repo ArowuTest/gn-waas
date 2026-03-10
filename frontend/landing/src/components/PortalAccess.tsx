@@ -7,7 +7,7 @@ const PORTALS = [
     description: 'Full system oversight — anomaly flags, audit events, field jobs, NRW analysis, reports, user management and district settings.',
     icon: Shield,
     color: 'green',
-    url: 'https://college-despite-tenant-lower.trycloudflare.com',
+    url: 'https://gnwaas-admin.vercel.app',
     devLogin: 'Super Admin',
     badge: 'LIVE',
   },
@@ -17,7 +17,7 @@ const PORTALS = [
     description: 'Ghana Water Limited case management — review billing variances, assign field officers, approve reclassifications and credit requests.',
     icon: BarChart3,
     color: 'blue',
-    url: 'https://salary-specialist-bob-gonna.trycloudflare.com',
+    url: 'https://gnwaas-gwl.vercel.app',
     devLogin: 'GWL Manager',
     badge: 'LIVE',
   },
@@ -27,7 +27,7 @@ const PORTALS = [
     description: 'Regulatory oversight — district NRW dashboard, anomaly review, field job monitoring and GRA compliance reporting.',
     icon: Building2,
     color: 'purple',
-    url: 'https://celebrate-tension-shuttle-density.trycloudflare.com',
+    url: 'https://gnwaas-authority.vercel.app',
     devLogin: 'GRA Officer',
     badge: 'LIVE',
   },
@@ -37,7 +37,7 @@ const PORTALS = [
     description: 'Flutter-based offline-first mobile app for GPS-locked meter readings, photo evidence capture and field job completion.',
     icon: Smartphone,
     color: 'orange',
-    url: 'https://hereby-molecules-curious-some.trycloudflare.com',
+    url: 'https://gnwaas-mobile.vercel.app',
     devLogin: 'Field Officer',
     badge: 'LIVE',
   },
@@ -127,7 +127,7 @@ export default function PortalAccess() {
             <p className="text-gray-400 text-xs mt-0.5">REST API · Dev Mode · PostgreSQL + Redis · RLS enforced</p>
           </div>
           <a
-            href="https://assisted-order-throat-procedures.trycloudflare.com/health"
+            href="https://gnwaas-api-gateway.onrender.com/health"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
