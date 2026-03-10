@@ -8,7 +8,8 @@ const PORTALS = [
     icon: Shield,
     color: 'green',
     url: 'https://gnwaas-admin.vercel.app',
-    devLogin: 'Super Admin',
+    loginEmail: 'superadmin@gnwaas.gov.gh',
+    loginPassword: 'Admin@GN2026!',
     badge: 'LIVE',
   },
   {
@@ -18,7 +19,8 @@ const PORTALS = [
     icon: BarChart3,
     color: 'blue',
     url: 'https://gnwaas-gwl.vercel.app',
-    devLogin: 'GWL Manager',
+    loginEmail: 'manager.accrawest@gwl.com.gh',
+    loginPassword: 'GWL@Manager2026!',
     badge: 'LIVE',
   },
   {
@@ -28,7 +30,8 @@ const PORTALS = [
     icon: Building2,
     color: 'purple',
     url: 'https://gnwaas-authority.vercel.app',
-    devLogin: 'GRA Officer',
+    loginEmail: 'graofficer1@gra.gov.gh',
+    loginPassword: 'GRA@Officer2026!',
     badge: 'LIVE',
   },
   {
@@ -38,7 +41,8 @@ const PORTALS = [
     icon: Smartphone,
     color: 'orange',
     url: 'https://gnwaas-mobile.vercel.app',
-    devLogin: 'Field Officer',
+    loginEmail: 'officer.kwame@gnwaas.gov.gh',
+    loginPassword: 'Field@Officer2026!',
     badge: 'LIVE',
   },
 ]
@@ -64,7 +68,7 @@ export default function PortalAccess() {
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             All four portals are deployed and running. Click any portal to open it — use the
-            <span className="font-semibold text-green-800"> Dev Login</span> buttons inside for instant access.
+            <span className="font-semibold text-green-800"> credentials shown</span> on each card to log in instantly.
           </p>
         </div>
 
@@ -97,11 +101,17 @@ export default function PortalAccess() {
                 {/* Description */}
                 <p className="text-sm text-gray-600 leading-relaxed flex-1">{portal.description}</p>
 
-                {/* Dev login hint */}
-                {portal.devLogin && (
-                  <div className="flex items-center gap-2 bg-white/70 rounded-lg px-3 py-2 border border-gray-200">
-                    <span className="text-xs text-gray-500">Dev login:</span>
-                    <span className="text-xs font-semibold text-gray-800">Click &ldquo;{portal.devLogin}&rdquo; button on login page</span>
+                {/* Login credentials hint */}
+                {portal.loginEmail && (
+                  <div className="bg-white/70 rounded-lg px-3 py-2 border border-gray-200 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 w-16 shrink-0">Email:</span>
+                      <span className="text-xs font-mono font-semibold text-gray-800 truncate">{portal.loginEmail}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 w-16 shrink-0">Password:</span>
+                      <span className="text-xs font-mono font-semibold text-gray-800">{portal.loginPassword}</span>
+                    </div>
                   </div>
                 )}
 

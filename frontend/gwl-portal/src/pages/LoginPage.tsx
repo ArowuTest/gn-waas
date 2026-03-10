@@ -8,9 +8,9 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 
 const DEV_ACCOUNTS = [
-  { label: 'GWL Manager',    email: 'manager.accrawest@gwl.com.gh', role: 'GWL_MANAGER' },
-  { label: 'GWL Supervisor', email: 'supervisor@gwl.com.gh',        role: 'GWL_SUPERVISOR' },
-  { label: 'GWL Analyst',    email: 'analyst1@gwl.com.gh',          role: 'GWL_ANALYST' },
+  { label: 'GWL Manager',    email: 'manager.accrawest@gwl.com.gh', role: 'GWL_MANAGER',    password: 'GWL@Manager2026!' },
+  { label: 'GWL Supervisor', email: 'supervisor@gwl.com.gh',        role: 'GWL_SUPERVISOR', password: 'GWL@Super2026!' },
+  { label: 'GWL Analyst',    email: 'analyst1@gwl.com.gh',          role: 'GWL_ANALYST',    password: 'GWL@Analyst2026!' },
 ];
 
 export default function LoginPage() {
@@ -41,23 +41,21 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickLogin = async (devEmail: string, role: string) => {
-    if (!DEV_MODE) return;
+  const handleQuickLogin = async (devEmail: string, _role: string, devPassword: string) => {
     setLoading(true);
     setError('');
+    setEmail(devEmail);
+    setPassword(devPassword);
     try {
-      // Use /auth/dev-login so the backend returns a role-specific token
-      const res = await apiClient.post('/auth/dev-login', { email: devEmail, role });
+      const res = await apiClient.post('/auth/login', { email: devEmail, password: devPassword });
       const data = res.data?.data ?? res.data;
       const token = data?.access_token || data?.token;
       if (!token) throw new Error('No token received');
       localStorage.setItem('gwl_token', token);
-      // GAP-FIX-06: persist user object so CaseDetailPage can read performed_by/role
       if (data?.user) localStorage.setItem('gwl_user', JSON.stringify(data.user));
       navigate('/');
     } catch {
-      setEmail(devEmail);
-      setError('Quick login failed. Enter credentials manually.');
+      setError('Login failed. Please check credentials.');
     } finally {
       setLoading(false);
     }
@@ -199,7 +197,7 @@ export default function LoginPage() {
                       <button
                         key={acc.role}
                         type="button"
-                        onClick={() => handleQuickLogin(acc.email, acc.role)}
+                        onClick={() => handleQuickLogin(acc.email, acc.role, acc.password)}
                         disabled={loading}
                         className="text-left px-3 py-2 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors group"
                       >

@@ -48,10 +48,10 @@ function initiateKeycloakLogin() {
 }
 
 const DEV_ACCOUNTS = [
-  { label: 'GRA Officer',      email: 'graofficer1@gra.gov.gh',        role: 'GRA_OFFICER' },
-  { label: 'MOF Auditor',      email: 'auditor1@mof.gov.gh',           role: 'MOF_AUDITOR' },
-  { label: 'Field Supervisor', email: 'supervisor.accra@gnwaas.gov.gh', role: 'FIELD_SUPERVISOR' },
-  { label: 'MOF Auditor',      email: 'auditor@mof.gov.gh',    role: 'MOF_AUDITOR' },
+  { label: 'GRA Officer',      email: 'graofficer1@gra.gov.gh',         role: 'GRA_OFFICER',      password: 'GRA@Officer2026!' },
+  { label: 'MOF Auditor',      email: 'auditor1@mof.gov.gh',            role: 'MOF_AUDITOR',      password: 'MoF@Audit2026!' },
+  { label: 'Field Supervisor', email: 'supervisor.accra@gnwaas.gov.gh', role: 'FIELD_SUPERVISOR', password: 'Field@Super2026!' },
+  { label: 'Minister View',    email: 'minister@mowsanitation.gov.gh',  role: 'MINISTER_VIEW',    password: 'Minister@2026!' },
 ]
 
 export default function LoginPage() {
@@ -82,17 +82,17 @@ export default function LoginPage() {
     }
   }
 
-  const handleQuickLogin = async (devEmail: string, role: string) => {
-    if (!DEV_MODE) return
+  const handleQuickLogin = async (devEmail: string, _role: string, devPassword: string) => {
     setEmail(devEmail)
+    setPassword(devPassword)
     setLoading(true)
     setError('')
     try {
-      const res = await apiClient.post('/auth/dev-login', { email: devEmail, role })
+      const res = await apiClient.post('/auth/login', { email: devEmail, password: devPassword })
       await login(res.data.data.access_token)
       navigate('/district')
     } catch {
-      setError('Quick login failed. Please enter credentials manually.')
+      setError('Login failed. Please check credentials.')
     } finally {
       setLoading(false)
     }
@@ -253,7 +253,7 @@ export default function LoginPage() {
                         <button
                           key={acc.role}
                           type="button"
-                          onClick={() => handleQuickLogin(acc.email, acc.role)}
+                          onClick={() => handleQuickLogin(acc.email, acc.role, acc.password)}
                           disabled={loading}
                           className="text-left px-3 py-2 rounded-xl border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 transition-colors group"
                         >

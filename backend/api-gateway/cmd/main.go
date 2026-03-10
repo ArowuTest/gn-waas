@@ -110,15 +110,7 @@ func runSeeds(ctx context.Context, dsn string, logger *zap.Logger) error {
 	}
 	defer pool.Close()
 
-	// Only seed if districts table is empty (avoid re-seeding)
-	var count int
-	pool.QueryRow(ctx, `SELECT COUNT(*) FROM districts`).Scan(&count)
-	if count > 0 {
-		logger.Info("Database already seeded, skipping", zap.Int("districts", count))
-		return nil
-	}
-
-	logger.Info("Seeding database...")
+	// Collect all seed files
 	var files []string
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
@@ -127,14 +119,25 @@ func runSeeds(ctx context.Context, dsn string, logger *zap.Logger) error {
 	}
 	sort.Strings(files)
 
+	// Only seed core data if districts table is empty (avoid re-seeding)
+	var count int
+	pool.QueryRow(ctx, `SELECT COUNT(*) FROM districts`).Scan(&count)
+	alreadySeeded := count > 0
+
 	applied := 0
 	for _, fname := range files {
-		content, err := os.ReadFile(filepath.Join(seedsDir, fname))
+		// Always apply password hash seed (007) even if already seeded
+		// This ensures passwords are set even on existing databases
+		isPasswordSeed := strings.Contains(fname, "007_password")
+		if alreadySeeded && !isPasswordSeed {
+			continue
+		}
+		fileContent, err := os.ReadFile(filepath.Join(seedsDir, fname))
 		if err != nil {
 			logger.Warn("Seed read failed", zap.String("file", fname), zap.Error(err))
 			continue
 		}
-		_, err = pool.Exec(ctx, string(content))
+		_, err = pool.Exec(ctx, string(fileContent))
 		if err != nil {
 			logger.Warn("Seed failed (continuing)", zap.String("file", fname), zap.Error(err))
 			continue
@@ -142,7 +145,11 @@ func runSeeds(ctx context.Context, dsn string, logger *zap.Logger) error {
 		logger.Info("Seed applied", zap.String("file", fname))
 		applied++
 	}
-	logger.Info("Seeding complete", zap.Int("applied", applied))
+	if alreadySeeded && applied == 0 {
+		logger.Info("Database already seeded, skipping core seeds")
+	} else {
+		logger.Info("Seeding complete", zap.Int("applied", applied))
+	}
 	return nil
 }
 

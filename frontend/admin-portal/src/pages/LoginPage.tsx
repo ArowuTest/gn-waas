@@ -8,10 +8,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true'
 
 const DEV_ACCOUNTS = [
-  { label: 'Super Admin',   email: 'superadmin@gnwaas.gov.gh',  role: 'SUPER_ADMIN' },
-  { label: 'System Admin',  email: 'sysadmin@gnwaas.gov.gh',   role: 'SYSTEM_ADMIN' },
-  { label: 'MOF Auditor',   email: 'auditor1@mof.gov.gh',      role: 'MOF_AUDITOR' },
-  { label: 'GWL Manager',   email: 'manager.accrawest@gwl.com.gh', role: 'GWL_MANAGER' },
+  { label: 'Super Admin',   email: 'superadmin@gnwaas.gov.gh',      role: 'SUPER_ADMIN',  password: 'Admin@GN2026!' },
+  { label: 'System Admin',  email: 'sysadmin@gnwaas.gov.gh',        role: 'SYSTEM_ADMIN', password: 'Admin@GN2026!' },
+  { label: 'MOF Auditor',   email: 'auditor1@mof.gov.gh',           role: 'MOF_AUDITOR',  password: 'MoF@Audit2026!' },
+  { label: 'GWL Manager',   email: 'manager.accrawest@gwl.com.gh',  role: 'GWL_MANAGER',  password: 'GWL@Manager2026!' },
 ]
 
 export function LoginPage() {
@@ -45,24 +45,23 @@ export function LoginPage() {
     }
   }
 
-  const handleDevLogin = async (devEmail: string, role: string) => {
-    if (!DEV_MODE) return
+  const handleDevLogin = async (devEmail: string, _role: string, devPassword: string) => {
     setLoading(true)
     setError('')
+    setEmail(devEmail)
+    setPassword(devPassword)
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/auth/dev-login`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Dev-Role': role },
-        body: JSON.stringify({ email: devEmail, role }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: devEmail, password: devPassword }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.message || 'Dev login failed')
-      await login(data.data?.access_token || data.access_token)
+      if (!res.ok || !data.success) throw new Error(data.error?.message || 'Login failed')
+      await login(data.data.access_token)
       navigate('/dashboard')
-    } catch {
-      // Fallback: try regular login with dev credentials
-      setEmail(devEmail)
-      setPassword('password123')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -212,7 +211,7 @@ export function LoginPage() {
                   {DEV_ACCOUNTS.map(acc => (
                     <button
                       key={acc.role}
-                      onClick={() => handleDevLogin(acc.email, acc.role)}
+                      onClick={() => handleDevLogin(acc.email, acc.role, acc.password)}
                       disabled={loading}
                       className="text-left px-3 py-2 rounded-xl border border-gray-200 hover:border-brand-300 hover:bg-brand-50 transition-colors group"
                     >

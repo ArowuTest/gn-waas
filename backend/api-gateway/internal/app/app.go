@@ -19,6 +19,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -329,38 +330,90 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		},
 	}))
 	authGroup.Post("/login", func(c *fiber.Ctx) error {
-		// In production: redirect to Keycloak OIDC
-		// In DEV_MODE: return a mock token for testing
-		if !cfg.Server.DevMode {
-			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-				"error": "Use Keycloak OIDC for authentication in production",
-				"keycloak_url": cfg.Keycloak.URL,
-			})
-		}
+		// POST /api/v1/auth/login
+		// Accepts email + password, validates against bcrypt hash in users table.
+		// Works in both DEV_MODE and production (no Keycloak dependency).
+		// In true production, Keycloak OIDC is the primary IdP; this endpoint
+		// serves as a fallback for demo/staging environments.
 		var body struct {
 			Email    string `json:"email"`
 			Password string `json:"password"`
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return c.Status(400).JSON(fiber.Map{"error": "invalid request body"})
+			return c.Status(400).JSON(fiber.Map{"success": false, "error": fiber.Map{"code": "BAD_REQUEST", "message": "invalid request body"}})
 		}
 		if body.Email == "" || body.Password == "" {
-			return c.Status(400).JSON(fiber.Map{"error": "email and password required"})
+			return c.Status(400).JSON(fiber.Map{"success": false, "error": fiber.Map{"code": "BAD_REQUEST", "message": "email and password are required"}})
 		}
-		// Dev mode: return mock token in standard APIResponse envelope
+
+		// Look up user by email — run in a SUPER_ADMIN RLS context so we can
+		// read the password_hash regardless of the user's own district scope.
+		var (
+			userID         string
+			fullName       string
+			role           string
+			districtID     string
+			passwordHash   string
+			status         string
+		)
+		err := func() error {
+			tx, err := db.Begin(c.Context())
+			if err != nil { return err }
+			defer tx.Rollback(c.Context())
+			if _, err = tx.Exec(c.Context(), "SET LOCAL ROLE gnwaas_app"); err != nil { return err }
+			if _, err = tx.Exec(c.Context(), "SELECT set_config('app.user_role','SUPER_ADMIN',true)"); err != nil { return err }
+			if _, err = tx.Exec(c.Context(), "SELECT set_config('app.district_id','00000000-0000-0000-0000-000000000000',true)"); err != nil { return err }
+			if _, err = tx.Exec(c.Context(), "SELECT set_config('app.user_id','00000000-0000-0000-0000-000000000000',true)"); err != nil { return err }
+			return tx.QueryRow(c.Context(),
+				`SELECT id::text, full_name, role::text,
+				        COALESCE(district_id::text,'00000000-0000-0000-0000-000000000000'),
+				        COALESCE(password_hash,''),
+				        status::text
+				 FROM users WHERE email = $1 LIMIT 1`,
+				body.Email,
+			).Scan(&userID, &fullName, &role, &districtID, &passwordHash, &status)
+		}()
+
+		if err != nil {
+			logger.Warn("login: user not found", zap.String("email", body.Email), zap.Error(err))
+			return c.Status(401).JSON(fiber.Map{"success": false, "error": fiber.Map{"code": "UNAUTHORIZED", "message": "Invalid email or password"}})
+		}
+
+		if status != "ACTIVE" {
+			return c.Status(403).JSON(fiber.Map{"success": false, "error": fiber.Map{"code": "FORBIDDEN", "message": "Account is not active"}})
+		}
+
+		// Validate password
+		if passwordHash == "" {
+			// No password set — only dev-login is available for this user
+			return c.Status(401).JSON(fiber.Map{"success": false, "error": fiber.Map{"code": "UNAUTHORIZED", "message": "Password login not configured for this account. Use dev-login."}})
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(body.Password)); err != nil {
+			logger.Warn("login: wrong password", zap.String("email", body.Email))
+			return c.Status(401).JSON(fiber.Map{"success": false, "error": fiber.Map{"code": "UNAUTHORIZED", "message": "Invalid email or password"}})
+		}
+
+		// Update last_login_at
+		_, _ = db.Exec(c.Context(),
+			`UPDATE users SET last_login_at = NOW(), failed_login_count = 0 WHERE id = $1`,
+			userID,
+		)
+
+		// Issue token (same format as dev-login so frontend works identically)
+		token := "dev-mock-token-" + body.Email
 		return c.JSON(fiber.Map{
 			"success": true,
 			"data": fiber.Map{
-				"access_token":  "dev-mock-token-" + body.Email,
+				"access_token":  token,
 				"token_type":    "Bearer",
-				"expires_in":    3600,
-				"refresh_token": "dev-refresh-" + body.Email,
+				"expires_in":    86400,
+				"refresh_token": "refresh-" + body.Email,
 				"user": fiber.Map{
-					"id":          "a0000001-0000-0000-0000-000000000001",
+					"id":          userID,
 					"email":       body.Email,
-					"full_name":   "Dev User",
-					"role":        "SUPER_ADMIN",
-					"district_id": "d0000001-0000-0000-0000-000000000001",
+					"full_name":   fullName,
+					"role":        role,
+					"district_id": districtID,
 				},
 			},
 		})
