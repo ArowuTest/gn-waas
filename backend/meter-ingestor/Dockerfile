@@ -1,41 +1,34 @@
-# ── Stage 1: Build ────────────────────────────────────────────────────────────
+# Build stage — context must be repo root so shared/go replace directive resolves
 FROM golang:1.22-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates
-
-WORKDIR /workspace
-
-# Copy go workspace files
-COPY go.work go.work.sum* ./
-
-# Copy all modules (workspace requires all modules present)
-COPY shared/go/ shared/go/
-COPY backend/meter-ingestor/ backend/meter-ingestor/
-
-# Download dependencies
-WORKDIR /workspace/backend/meter-ingestor
-RUN GONOSUMCHECK=* GONOSUMDB=* GOWORK=on go mod download
-
-# Build the binary
-RUN GONOSUMCHECK=* GONOSUMDB=* GOWORK=on CGO_ENABLED=0 GOOS=linux \
-    go build -ldflags="-w -s" -o /meter-ingestor ./cmd/
-
-# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
-FROM alpine:3.19
-
-RUN apk add --no-cache ca-certificates wget tzdata
+RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /app
 
-COPY --from=builder /meter-ingestor /app/meter-ingestor
+# Copy shared module first (required by replace directive in go.mod)
+COPY shared/go/ ./shared/go/
 
-# Non-root user
-RUN addgroup -S gnwaas && adduser -S gnwaas -G gnwaas
-USER gnwaas
+# Copy service module files and download dependencies
+COPY backend/meter-ingestor/go.mod backend/meter-ingestor/go.sum ./backend/meter-ingestor/
+WORKDIR /app/backend/meter-ingestor
+RUN GOWORK=off go mod download
 
-EXPOSE 3007 50051
+# Copy service source and build
+COPY backend/meter-ingestor/ ./
+RUN GOWORK=off CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-w -s" \
+    -o /app/meter-ingestor \
+    ./cmd/main.go
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD wget -q --spider http://localhost:3007/health || exit 1
+# Runtime stage
+FROM scratch
 
-ENTRYPOINT ["/app/meter-ingestor"]
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /app/meter-ingestor /meter-ingestor
+
+ENV TZ=Africa/Accra
+
+EXPOSE 3007
+
+ENTRYPOINT ["/meter-ingestor"]

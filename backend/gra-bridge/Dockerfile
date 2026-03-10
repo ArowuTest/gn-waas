@@ -1,36 +1,34 @@
-# ─── Stage 1: Build ───────────────────────────────────────────────────────────
+# Build stage — context must be repo root so shared/go replace directive resolves
 FROM golang:1.22-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /app
 
-# Cache dependencies separately from source
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy shared module first (required by replace directive in go.mod)
+COPY shared/go/ ./shared/go/
 
-COPY . .
+# Copy service module files and download dependencies
+COPY backend/gra-bridge/go.mod backend/gra-bridge/go.sum ./backend/gra-bridge/
+WORKDIR /app/backend/gra-bridge
+RUN GOWORK=off go mod download
 
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X main.version=${VERSION:-dev}" \
+# Copy service source and build
+COPY backend/gra-bridge/ ./
+RUN GOWORK=off CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-w -s" \
     -o /app/gra-bridge \
     ./cmd/main.go
 
-# ─── Stage 2: Minimal runtime ─────────────────────────────────────────────────
+# Runtime stage
 FROM scratch
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /app/gra-bridge /gra-bridge
 
-# GRA Bridge environment variables
 ENV TZ=Africa/Accra
-ENV PORT=3003
-ENV GRA_VSDC_URL=https://vsdc.gra.gov.gh/api/v1
-ENV GRA_API_KEY=""
-ENV DB_URL=""
-ENV LOG_LEVEL=info
 
-EXPOSE 3003
+EXPOSE 3004
 
 ENTRYPOINT ["/gra-bridge"]

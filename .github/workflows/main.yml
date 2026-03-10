@@ -187,26 +187,38 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Go services: build context = repo root so shared/go replace directive resolves
           - service: api-gateway
-            context: backend/api-gateway
+            context: .
+            dockerfile: backend/api-gateway/Dockerfile
           - service: sentinel
-            context: backend/sentinel
+            context: .
+            dockerfile: backend/sentinel/Dockerfile
           - service: tariff-engine
-            context: backend/tariff-engine
+            context: .
+            dockerfile: backend/tariff-engine/Dockerfile
           - service: gra-bridge
-            context: backend/gra-bridge
+            context: .
+            dockerfile: backend/gra-bridge/Dockerfile
           - service: ocr-service
-            context: backend/ocr-service
+            context: .
+            dockerfile: backend/ocr-service/Dockerfile
           - service: cdc-ingestor
-            context: backend/cdc-ingestor
+            context: .
+            dockerfile: backend/cdc-ingestor/Dockerfile
           - service: meter-ingestor
-            context: backend/meter-ingestor
+            context: .
+            dockerfile: backend/meter-ingestor/Dockerfile
+          # Frontend services: build context = portal directory (no shared deps)
           - service: admin-portal
             context: frontend/admin-portal
+            dockerfile: frontend/admin-portal/Dockerfile
           - service: authority-portal
             context: frontend/authority-portal
+            dockerfile: frontend/authority-portal/Dockerfile
           - service: gwl-portal
             context: frontend/gwl-portal
+            dockerfile: frontend/gwl-portal/Dockerfile
 
     steps:
       - uses: actions/checkout@v4
@@ -235,6 +247,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
