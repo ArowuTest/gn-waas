@@ -34,7 +34,7 @@ jobs:
       - name: Set up Go 1.22
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           # CI-01 fix: cache all go.sum files via go.work for efficient workspace handling
           cache-dependency-path: |
             backend/${{ matrix.service }}/go.sum
@@ -282,7 +282,7 @@ jobs:
       - name: Set up Go 1.22
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: true
           cache-dependency-path: backend/${{ matrix.service }}/go.sum
 

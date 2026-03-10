@@ -1,5 +1,5 @@
 # Build stage — context must be repo root so shared/go replace directive resolves
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates tzdata
 
@@ -20,15 +20,23 @@ RUN GOWORK=off CGO_ENABLED=0 GOOS=linux go build \
     -o /app/api-gateway \
     ./cmd/main.go
 
-# Runtime stage
-FROM scratch
+# Runtime stage — use alpine (not scratch) so we can include migration files
+FROM alpine:3.19
 
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-COPY --from=builder /app/api-gateway /api-gateway
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder /app/api-gateway ./api-gateway
+
+# Copy database migrations and seeds
+COPY database/migrations/ ./migrations/
+COPY database/seeds/ ./seeds/
 
 ENV TZ=Africa/Accra
+ENV MIGRATIONS_DIR=/app/migrations
+ENV SEEDS_DIR=/app/seeds
 
 EXPOSE 3000
 
-ENTRYPOINT ["/api-gateway"]
+ENTRYPOINT ["/app/api-gateway"]

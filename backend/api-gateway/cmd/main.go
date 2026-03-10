@@ -91,6 +91,61 @@ func runMigrations(ctx context.Context, dsn string, logger *zap.Logger) error {
 	return nil
 }
 
+
+func runSeeds(ctx context.Context, dsn string, logger *zap.Logger) error {
+	seedsDir := os.Getenv("SEEDS_DIR")
+	if seedsDir == "" {
+		seedsDir = "./seeds"
+	}
+
+	entries, err := os.ReadDir(seedsDir)
+	if err != nil {
+		logger.Warn("No seeds directory found, skipping", zap.String("dir", seedsDir))
+		return nil
+	}
+
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("seeds: connect failed: %w", err)
+	}
+	defer pool.Close()
+
+	// Only seed if districts table is empty (avoid re-seeding)
+	var count int
+	pool.QueryRow(ctx, `SELECT COUNT(*) FROM districts`).Scan(&count)
+	if count > 0 {
+		logger.Info("Database already seeded, skipping", zap.Int("districts", count))
+		return nil
+	}
+
+	logger.Info("Seeding database...")
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
+			files = append(files, e.Name())
+		}
+	}
+	sort.Strings(files)
+
+	applied := 0
+	for _, fname := range files {
+		content, err := os.ReadFile(filepath.Join(seedsDir, fname))
+		if err != nil {
+			logger.Warn("Seed read failed", zap.String("file", fname), zap.Error(err))
+			continue
+		}
+		_, err = pool.Exec(ctx, string(content))
+		if err != nil {
+			logger.Warn("Seed failed (continuing)", zap.String("file", fname), zap.Error(err))
+			continue
+		}
+		logger.Info("Seed applied", zap.String("file", fname))
+		applied++
+	}
+	logger.Info("Seeding complete", zap.Int("applied", applied))
+	return nil
+}
+
 func main() {
 	// Logger
 	var logger *zap.Logger
@@ -126,6 +181,15 @@ func main() {
 			logger.Error("Migrations failed (continuing anyway)", zap.Error(err))
 		}
 		cancel()
+	}
+
+	// Run seeds after migrations if DB is empty
+	if os.Getenv("SKIP_MIGRATIONS") != "true" {
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 3*time.Minute)
+		if err := runSeeds(ctx2, cfg.Database.DSN(), logger); err != nil {
+			logger.Error("Seeds failed (continuing anyway)", zap.Error(err))
+		}
+		cancel2()
 	}
 
 	// Application
