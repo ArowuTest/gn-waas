@@ -50,7 +50,7 @@ func (h *TariffAdminHandler) ListTariffRates(c *fiber.Ctx) error {
 		       min_volume_m3, max_volume_m3,
 		       rate_per_m3, service_charge_ghs,
 		       effective_from, effective_to,
-		       approved_by, regulatory_ref, is_active,
+		       COALESCE(approved_by, ''), COALESCE(regulatory_ref, ''), is_active,
 		       created_at, updated_at
 		FROM tariff_rates
 		ORDER BY category, effective_from DESC, min_volume_m3 ASC
@@ -319,7 +319,7 @@ func (h *TariffAdminHandler) DeactivateTariffRate(c *fiber.Ctx) error {
 func (h *TariffAdminHandler) ListVATConfigs(c *fiber.Ctx) error {
 	rows, err := h.db.Query(c.Context(), `
 		SELECT id, rate_percentage, components, effective_from, effective_to,
-		       regulatory_ref, is_active, created_at
+		       COALESCE(regulatory_ref, ''), is_active, created_at
 		FROM vat_config
 		ORDER BY effective_from DESC
 	`)
@@ -395,7 +395,7 @@ func (h *TariffAdminHandler) CreateVATConfig(c *fiber.Ctx) error {
 
 	// Deactivate current active VAT config
 	h.db.Exec(c.Context(), `
-		UPDATE vat_config SET is_active = false, effective_to = $1, updated_at = NOW()
+		UPDATE vat_config SET is_active = false, effective_to = $1
 		WHERE is_active = true
 	`, effectiveFrom)
 
