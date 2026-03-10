@@ -1656,7 +1656,7 @@
   // Load districts into dropdown
   (async function loadDistricts() {
     try {
-      const r = await fetch(WB_API + '/districts/public');
+      const r = await fetch(WB_API + '/public/districts');
       if (!r.ok) throw new Error();
       const data = await r.json();
       const sel = document.getElementById('wb-district');

@@ -1087,7 +1087,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	app.Get("/api/v1/tips/:ref", whistleblowerHandler.GetTipStatus)
 
 	// ── Public district list (for whistleblower form dropdown — no auth) ──────
-	app.Get("/api/v1/districts/public", func(c *fiber.Ctx) error {
+	app.Get("/api/v1/public/districts", func(c *fiber.Ctx) error {
 		type districtPublic struct {
 			DistrictCode string `json:"district_code"`
 			Name         string `json:"name"`
