@@ -529,13 +529,14 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
 		fieldJobHandler.CreateFieldJob,
 	)
-	fieldJobs.Get("/:id",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_OFFICER"),
-		fieldJobHandler.GetFieldJob,
-	)
+	// /my-jobs MUST be before /:id to prevent Fiber matching "my-jobs" as an ID param
 	fieldJobs.Get("/my-jobs",
 		middleware.RequireRoles("FIELD_OFFICER", "GRA_OFFICER"),
 		fieldJobHandler.GetMyJobs,
+	)
+	fieldJobs.Get("/:id",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_OFFICER"),
+		fieldJobHandler.GetFieldJob,
 	)
 	// Admin/supervisor: assign a field officer to a job.
 	// Used by admin portal FieldJobsPage assign-officer modal.
@@ -634,7 +635,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	reports := api.Group("/reports")
 	reports.Get("/nrw",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_SUPERVISOR"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_SUPERVISOR", "GRA_OFFICER"),
 		nrwHandler.GetNRWSummary)
 	reports.Get("/nrw/my-district",
 		middleware.RequireRoles("FIELD_OFFICER", "GWL_MANAGER", "FIELD_SUPERVISOR", "GRA_OFFICER"),
@@ -697,7 +698,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	//   Audit Trail      — system admins and auditors
 	//   Field Jobs       — supervisors and management
 	reportAdminRoles := middleware.RequireRoles(
-		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR",
+		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GRA_OFFICER",
 		"GWL_EXECUTIVE", "GWL_MANAGER", "GWL_SUPERVISOR",
 	)
 	reportGRARoles := middleware.RequireRoles(

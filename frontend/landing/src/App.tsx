@@ -1,5 +1,6 @@
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
+import PortalAccess from './components/PortalAccess'
 import Problem from './components/Problem'
 import Solution from './components/Solution'
 import HowItWorks from './components/HowItWorks'
@@ -14,6 +15,7 @@ export default function App() {
     <div className="min-h-screen bg-white">
       <Navbar />
       <Hero />
+      <PortalAccess />
       <Problem />
       <Solution />
       <HowItWorks />
