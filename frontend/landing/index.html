@@ -689,6 +689,349 @@
       .section { padding: 48px 1rem; }
       .impact-grid { grid-template-columns: repeat(2, 1fr); }
     }
+
+    /* ── WHISTLEBLOWER SECTION ──────────────────────────────── */
+    .wb-section {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      padding: 5rem 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .wb-section::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #CE1126, #FCD116, #006B3F);
+    }
+    .wb-inner {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .wb-header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    .wb-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(252,209,22,0.15);
+      border: 1px solid rgba(252,209,22,0.4);
+      color: #FCD116;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 5px 14px;
+      border-radius: 20px;
+      margin-bottom: 1rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .wb-badge .wb-dot {
+      width: 6px; height: 6px;
+      background: #FCD116;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    .wb-header h2 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 0.75rem;
+    }
+    .wb-header h2 span { color: #FCD116; }
+    .wb-header p {
+      color: rgba(255,255,255,0.65);
+      font-size: 0.95rem;
+      max-width: 600px;
+      margin: 0 auto 1.5rem;
+      line-height: 1.7;
+    }
+    .wb-confidential {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,107,63,0.25);
+      border: 1px solid rgba(0,107,63,0.5);
+      color: #4ade80;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 6px 16px;
+      border-radius: 8px;
+    }
+    /* Tabs */
+    .wb-tabs {
+      display: flex;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 1.5rem;
+      gap: 4px;
+    }
+    .wb-tab {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.5);
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .wb-tab.active {
+      background: white;
+      color: #0f172a;
+    }
+    .wb-tab:hover:not(.active) {
+      color: rgba(255,255,255,0.8);
+      background: rgba(255,255,255,0.08);
+    }
+    /* Card */
+    .wb-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 2rem;
+    }
+    /* Form */
+    .wb-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 640px) {
+      .wb-form-grid { grid-template-columns: 1fr; }
+      .wb-header h2 { font-size: 1.5rem; }
+    }
+    .wb-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .wb-field.full { grid-column: 1 / -1; }
+    .wb-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 0.03em;
+    }
+    .wb-label .wb-optional {
+      font-weight: 400;
+      color: rgba(255,255,255,0.35);
+      margin-left: 4px;
+    }
+    .wb-input, .wb-select, .wb-textarea {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      color: white;
+      font-size: 0.875rem;
+      font-family: 'Inter', sans-serif;
+      padding: 10px 14px;
+      transition: border-color 0.2s;
+      outline: none;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .wb-input::placeholder, .wb-textarea::placeholder {
+      color: rgba(255,255,255,0.3);
+    }
+    .wb-input:focus, .wb-select:focus, .wb-textarea:focus {
+      border-color: #FCD116;
+      background: rgba(255,255,255,0.1);
+    }
+    .wb-select option { background: #1e293b; color: white; }
+    .wb-textarea { resize: vertical; min-height: 110px; }
+    .wb-char-count {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.35);
+      text-align: right;
+      margin-top: 2px;
+    }
+    .wb-char-count.warn { color: #FCD116; }
+    /* Reward notice */
+    .wb-reward-notice {
+      background: rgba(252,209,22,0.08);
+      border: 1px solid rgba(252,209,22,0.25);
+      border-radius: 10px;
+      padding: 0.875rem 1rem;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-top: 0.5rem;
+    }
+    .wb-reward-notice p {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.65);
+      margin: 0;
+      line-height: 1.5;
+    }
+    .wb-reward-notice strong { color: #FCD116; }
+    /* Submit button */
+    .wb-submit-btn {
+      width: 100%;
+      padding: 13px;
+      background: #FCD116;
+      color: #0f172a;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      margin-top: 1rem;
+    }
+    .wb-submit-btn:hover:not(:disabled) { background: #f5c800; }
+    .wb-submit-btn:active:not(:disabled) { transform: scale(0.99); }
+    .wb-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* Success state */
+    .wb-success {
+      text-align: center;
+      padding: 1.5rem 0;
+    }
+    .wb-success-icon {
+      width: 64px; height: 64px;
+      background: rgba(0,107,63,0.2);
+      border: 2px solid #006B3F;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      margin: 0 auto 1.25rem;
+    }
+    .wb-success h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 0.5rem;
+    }
+    .wb-success p {
+      color: rgba(255,255,255,0.6);
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+    }
+    .wb-ref-box {
+      background: rgba(252,209,22,0.1);
+      border: 2px solid #FCD116;
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      margin: 0 auto 1.25rem;
+      max-width: 320px;
+    }
+    .wb-ref-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: rgba(255,255,255,0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .wb-ref-number {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #FCD116;
+      letter-spacing: 0.05em;
+    }
+    .wb-success-note {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.4);
+      margin-top: 0.5rem;
+    }
+    .wb-new-tip-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.7);
+      padding: 9px 20px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .wb-new-tip-btn:hover { border-color: rgba(255,255,255,0.4); color: white; }
+    /* Status check */
+    .wb-status-form { display: flex; flex-direction: column; gap: 1rem; }
+    .wb-status-result {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-top: 0.5rem;
+    }
+    .wb-status-result h4 {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 0.75rem;
+    }
+    .wb-status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.8rem;
+    }
+    .wb-status-row:last-child { border-bottom: none; }
+    .wb-status-key { color: rgba(255,255,255,0.45); }
+    .wb-status-val { color: white; font-weight: 600; }
+    .wb-status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .wb-status-NEW { background: rgba(59,130,246,0.2); color: #93c5fd; }
+    .wb-status-UNDER_REVIEW { background: rgba(234,179,8,0.2); color: #fde047; }
+    .wb-status-INVESTIGATING { background: rgba(249,115,22,0.2); color: #fdba74; }
+    .wb-status-CONFIRMED { background: rgba(239,68,68,0.2); color: #fca5a5; }
+    .wb-status-DISMISSED { background: rgba(100,116,139,0.2); color: #94a3b8; }
+    .wb-status-REWARDED { background: rgba(34,197,94,0.2); color: #86efac; }
+    /* Error */
+    .wb-error {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fca5a5;
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+    }
+    /* Stats strip */
+    .wb-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 480px) { .wb-stats { grid-template-columns: 1fr; } }
+    .wb-stat {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .wb-stat-val {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #FCD116;
+      margin-bottom: 2px;
+    }
+    .wb-stat-label {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.5);
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -740,6 +1083,7 @@
       <a href="#mandate">Our Mandate</a>
       <a href="#oversight">Oversight Framework</a>
       <a href="#portals">Portal Directory</a>
+      <a href="#report-fraud" style="color:rgba(255,255,255,0.85);background:rgba(206,17,38,0.15);border:1px solid rgba(206,17,38,0.4);padding:8px 16px;border-radius:6px;font-size:0.82rem;font-weight:600;">🔒 Report Fraud</a>
       <a href="#portals" class="login-btn">Authorised Access →</a>
     </nav>
   </div>
@@ -1058,6 +1402,197 @@
   </div>
 </section>
 
+<!-- Whistleblower / Anonymous Tip Section -->
+<section class="wb-section" id="report-fraud">
+  <div class="wb-inner">
+
+    <!-- Header -->
+    <div class="wb-header">
+      <div class="wb-badge">
+        <span class="wb-dot"></span>
+        Confidential &amp; Anonymous
+      </div>
+      <h2>Report Water <span>Fraud &amp; Corruption</span></h2>
+      <p>
+        Know about ghost accounts, meter tampering, billing manipulation, or staff collusion?
+        Submit an anonymous tip. Your identity is never stored — only a privacy hash of your connection.
+        Confirmed tips earn a <strong style="color:#FCD116">3% reward</strong> of the recovered amount.
+      </p>
+      <div class="wb-confidential">
+        🔒 &nbsp; Your identity is fully protected — no login required
+      </div>
+    </div>
+
+    <!-- Stats strip -->
+    <div class="wb-stats">
+      <div class="wb-stat">
+        <div class="wb-stat-val">100%</div>
+        <div class="wb-stat-label">Anonymous — no account needed</div>
+      </div>
+      <div class="wb-stat">
+        <div class="wb-stat-val">3%</div>
+        <div class="wb-stat-label">Reward of recovered amount</div>
+      </div>
+      <div class="wb-stat">
+        <div class="wb-stat-val">8</div>
+        <div class="wb-stat-label">Fraud categories covered</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="wb-tabs">
+      <button class="wb-tab active" id="wb-tab-submit" onclick="wbShowTab('submit')">
+        📝 &nbsp; Submit a Tip
+      </button>
+      <button class="wb-tab" id="wb-tab-status" onclick="wbShowTab('status')">
+        🔍 &nbsp; Check Tip Status
+      </button>
+    </div>
+
+    <!-- Submit Tip Panel -->
+    <div class="wb-card" id="wb-panel-submit">
+
+      <!-- Success state (hidden by default) -->
+      <div class="wb-success" id="wb-success" style="display:none">
+        <div class="wb-success-icon">✅</div>
+        <h3>Tip Received — Thank You</h3>
+        <p>Your report has been securely submitted to the GN-WAAS audit team.<br>Save your reference number to track the investigation.</p>
+        <div class="wb-ref-box">
+          <div class="wb-ref-label">Your Reference Number</div>
+          <div class="wb-ref-number" id="wb-ref-display">TIP-2026-000000</div>
+        </div>
+        <p class="wb-success-note" id="wb-reward-note"></p>
+        <button class="wb-new-tip-btn" onclick="wbResetForm()">Submit Another Tip</button>
+      </div>
+
+      <!-- Form (shown by default) -->
+      <form id="wb-form" onsubmit="wbSubmit(event)">
+        <div class="wb-form-grid">
+
+          <!-- Category -->
+          <div class="wb-field">
+            <label class="wb-label" for="wb-category">Fraud Category</label>
+            <select class="wb-select" id="wb-category" required>
+              <option value="">— Select category —</option>
+              <option value="GHOST_ACCOUNT">👻 Ghost Account</option>
+              <option value="PHANTOM_METER">📟 Phantom Meter</option>
+              <option value="BILLING_MANIPULATION">🧾 Billing Manipulation</option>
+              <option value="METER_TAMPERING">🔧 Meter Tampering</option>
+              <option value="COLLUSION">🤝 Staff Collusion / Bribery</option>
+              <option value="ILLEGAL_CONNECTION">⚡ Illegal Connection</option>
+              <option value="FIELD_OFFICER_FRAUD">👷 Field Officer Fraud</option>
+              <option value="OTHER">📋 Other</option>
+            </select>
+          </div>
+
+          <!-- Language -->
+          <div class="wb-field">
+            <label class="wb-label" for="wb-language">Language <span class="wb-optional">(optional)</span></label>
+            <select class="wb-select" id="wb-language">
+              <option value="en">🇬🇧 English</option>
+              <option value="tw">🇬🇭 Twi (Akan)</option>
+              <option value="ga">🇬🇭 Ga</option>
+              <option value="ee">🇬🇭 Ewe</option>
+              <option value="ha">🇬🇭 Hausa</option>
+            </select>
+          </div>
+
+          <!-- GWL Account Number -->
+          <div class="wb-field">
+            <label class="wb-label" for="wb-account">GWL Account Number <span class="wb-optional">(optional)</span></label>
+            <input class="wb-input" type="text" id="wb-account"
+              placeholder="e.g. ACC-00847" maxlength="50" />
+          </div>
+
+          <!-- District -->
+          <div class="wb-field">
+            <label class="wb-label" for="wb-district">District <span class="wb-optional">(optional)</span></label>
+            <select class="wb-select" id="wb-district">
+              <option value="">— Select district —</option>
+            </select>
+          </div>
+
+          <!-- Description -->
+          <div class="wb-field full">
+            <label class="wb-label" for="wb-description">
+              Description <span style="color:#ef4444;margin-left:2px">*</span>
+            </label>
+            <textarea class="wb-textarea" id="wb-description" required
+              placeholder="Describe what you observed. Include dates, locations, names (if known), and any other relevant details. Minimum 20 characters."
+              oninput="wbUpdateCharCount(this)"></textarea>
+            <div class="wb-char-count" id="wb-char-count">0 / 20 minimum</div>
+          </div>
+
+          <!-- Contact Phone -->
+          <div class="wb-field">
+            <label class="wb-label" for="wb-phone">
+              Contact Phone <span class="wb-optional">(optional — for reward)</span>
+            </label>
+            <input class="wb-input" type="tel" id="wb-phone"
+              placeholder="+233 XX XXX XXXX" maxlength="20"
+              oninput="wbToggleContactMethod()" />
+          </div>
+
+          <!-- Contact Method -->
+          <div class="wb-field" id="wb-contact-method-field" style="display:none">
+            <label class="wb-label" for="wb-contact-method">Preferred Contact Method</label>
+            <select class="wb-select" id="wb-contact-method">
+              <option value="SMS">📱 SMS</option>
+              <option value="PHONE">📞 Phone Call</option>
+              <option value="NONE">🚫 Do not contact me</option>
+            </select>
+          </div>
+
+        </div>
+
+        <!-- Reward notice -->
+        <div class="wb-reward-notice" style="margin-top:1rem">
+          <span style="font-size:1.2rem;flex-shrink:0">💰</span>
+          <p>
+            <strong>Earn a reward:</strong> If your tip leads to confirmed fraud recovery,
+            you are eligible for <strong>3% of the recovered amount</strong> (paid via Mobile Money).
+            Providing a contact phone is optional but required to receive a reward.
+          </p>
+        </div>
+
+        <!-- Error display -->
+        <div class="wb-error" id="wb-error" style="display:none"></div>
+
+        <button type="submit" class="wb-submit-btn" id="wb-submit-btn">
+          🔒 &nbsp; Submit Anonymous Tip
+        </button>
+
+        <p style="text-align:center;font-size:0.72rem;color:rgba(255,255,255,0.3);margin-top:0.75rem">
+          Your IP address is never stored. Only a one-way cryptographic hash is recorded for abuse prevention.
+          This system is operated under the Data Protection Act, 2012 (Act 843).
+        </p>
+      </form>
+    </div>
+
+    <!-- Check Status Panel (hidden by default) -->
+    <div class="wb-card" id="wb-panel-status" style="display:none">
+      <div class="wb-status-form">
+        <div class="wb-field">
+          <label class="wb-label" for="wb-ref-input">Your Tip Reference Number</label>
+          <input class="wb-input" type="text" id="wb-ref-input"
+            placeholder="e.g. TIP-2026-123456" maxlength="20"
+            style="font-size:1rem;font-weight:600;letter-spacing:0.05em" />
+        </div>
+        <div class="wb-error" id="wb-status-error" style="display:none"></div>
+        <button class="wb-submit-btn" id="wb-check-btn" onclick="wbCheckStatus()">
+          🔍 &nbsp; Check Tip Status
+        </button>
+        <div id="wb-status-result" style="display:none" class="wb-status-result">
+          <h4>Tip Investigation Status</h4>
+          <div id="wb-status-rows"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
 <!-- Footer -->
 <footer>
   <div class="footer-inner">
@@ -1114,6 +1649,203 @@
     const el = document.getElementById(id);
     if (el) el.href = AUTHORITY_URL;
   });
+
+  // ── WHISTLEBLOWER SYSTEM ─────────────────────────────────────────────────
+  const WB_API = 'https://gnwaas-api-gateway.onrender.com/api/v1';
+
+  // Load districts into dropdown
+  (async function loadDistricts() {
+    try {
+      const r = await fetch(WB_API + '/districts/public');
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+      const sel = document.getElementById('wb-district');
+      if (sel && data.districts) {
+        data.districts.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.district_code || d.code || '';
+          opt.textContent = d.name || d.district_name || d.district_code;
+          sel.appendChild(opt);
+        });
+      }
+    } catch(e) {
+      // Districts are optional — silently ignore if endpoint unavailable
+    }
+  })();
+
+  function wbShowTab(tab) {
+    document.getElementById('wb-panel-submit').style.display = tab === 'submit' ? '' : 'none';
+    document.getElementById('wb-panel-status').style.display = tab === 'status' ? '' : 'none';
+    document.getElementById('wb-tab-submit').classList.toggle('active', tab === 'submit');
+    document.getElementById('wb-tab-status').classList.toggle('active', tab === 'status');
+  }
+
+  function wbUpdateCharCount(el) {
+    const len = el.value.length;
+    const counter = document.getElementById('wb-char-count');
+    if (len < 20) {
+      counter.textContent = len + ' / 20 minimum';
+      counter.classList.add('warn');
+    } else {
+      counter.textContent = len + ' characters';
+      counter.classList.remove('warn');
+    }
+  }
+
+  function wbToggleContactMethod() {
+    const phone = document.getElementById('wb-phone').value.trim();
+    const field = document.getElementById('wb-contact-method-field');
+    field.style.display = phone ? '' : 'none';
+  }
+
+  async function wbSubmit(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('wb-error');
+    errEl.style.display = 'none';
+
+    const description = document.getElementById('wb-description').value.trim();
+    if (description.length < 20) {
+      errEl.textContent = 'Description must be at least 20 characters.';
+      errEl.style.display = '';
+      return;
+    }
+
+    const phone = document.getElementById('wb-phone').value.trim();
+    const contactMethod = phone
+      ? (document.getElementById('wb-contact-method').value || 'SMS')
+      : 'NONE';
+
+    const payload = {
+      category:           document.getElementById('wb-category').value || 'OTHER',
+      district_code:      document.getElementById('wb-district').value || '',
+      gwl_account_number: document.getElementById('wb-account').value.trim(),
+      description:        description,
+      photo_urls:         [],
+      contact_phone:      phone,
+      contact_method:     contactMethod,
+      language:           document.getElementById('wb-language').value || 'en',
+    };
+
+    const btn = document.getElementById('wb-submit-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳  Submitting securely…';
+
+    try {
+      const r = await fetch(WB_API + '/tips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+
+      if (!r.ok) {
+        throw new Error(data.error || 'Submission failed. Please try again.');
+      }
+
+      // Show success
+      document.getElementById('wb-form').style.display = 'none';
+      document.getElementById('wb-success').style.display = '';
+      document.getElementById('wb-ref-display').textContent = data.tip_reference || 'TIP-2026-XXXXXX';
+
+      const rewardNote = document.getElementById('wb-reward-note');
+      if (data.reward_eligible) {
+        rewardNote.textContent = '✅ You are eligible for a 3% reward if this tip leads to confirmed fraud recovery.';
+        rewardNote.style.color = '#86efac';
+      } else {
+        rewardNote.textContent = 'Tip submitted anonymously. Provide a contact number next time to be eligible for a reward.';
+      }
+
+    } catch(err) {
+      errEl.textContent = err.message || 'Network error. Please check your connection and try again.';
+      errEl.style.display = '';
+      btn.disabled = false;
+      btn.textContent = '🔒  Submit Anonymous Tip';
+    }
+  }
+
+  function wbResetForm() {
+    document.getElementById('wb-form').style.display = '';
+    document.getElementById('wb-success').style.display = 'none';
+    document.getElementById('wb-form').reset();
+    document.getElementById('wb-char-count').textContent = '0 / 20 minimum';
+    document.getElementById('wb-contact-method-field').style.display = 'none';
+    document.getElementById('wb-error').style.display = 'none';
+    const btn = document.getElementById('wb-submit-btn');
+    btn.disabled = false;
+    btn.textContent = '🔒  Submit Anonymous Tip';
+  }
+
+  async function wbCheckStatus() {
+    const ref = document.getElementById('wb-ref-input').value.trim().toUpperCase();
+    const errEl = document.getElementById('wb-status-error');
+    const resultEl = document.getElementById('wb-status-result');
+    errEl.style.display = 'none';
+    resultEl.style.display = 'none';
+
+    if (!ref || !ref.startsWith('TIP-')) {
+      errEl.textContent = 'Please enter a valid reference number (e.g. TIP-2026-123456).';
+      errEl.style.display = '';
+      return;
+    }
+
+    const btn = document.getElementById('wb-check-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳  Checking…';
+
+    try {
+      const r = await fetch(WB_API + '/tips/' + encodeURIComponent(ref));
+      const data = await r.json();
+
+      if (!r.ok) {
+        throw new Error(data.error || 'Tip not found. Please check your reference number.');
+      }
+
+      const STATUS_LABELS = {
+        NEW: 'Received — Awaiting Review',
+        UNDER_REVIEW: 'Under Review',
+        INVESTIGATING: 'Under Investigation',
+        CONFIRMED: 'Fraud Confirmed',
+        DISMISSED: 'Dismissed',
+        REWARDED: 'Reward Issued',
+      };
+
+      const CATEGORY_LABELS = {
+        GHOST_ACCOUNT: 'Ghost Account',
+        PHANTOM_METER: 'Phantom Meter',
+        BILLING_MANIPULATION: 'Billing Manipulation',
+        METER_TAMPERING: 'Meter Tampering',
+        COLLUSION: 'Staff Collusion',
+        ILLEGAL_CONNECTION: 'Illegal Connection',
+        FIELD_OFFICER_FRAUD: 'Field Officer Fraud',
+        OTHER: 'Other',
+      };
+
+      const status = data.status || 'NEW';
+      const rows = [
+        ['Reference', data.tip_reference || ref],
+        ['Status', '<span class="wb-status-badge wb-status-' + status + '">' + (STATUS_LABELS[status] || status) + '</span>'],
+        ['Category', CATEGORY_LABELS[data.category] || data.category || '—'],
+        ['Submitted', data.created_at ? new Date(data.created_at).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'}) : '—'],
+        ['Reward Eligible', data.reward_eligible ? '✅ Yes' : '—'],
+        data.reward_amount_ghs ? ['Reward Amount', 'GHS ' + parseFloat(data.reward_amount_ghs).toLocaleString()] : null,
+      ].filter(Boolean);
+
+      document.getElementById('wb-status-rows').innerHTML = rows.map(([k, v]) =>
+        '<div class="wb-status-row"><span class="wb-status-key">' + k + '</span><span class="wb-status-val">' + v + '</span></div>'
+      ).join('');
+
+      resultEl.style.display = '';
+
+    } catch(err) {
+      errEl.textContent = err.message || 'Could not retrieve tip status. Please try again.';
+      errEl.style.display = '';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔍  Check Tip Status';
+    }
+  }
+  // ── END WHISTLEBLOWER ────────────────────────────────────────────────────
+
 </script>
 
 </body>

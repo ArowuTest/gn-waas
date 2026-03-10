@@ -1086,6 +1086,33 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	app.Post("/api/v1/tips", whistleblowerHandler.SubmitTip)
 	app.Get("/api/v1/tips/:ref", whistleblowerHandler.GetTipStatus)
 
+	// ── Public district list (for whistleblower form dropdown — no auth) ──────
+	app.Get("/api/v1/districts/public", func(c *fiber.Ctx) error {
+		type districtPublic struct {
+			DistrictCode string `json:"district_code"`
+			Name         string `json:"name"`
+			Region       string `json:"region"`
+		}
+		rows, err := db.Query(c.Context(),
+			`SELECT district_code, name, region FROM districts ORDER BY name`)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "failed to fetch districts"})
+		}
+		defer rows.Close()
+		var districts []districtPublic
+		for rows.Next() {
+			var d districtPublic
+			if err := rows.Scan(&d.DistrictCode, &d.Name, &d.Region); err != nil {
+				continue
+			}
+			districts = append(districts, d)
+		}
+		if districts == nil {
+			districts = []districtPublic{}
+		}
+		return c.JSON(fiber.Map{"districts": districts})
+	})
+
 	// ── Whistleblower Admin (SYSTEM_ADMIN only) ───────────────────────────────
 	adminTips := api.Group("/admin/tips",
 		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN"),
