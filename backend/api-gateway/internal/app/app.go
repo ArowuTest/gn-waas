@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ArowuTest/gn-waas/shared/go/middleware"
+	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/cache"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/config"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/handler"
