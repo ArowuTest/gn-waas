@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { Droplets, Eye, EyeOff, Shield, BarChart3, Map } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true'
 
 const DEV_ACCOUNTS = [
-  { label: 'System Admin',  email: 'admin@gnwaas.gov.gh',      role: 'SYSTEM_ADMIN' },
-  { label: 'GRA Officer',   email: 'gra@gnwaas.gov.gh',        role: 'GRA_OFFICER' },
-  { label: 'MOF Auditor',   email: 'auditor@gnwaas.gov.gh',    role: 'MOF_AUDITOR' },
-  { label: 'GWL Manager',   email: 'manager@gwl.gov.gh',       role: 'GWL_MANAGER' },
+  { label: 'Super Admin',   email: 'superadmin@gnwaas.gov.gh',  role: 'SUPER_ADMIN' },
+  { label: 'System Admin',  email: 'sysadmin@gnwaas.gov.gh',   role: 'SYSTEM_ADMIN' },
+  { label: 'MOF Auditor',   email: 'auditor1@mof.gov.gh',      role: 'MOF_AUDITOR' },
+  { label: 'GWL Manager',   email: 'manager.accrawest@gwl.com.gh', role: 'GWL_MANAGER' },
 ]
 
 export function LoginPage() {
@@ -27,7 +29,7 @@ export function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/v1/auth/login', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -48,7 +50,7 @@ export function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/v1/auth/dev-login', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/dev-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Dev-Role': role },
         body: JSON.stringify({ email: devEmail, role }),

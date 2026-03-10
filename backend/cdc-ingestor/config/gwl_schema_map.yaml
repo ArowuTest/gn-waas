@@ -1,0 +1,102 @@
+# GWL → GN-WAAS Schema Mapping Configuration
+# This file maps GWL (Ghana Water Limited) billing system columns
+# to GN-WAAS internal schema fields.
+
+gwl_database:
+  host: ""          # Set via GWL_DB_HOST env var
+  port: 5432
+  name: ""          # Set via GWL_DB_NAME env var
+  schema: "public"
+  ssl_mode: "disable"
+  user: ""          # Set via GWL_DB_USER env var
+  password: ""      # Set via GWL_DB_PASSWORD env var
+
+category_mapping:
+  RESIDENTIAL: "RESIDENTIAL"
+  RES: "RESIDENTIAL"
+  DOMESTIC: "RESIDENTIAL"
+  COMMERCIAL: "COMMERCIAL"
+  COM: "COMMERCIAL"
+  BUSINESS: "COMMERCIAL"
+  INDUSTRIAL: "INDUSTRIAL"
+  IND: "INDUSTRIAL"
+  GOVERNMENT: "GOVERNMENT"
+  GOV: "GOVERNMENT"
+  PUBLIC: "GOVERNMENT"
+  INSTITUTION: "INSTITUTIONAL"
+  INST: "INSTITUTIONAL"
+  SCHOOL: "INSTITUTIONAL"
+  HOSPITAL: "INSTITUTIONAL"
+
+tables:
+  billing:
+    source_table: "gwl_bills"
+    enabled: true
+    fields:
+      - source_column: "bill_id"
+        target_field: "gwl_bill_id"
+      - source_column: "account_number"
+        target_field: "gwl_account_number"
+      - source_column: "billing_period_start"
+        target_field: "billing_period_start"
+      - source_column: "billing_period_end"
+        target_field: "billing_period_end"
+      - source_column: "previous_reading"
+        target_field: "previous_reading"
+      - source_column: "current_reading"
+        target_field: "current_reading"
+      - source_column: "consumption_m3"
+        target_field: "consumption_m3"
+      - source_column: "category"
+        target_field: "gwl_category"
+      - source_column: "amount_ghs"
+        target_field: "gwl_amount_ghs"
+      - source_column: "vat_ghs"
+        target_field: "gwl_vat_ghs"
+      - source_column: "total_ghs"
+        target_field: "gwl_total_ghs"
+      - source_column: "reader_id"
+        target_field: "gwl_reader_id"
+      - source_column: "read_date"
+        target_field: "gwl_read_date"
+      - source_column: "read_method"
+        target_field: "gwl_read_method"
+      - source_column: "payment_status"
+        target_field: "payment_status"
+      - source_column: "payment_amount_ghs"
+        target_field: "payment_amount_ghs"
+
+  accounts:
+    source_table: "gwl_accounts"
+    enabled: true
+    fields:
+      - source_column: "account_number"
+        target_field: "gwl_account_number"
+      - source_column: "account_holder_name"
+        target_field: "account_holder_name"
+      - source_column: "tin"
+        target_field: "account_holder_tin"
+      - source_column: "category"
+        target_field: "category"
+      - source_column: "status"
+        target_field: "status"
+      - source_column: "district_code"
+        target_field: "district_code"
+      - source_column: "meter_number"
+        target_field: "meter_number"
+      - source_column: "meter_serial"
+        target_field: "meter_serial"
+      - source_column: "meter_install_date"
+        target_field: "meter_install_date"
+      - source_column: "address_line1"
+        target_field: "address_line1"
+      - source_column: "gps_latitude"
+        target_field: "gps_latitude"
+      - source_column: "gps_longitude"
+        target_field: "gps_longitude"
+      - source_column: "billing_cycle"
+        target_field: "gwl_billing_cycle"
+      - source_column: "route_code"
+        target_field: "gwl_route_code"
+      - source_column: "reader_id"
+        target_field: "gwl_reader_id"

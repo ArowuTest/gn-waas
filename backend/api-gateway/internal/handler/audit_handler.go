@@ -198,13 +198,27 @@ func (h *AuditHandler) AssignAuditEvent(c *fiber.Ctx) error {
 		}
 	}
 
+	// Fetch account GPS coordinates for the field job target location
+	var targetLat, targetLng float64
+	{
+		var lat, lng *float64
+		_ = h.fieldJobRepo.DB().QueryRow(c.UserContext(),
+			`SELECT gps_latitude, gps_longitude FROM water_accounts WHERE id = $1`,
+			event.AccountID,
+		).Scan(&lat, &lng)
+		if lat != nil { targetLat = *lat }
+		if lng != nil { targetLng = *lng }
+	}
+
 	job := &domain.FieldJob{
 		AuditEventID:    &id,
 		AccountID:       event.AccountID,
 		DistrictID:      event.DistrictID,
 		AssignedOfficerID: &officerID,
-		Status:          "IN_PROGRESS",
+		Status:          "QUEUED",
 		IsBlindAudit:    true, // Always blind audit - officer doesn't see expected reading
+		TargetGPSLat:    targetLat,
+		TargetGPSLng:    targetLng,
 		GPSFenceRadiusM: 50.0, // 50m GPS fence
 		Priority:        1,
 	}
@@ -313,6 +327,17 @@ func (h *FieldJobHandler) UpdateJobStatus(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+
+	// Validate status is a valid field_job_status enum value
+	validStatuses := map[string]bool{
+		"QUEUED": true, "ASSIGNED": true, "DISPATCHED": true, "EN_ROUTE": true,
+		"ON_SITE": true, "COMPLETED": true, "FAILED": true, "CANCELLED": true,
+		"ESCALATED": true, "SOS": true, "OUTCOME_RECORDED": true,
+	}
+	if !validStatuses[req.Status] {
+		return response.BadRequest(c, "INVALID_STATUS",
+			"Invalid status. Valid values: QUEUED, ASSIGNED, DISPATCHED, EN_ROUTE, ON_SITE, COMPLETED, FAILED, CANCELLED, ESCALATED, SOS, OUTCOME_RECORDED")
 	}
 
 	if err := h.fieldJobRepo.UpdateStatus(c.UserContext(), id, req.Status, req.OfficerLat, req.OfficerLng); err != nil {
@@ -633,6 +658,20 @@ func (h *FieldJobHandler) ListAllJobs(c *fiber.Ctx) error {
 	})
 }
 
+// ─── GetFieldJob ─────────────────────────────────────────────────────────────
+// GET /api/v1/field-jobs/:id
+func (h *FieldJobHandler) GetFieldJob(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ID", "Invalid field job ID")
+	}
+	job, err := h.fieldJobRepo.GetByID(c.UserContext(), id)
+	if err != nil {
+		return response.NotFound(c, "Field job")
+	}
+	return response.OK(c, job)
+}
+
 // ─── CreateFieldJob ───────────────────────────────────────────────────────────
 // POST /api/v1/field-jobs — admin creates a new dispatch job
 
@@ -884,6 +923,7 @@ func derefString(s *string) string {
 func (h *AnomalyFlagHandler) CreateAnomalyFlag(c *fiber.Ctx) error {
 	var req struct {
 		DistrictID       string   `json:"district_id"`
+		AccountID        string   `json:"account_id"`
 		AccountNumber    *string  `json:"account_number"`
 		AnomalyType      string   `json:"anomaly_type"`
 		AlertLevel       string   `json:"alert_level"`
@@ -921,9 +961,13 @@ func (h *AnomalyFlagHandler) CreateAnomalyFlag(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_DISTRICT_ID", "Invalid district_id UUID")
 	}
 
-	// Resolve account_id from account_number if provided
+	// Resolve account_id from request body
 	var accountID *uuid.UUID
-	// (account lookup omitted for brevity — account_id remains nil for district-level reports)
+	if req.AccountID != "" {
+		if parsed, err := uuid.Parse(req.AccountID); err == nil {
+			accountID = &parsed
+		}
+	}
 
 	flag, err := h.flagRepo.CreateAnomalyFlag(
 		c.UserContext(),
@@ -1016,14 +1060,14 @@ func (h *AnomalyFlagHandler) ConfirmAnomaly(c *fiber.Ctx) error {
 		    confirmed_leakage_ghs  = $2,
 		    leakage_category       = $3::leakage_category,
 		    monthly_leakage_ghs    = $4,
-		    annualised_leakage_ghs = $4 * 12,
-		    status                 = $5,
-		    resolution_notes       = COALESCE(NULLIF($6,''), resolution_notes),
+		    annualised_leakage_ghs = $5,
+		    status                 = $6,
+		    resolution_notes       = COALESCE(NULLIF($7,''), resolution_notes),
 		    resolved_at            = CASE WHEN $1 = FALSE THEN NOW() ELSE resolved_at END,
 		    updated_at             = NOW()
-		WHERE id = $7`,
+		WHERE id = $8`,
 		req.ConfirmedFraud, confirmedLeakageGHS, leakageCategory,
-		confirmedLeakageGHS, newStatus, req.ResolutionNotes, id,
+		confirmedLeakageGHS, confirmedLeakageGHS*12, newStatus, req.ResolutionNotes, id,
 	)
 	if err != nil {
 		h.logger.Error("ConfirmAnomaly update failed", zap.Error(err))
@@ -1044,7 +1088,7 @@ func (h *AnomalyFlagHandler) ConfirmAnomaly(c *fiber.Ctx) error {
 			accountIDArg = *flag.AccountID
 		} // else nil → NULL in DB (allowed since migration 032)
 
-		_, err = h.flagRepo.DB().Exec(ctx, `
+		err = h.flagRepo.ExecInTx(ctx, `
 			INSERT INTO revenue_recovery_events (
 				id, anomaly_flag_id, district_id, account_id,
 				variance_ghs, recovered_ghs, recovery_type,
@@ -1052,14 +1096,14 @@ func (h *AnomalyFlagHandler) ConfirmAnomaly(c *fiber.Ctx) error {
 				detection_date, status, notes, created_at, updated_at
 			)
 			SELECT
-				$1, $2, $3, $4,
-				$5, 0, $6,
-				$7::leakage_category, $5,
+				$1::uuid, $2::uuid, $3::uuid, $4::uuid,
+				$5::numeric, 0, $6::text,
+				$7::leakage_category, $5::numeric,
 				NOW(), 'PENDING',
 				'Auto-created from confirmed anomaly ' || $2::text,
 				NOW(), NOW()
 			WHERE NOT EXISTS (
-				SELECT 1 FROM revenue_recovery_events WHERE anomaly_flag_id = $2
+				SELECT 1 FROM revenue_recovery_events WHERE anomaly_flag_id = $2::uuid
 			)`,
 			newID, id, flag.DistrictID, accountIDArg,
 			confirmedLeakageGHS, recoveryType,

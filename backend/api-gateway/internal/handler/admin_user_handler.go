@@ -51,10 +51,10 @@ type SystemUser struct {
 // ListUsers godoc
 // GET /api/v1/admin/users
 func (h *AdminUserHandler) ListUsers(c *fiber.Ctx) error {
-	// Only SYSTEM_ADMIN can manage users
+	// SYSTEM_ADMIN and SUPER_ADMIN can manage users
 	role, _ := c.Locals("rls_user_role").(string)
-	if role != "SYSTEM_ADMIN" {
-		return response.Unauthorized(c, "Only SYSTEM_ADMIN can manage users")
+	if role != "SYSTEM_ADMIN" && role != "SUPER_ADMIN" {
+		return response.Unauthorized(c, "Only SYSTEM_ADMIN or SUPER_ADMIN can manage users")
 	}
 
 	q := c.Query("q")
@@ -118,7 +118,7 @@ func (h *AdminUserHandler) ListUsers(c *fiber.Ctx) error {
 // POST /api/v1/admin/users
 func (h *AdminUserHandler) CreateUser(c *fiber.Ctx) error {
 	role, _ := c.Locals("rls_user_role").(string)
-	if role != "SYSTEM_ADMIN" {
+	if role != "SYSTEM_ADMIN" && role != "SUPER_ADMIN" {
 		return response.Unauthorized(c, "Only SYSTEM_ADMIN can create users")
 	}
 
@@ -205,7 +205,7 @@ func (h *AdminUserHandler) CreateUser(c *fiber.Ctx) error {
 // PATCH /api/v1/admin/users/:id
 func (h *AdminUserHandler) UpdateUser(c *fiber.Ctx) error {
 	role, _ := c.Locals("rls_user_role").(string)
-	if role != "SYSTEM_ADMIN" {
+	if role != "SYSTEM_ADMIN" && role != "SUPER_ADMIN" {
 		return response.Unauthorized(c, "Only SYSTEM_ADMIN can update users")
 	}
 
@@ -283,7 +283,7 @@ func (h *AdminUserHandler) UpdateUser(c *fiber.Ctx) error {
 // POST /api/v1/admin/users/:id/reset-password
 func (h *AdminUserHandler) ResetPassword(c *fiber.Ctx) error {
 	role, _ := c.Locals("rls_user_role").(string)
-	if role != "SYSTEM_ADMIN" {
+	if role != "SYSTEM_ADMIN" && role != "SUPER_ADMIN" {
 		return response.Unauthorized(c, "Only SYSTEM_ADMIN can reset passwords")
 	}
 

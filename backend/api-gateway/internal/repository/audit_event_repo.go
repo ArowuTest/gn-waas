@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
@@ -127,8 +128,13 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 		argIdx++
 	}
 
+	// Qualify district_id in WHERE to avoid ambiguity with JOINed tables
+	qualifiedWhere := strings.ReplaceAll(where, "district_id", "ae.district_id")
+	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, "status", "ae.status")
+	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, "gra_status", "ae.gra_status")
+
 	var total int
-	r.q(ctx).QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM audit_events WHERE %s", where), args...).Scan(&total)
+	r.q(ctx).QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM audit_events ae WHERE %s", qualifiedWhere), args...).Scan(&total)
 
 	args = append(args, limit, offset)
 	// FIX: expanded SELECT to include fields required by GRACompliancePage and AuditsPage:
@@ -141,15 +147,15 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 		       ae.confirmed_loss_ghs, ae.success_fee_ghs,
 		       ae.gra_sdc_id, ae.gra_qr_code_url, ae.gra_signed_at,
 		       ae.is_locked, ae.created_at, ae.updated_at,
-		       COALESCE(wa.account_number, '')  AS account_number,
-		       COALESCE(wa.customer_name, '')   AS account_holder,
+		       COALESCE(wa.gwl_account_number, '')  AS account_number,
+		       COALESCE(wa.account_holder_name, '')   AS account_holder,
 		       COALESCE(d.district_name, '')    AS district_name
 		FROM audit_events ae
 		LEFT JOIN water_accounts wa ON wa.id = ae.account_id
 		LEFT JOIN districts d ON d.id = ae.district_id
 		WHERE %s
 		ORDER BY ae.created_at DESC
-		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1), args...)
+		LIMIT $%d OFFSET $%d`, qualifiedWhere, argIdx, argIdx+1), args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("GetByDistrict failed: %w", err)
 	}

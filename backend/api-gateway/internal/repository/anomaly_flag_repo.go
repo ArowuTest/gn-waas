@@ -43,6 +43,13 @@ type AnomalyFlag struct {
 }
 
 // DB returns the underlying connection pool (for direct queries in handlers).
+// ExecInTx executes a query using the RLS-activated transaction from context (if present).
+// Falls back to the pool if no transaction is in context.
+func (r *AnomalyFlagRepository) ExecInTx(ctx context.Context, sql string, args ...interface{}) error {
+	_, err := r.q(ctx).Exec(ctx, sql, args...)
+	return err
+}
+
 func (r *AnomalyFlagRepository) DB() *pgxpool.Pool {
 	return r.db
 }
@@ -273,7 +280,7 @@ func (r *AnomalyFlagRepository) CreateAnomalyFlag(ctx context.Context,
 		) VALUES (
 			$1, $2, $3::anomaly_type, $4::alert_level,
 			$5, $6, $7,
-			'OPEN', jsonb_build_object('source', $8), NOW(), NOW()
+			'OPEN', jsonb_build_object('source', $8::text), NOW(), NOW()
 		) RETURNING `+anomalyFlagSelectCols,
 		districtID, accountID, anomalyType, alertLevel,
 		title, description, estimatedLossGHS, source,

@@ -328,6 +328,14 @@ func setLocals(ctx context.Context, tx pgx.Tx, rlsCtx Context) error {
 	userRole   := sanitizeRole(rlsCtx.UserRole)
 	userID     := sanitizeUUID(rlsCtx.UserID, "00000000-0000-0000-0000-000000000000")
 
+	// BUG-RLS-04: RLS policies are defined for the gnwaas_app role.
+	// The app connects as the gnwaas user (which has gnwaas_app granted).
+	// We must SET LOCAL ROLE gnwaas_app so PostgreSQL applies the correct policies.
+	// Without this, gnwaas has no applicable policies → default deny on all tables.
+	if _, err := tx.Exec(ctx, "SET LOCAL ROLE gnwaas_app"); err != nil {
+		return fmt.Errorf("rls.setLocals: SET LOCAL ROLE gnwaas_app: %w", err)
+	}
+
 	// set_config(setting_name, new_value, is_local)
 	// is_local=true → equivalent to SET LOCAL (transaction-scoped)
 	// Each call is a separate parameterized query — no string interpolation.

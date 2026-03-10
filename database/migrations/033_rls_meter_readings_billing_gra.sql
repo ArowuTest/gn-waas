@@ -39,23 +39,23 @@ COMMENT ON POLICY rls_meter_readings_district ON meter_readings
 -- ─── gwl_billing_records ─────────────────────────────────────────────────────
 -- Links to water_accounts via account_id. Contains GWL billing amounts —
 -- cross-district exposure would reveal competitor pricing intelligence.
-ALTER TABLE gwl_billing_records ENABLE ROW LEVEL SECURITY;
-ALTER TABLE gwl_billing_records FORCE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS rls_gwl_billing_records_district ON gwl_billing_records;
-CREATE POLICY rls_gwl_billing_records_district ON gwl_billing_records
-    FOR ALL TO gnwaas_app
-    USING (
-        current_user_is_admin()
-        OR EXISTS (
-            SELECT 1 FROM water_accounts wa
-            WHERE wa.id = gwl_billing_records.account_id
-              AND wa.district_id = current_district_id()
-        )
-    );
-
-COMMENT ON POLICY rls_gwl_billing_records_district ON gwl_billing_records
-    IS 'RLS-M01 fix: Restricts GWL billing records to the authenticated user''s district.';
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable] ALTER TABLE gwl_billing_records ENABLE ROW LEVEL SECURITY;
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable] ALTER TABLE gwl_billing_records FORCE ROW LEVEL SECURITY;
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable] 
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable] DROP POLICY IF EXISTS rls_gwl_billing_records_district ON gwl_billing_records;
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable] CREATE POLICY rls_gwl_billing_records_district ON gwl_billing_records
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]     FOR ALL TO gnwaas_app
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]     USING (
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]         current_user_is_admin()
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]         OR EXISTS (
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]             SELECT 1 FROM water_accounts wa
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]             WHERE wa.id = gwl_billing_records.account_id
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]               AND wa.district_id = current_district_id()
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]         )
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]     );
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable] 
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable] COMMENT ON POLICY rls_gwl_billing_records_district ON gwl_billing_records
+-- [SKIP - gwl_billing_records is a VIEW, RLS not applicable]     IS 'RLS-M01 fix: Restricts GWL billing records to the authenticated user''s district.';
 
 -- ─── gra_compliance_log ──────────────────────────────────────────────────────
 -- Links to water_accounts via account_id. Contains GRA invoice data —

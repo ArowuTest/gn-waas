@@ -114,14 +114,14 @@ BEGIN
       INSERT INTO meter_readings (
         id, account_id, reading_date, reading_m3,
         flow_rate_m3h, pressure_bar,
-        read_method, reader_id, created_at
+        read_method, created_at
       ) VALUES (
         gen_random_uuid(), acc.id,
         month_start + INTERVAL '28 days',
         ROUND(curr_reading::numeric, 2),
         ROUND((monthly_consumption / 720.0)::numeric, 3),
         ROUND((2.5 + random() * 1.5)::numeric, 2),
-        read_method, reader_id, NOW()
+        read_method, NOW()
       ) ON CONFLICT (account_id, reading_date) DO NOTHING;
 
       -- Calculate bill using PURC 2026 tariff
@@ -161,7 +161,7 @@ BEGIN
         billing_period_start, billing_period_end,
         previous_reading_m3, current_reading_m3, consumption_m3,
         gwl_category, gwl_amount_ghs, gwl_vat_ghs, gwl_total_ghs,
-        gwl_reader_id, gwl_read_date, gwl_read_method,
+        gwl_read_date, gwl_read_method,
         payment_status, payment_date, payment_amount_ghs,
         created_at
       ) VALUES (
@@ -171,7 +171,6 @@ BEGIN
         ROUND(prev_reading::numeric, 2), ROUND(curr_reading::numeric, 2),
         ROUND(monthly_consumption::numeric, 2),
         acc.category, bill_amount, bill_vat, bill_total,
-        reader_id,
         month_start + INTERVAL '28 days',
         read_method,
         payment_status, payment_date,
@@ -352,10 +351,12 @@ BEGIN
 
   -- NRW_SPIKE: districts with NRW > 60%
   FOR acc IN
-    SELECT d.id AS district_id, NULL::uuid AS account_id
+    SELECT d.id AS district_id,
+           (SELECT wa.id FROM water_accounts wa WHERE wa.district_id = d.id LIMIT 1) AS account_id
     FROM districts d
     WHERE d.district_code IN ('ASHAIMAN','TAMALE-CENTRAL','DAMONGO','NALERIGU','DAMBAI')
   LOOP
+    CONTINUE WHEN acc.account_id IS NULL; -- skip districts with no accounts
     INSERT INTO anomaly_flags (
       id, account_id, district_id, anomaly_type, alert_level,
       title, description, evidence_data, estimated_loss_ghs, status, created_at
@@ -408,7 +409,7 @@ BEGIN
   FOR officer IN
     SELECT u.id, u.district_id
     FROM users u
-    WHERE u.role = 'FIELD_OFFICER' AND u.is_active = TRUE
+    WHERE u.role = 'FIELD_OFFICER' AND u.status = 'ACTIVE'
     LIMIT 10
   LOOP
     FOR acc IN
@@ -419,31 +420,27 @@ BEGIN
       LIMIT 3
     LOOP
       INSERT INTO field_jobs (
-        id, account_id, assigned_officer_id,
-        job_type, priority, status,
-        title, description,
-        due_date, created_at
+        id, job_reference, account_id, district_id, assigned_officer_id,
+        priority, status,
+        target_gps_lat, target_gps_lng,
+        notes, created_at
       ) VALUES (
-        gen_random_uuid(), acc.id, officer.id,
-        CASE FLOOR(random()*3)::int
-          WHEN 0 THEN 'METER_INSPECTION'
-          WHEN 1 THEN 'LEAK_INVESTIGATION'
-          ELSE 'BILLING_VERIFICATION'
-        END,
+        gen_random_uuid(),
+        'FJ-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD((FLOOR(random()*9999+1))::text, 4, '0'),
+        acc.id, officer.district_id, officer.id,
         CASE FLOOR(random()*3)::int
           WHEN 0 THEN 2
           WHEN 1 THEN 5
           ELSE 8
         END,
-        CASE FLOOR(random()*3)::int
+        (CASE FLOOR(random()*3)::int
           WHEN 0 THEN 'ASSIGNED'
           WHEN 1 THEN 'DISPATCHED'
           ELSE 'ASSIGNED'
-        END,
-        'Anomaly Investigation — Meter Audit Required',
-        'Sentinel flagged this account for billing variance. ' ||
-         'Please inspect meter, verify category, and photograph installation.',
-        NOW() + (3 + FLOOR(random()*7)::int) * INTERVAL '1 day',
+        END)::field_job_status,
+        5.5 + random() * 0.5,
+        -0.2 + random() * 0.4,
+        'Sentinel flagged this account for billing variance. Inspect meter and photograph installation.',
         NOW() - (FLOOR(random()*5)::int) * INTERVAL '1 day'
       ) ON CONFLICT DO NOTHING;
       job_count := job_count + 1;

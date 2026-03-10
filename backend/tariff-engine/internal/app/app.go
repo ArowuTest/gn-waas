@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 	"fmt"
 
 	"github.com/ArowuTest/gn-waas/backend/tariff-engine/internal/config"
@@ -38,8 +39,8 @@ func New(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger) *App {
 	// HTTP Server
 	server := fiber.New(fiber.Config{
 		AppName:      "GN-WAAS Tariff Engine v1.0",
-		ReadTimeout:  30,
-		WriteTimeout: 30,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"success": false,

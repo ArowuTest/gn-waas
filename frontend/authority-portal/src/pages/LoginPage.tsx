@@ -4,6 +4,8 @@ import { Droplets, Eye, EyeOff, MapPin, Smartphone, ClipboardList } from 'lucide
 import { useAuth } from '../contexts/AuthContext'
 import apiClient from '../lib/api-client'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+
 const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || ''
 const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'gnwaas'
 const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'authority-portal'
@@ -46,9 +48,9 @@ function initiateKeycloakLogin() {
 }
 
 const DEV_ACCOUNTS = [
-  { label: 'GWL Manager',      email: 'manager@gwl.gov.gh',    role: 'GWL_MANAGER' },
-  { label: 'Field Officer',    email: 'officer@gwl.gov.gh',    role: 'FIELD_OFFICER' },
-  { label: 'Field Supervisor', email: 'supervisor@gwl.gov.gh', role: 'FIELD_SUPERVISOR' },
+  { label: 'GRA Officer',      email: 'graofficer1@gra.gov.gh',        role: 'GRA_OFFICER' },
+  { label: 'MOF Auditor',      email: 'auditor1@mof.gov.gh',           role: 'MOF_AUDITOR' },
+  { label: 'Field Supervisor', email: 'supervisor.accra@gnwaas.gov.gh', role: 'FIELD_SUPERVISOR' },
   { label: 'MOF Auditor',      email: 'auditor@mof.gov.gh',    role: 'MOF_AUDITOR' },
 ]
 

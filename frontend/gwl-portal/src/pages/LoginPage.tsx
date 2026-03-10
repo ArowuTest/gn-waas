@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Droplets, Eye, EyeOff, Shield, BarChart3, Users } from 'lucide-react';
 import { api as apiClient } from '../utils/api';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 
 const DEV_ACCOUNTS = [
-  { label: 'GWL Supervisor', email: 'supervisor@gwl.gov.gh', role: 'GWL_SUPERVISOR' },
-  { label: 'GWL Manager',    email: 'manager@gwl.gov.gh',    role: 'GWL_MANAGER' },
-  { label: 'GWL Analyst',    email: 'analyst@gwl.gov.gh',    role: 'GWL_ANALYST' },
+  { label: 'GWL Manager',    email: 'manager.accrawest@gwl.com.gh', role: 'GWL_MANAGER' },
+  { label: 'GWL Supervisor', email: 'supervisor@gwl.com.gh',        role: 'GWL_SUPERVISOR' },
+  { label: 'GWL Analyst',    email: 'analyst1@gwl.com.gh',          role: 'GWL_ANALYST' },
 ];
 
 export default function LoginPage() {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ArowuTest/gn-waas/shared/go/middleware"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/cache"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/config"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/handler"
 	gwsvc "github.com/ArowuTest/gn-waas/backend/api-gateway/internal/service"
@@ -63,6 +64,10 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	}
 	logger.Info("Database connected", zap.String("host", cfg.Database.Host))
 
+	// ── Redis Cache ───────────────────────────────────────────────────────────
+	redisAddr := cfg.Redis.Addr()
+	cacheClient := cache.NewClient(redisAddr, cfg.Redis.Password, cfg.Redis.DB, logger)
+
 	// ── Repositories ─────────────────────────────────────────────────────────
 	auditRepo    := repository.NewAuditEventRepository(db, logger)
 	fieldJobRepo := repository.NewFieldJobRepository(db, logger)
@@ -93,7 +98,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	flagRepo        := repository.NewAnomalyFlagRepository(db, logger)
 	auditHandler    := handler.NewAuditHandler(auditRepo, fieldJobRepo, userRepo, logger)
 	fieldJobHandler := handler.NewFieldJobHandler(fieldJobRepo, flagRepo, auditRepo, sosNotifier, evidenceStorage, logger)
-	districtHandler := handler.NewDistrictHandler(districtRepo, logger)
+	districtHandler := handler.NewDistrictHandler(districtRepo, cacheClient, logger)
 	userHandler     := handler.NewUserHandler(userRepo, logger)
 	configHandler   := handler.NewSystemConfigHandler(configRepo, logger)
 	accountHandler  := handler.NewAccountHandler(accountRepo, logger)
@@ -214,46 +219,91 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		// resulting in 404 for all authenticated routes. Fix: inline the dev auth setup
 		// directly in a single middleware that calls c.Next() exactly once.
 		authMW = func(c *fiber.Ctx) error {
+			// BUG-RLS-01 fix: Parse the actual user email from the dev token so that
+			// each user gets their real district_id and user_id from the database,
+			// not a hardcoded first-district fallback that breaks RLS isolation.
+			//
+			// Token format: "dev-mock-token-{email}"
+			// e.g. "dev-mock-token-officer.kwame@gnwaas.gov.gh"
+			authHeader := c.Get("Authorization")
+			tokenEmail := ""
+			const devPrefix = "dev-mock-token-"
+			if strings.HasPrefix(authHeader, "Bearer "+devPrefix) {
+				tokenEmail = strings.TrimPrefix(authHeader, "Bearer "+devPrefix)
+			}
+
+			// Default role/identity for unauthenticated or generic dev requests
 			devRole := c.Get("X-Dev-Role", "SUPER_ADMIN")
 			devEmail := "dev-" + strings.ToLower(devRole) + "@gnwaas.gov.gh"
 			devName := "Dev User (" + devRole + ")"
+			devUserID := "a0000001-0000-0000-0000-000000000001"
+			devDistrictID := "00000000-0000-0000-0000-000000000000"
 
-			c.Locals("user_id", "a0000001-0000-0000-0000-000000000001")
-			c.Locals("user_email", devEmail)
-			c.Locals("user_name", devName)
-			c.Locals("user_roles", []string{devRole})
-			c.Locals("claims", &middleware.Claims{
-				Sub:   "a0000001-0000-0000-0000-000000000001",
-				Email: devEmail,
-				Name:  devName,
-				RealmAccess: middleware.RealmAccess{
-					Roles: []string{devRole},
-				},
-			})
+			// If a real user email is embedded in the token, look them up
+			if tokenEmail != "" {
+				// BUG-RLS-05: The users table has RLS enabled. The gnwaas app user
+				// is not a superuser, so a plain pool.QueryRow() returns 0 rows.
+				// Fix: run the lookup inside a transaction with SET LOCAL ROLE gnwaas_app
+				// and app.user_role = 'SUPER_ADMIN' so the RLS policy allows the read.
+				var dbUserID, dbRole, dbDistrictID string
+				authErr := func() error {
+					tx, txErr := db.Begin(c.Context())
+					if txErr != nil {
+						return txErr
+					}
+					defer tx.Rollback(c.Context())
+					if _, txErr = tx.Exec(c.Context(), "SET LOCAL ROLE gnwaas_app"); txErr != nil {
+						return txErr
+					}
+					if _, txErr = tx.Exec(c.Context(), "SELECT set_config('app.user_role', 'SUPER_ADMIN', true)"); txErr != nil {
+						return txErr
+					}
+					if _, txErr = tx.Exec(c.Context(), "SELECT set_config('app.district_id', '00000000-0000-0000-0000-000000000000', true)"); txErr != nil {
+						return txErr
+					}
+					if _, txErr = tx.Exec(c.Context(), "SELECT set_config('app.user_id', '00000000-0000-0000-0000-000000000000', true)"); txErr != nil {
+						return txErr
+					}
+					return tx.QueryRow(c.Context(),
+						`SELECT id::text, role::text, COALESCE(district_id::text, '00000000-0000-0000-0000-000000000000')
+						 FROM users WHERE email = $1 AND status = 'ACTIVE' LIMIT 1`,
+						tokenEmail,
+					).Scan(&dbUserID, &dbRole, &dbDistrictID)
+				}()
+				if authErr == nil {
+					devEmail = tokenEmail
+					devRole = dbRole
+					devUserID = dbUserID
+					devDistrictID = dbDistrictID
+					devName = tokenEmail
+				}
+			}
 
-			// Set RLS locals
-			c.Locals("rls_user_role", devRole)
-			c.Locals("rls_user_id", "a0000001-0000-0000-0000-000000000001")
-
-			// BUG-V30-04: For district-scoped roles, replace zero UUID with a real district.
+			// Admin/global roles bypass district RLS (zero UUID = no district filter)
 			adminRoles := map[string]bool{
 				"SUPER_ADMIN":  true,
 				"SYSTEM_ADMIN": true,
 				"MOF_AUDITOR":  true,
 			}
 			if adminRoles[devRole] {
-				c.Locals("rls_district_id", "00000000-0000-0000-0000-000000000000")
-			} else {
-				var realDistrictID string
-				err := db.QueryRow(c.Context(),
-					"SELECT id::text FROM districts WHERE is_active = true ORDER BY district_name LIMIT 1",
-				).Scan(&realDistrictID)
-				if err == nil && realDistrictID != "" {
-					c.Locals("rls_district_id", realDistrictID)
-				} else {
-					c.Locals("rls_district_id", "00000000-0000-0000-0000-000000000000")
-				}
+				devDistrictID = "00000000-0000-0000-0000-000000000000"
 			}
+
+			c.Locals("user_id", devUserID)
+			c.Locals("user_email", devEmail)
+			c.Locals("user_name", devName)
+			c.Locals("user_roles", []string{devRole})
+			c.Locals("claims", &middleware.Claims{
+				Sub:   devUserID,
+				Email: devEmail,
+				Name:  devName,
+				RealmAccess: middleware.RealmAccess{
+					Roles: []string{devRole},
+				},
+			})
+			c.Locals("rls_user_role", devRole)
+			c.Locals("rls_user_id", devUserID)
+			c.Locals("rls_district_id", devDistrictID)
 
 			return c.Next()
 		}
@@ -380,6 +430,29 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		if body.Email == "" {
 			body.Email = "dev-" + strings.ToLower(body.Role) + "@gnwaas.gov.gh"
 		}
+		// BUG-V30-04 fix: look up the real user from DB so district_id is correct.
+		// Run inside a transaction with SUPER_ADMIN context to bypass RLS.
+		var realID, realName, realRole, realDistrictID string
+		realID = "a0000001-0000-0000-0000-000000000001"
+		realName = "Dev " + body.Role
+		realRole = body.Role
+		realDistrictID = "00000000-0000-0000-0000-000000000000"
+
+		_ = func() error {
+			tx, err := db.Begin(c.Context())
+			if err != nil { return err }
+			defer tx.Rollback(c.Context())
+			if _, err = tx.Exec(c.Context(), "SET LOCAL ROLE gnwaas_app"); err != nil { return err }
+			if _, err = tx.Exec(c.Context(), "SELECT set_config('app.user_role','SUPER_ADMIN',true)"); err != nil { return err }
+			if _, err = tx.Exec(c.Context(), "SELECT set_config('app.district_id','00000000-0000-0000-0000-000000000000',true)"); err != nil { return err }
+			if _, err = tx.Exec(c.Context(), "SELECT set_config('app.user_id','00000000-0000-0000-0000-000000000000',true)"); err != nil { return err }
+			return tx.QueryRow(c.Context(),
+				`SELECT id::text, full_name, role::text,
+				        COALESCE(district_id::text,'00000000-0000-0000-0000-000000000000')
+				 FROM users WHERE email=$1 AND status='ACTIVE' LIMIT 1`, body.Email,
+			).Scan(&realID, &realName, &realRole, &realDistrictID)
+		}()
+
 		// Return in the standard APIResponse envelope so frontend can use response.data
 		return c.JSON(fiber.Map{
 			"success": true,
@@ -389,11 +462,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 				"expires_in":    3600,
 				"refresh_token": "dev-refresh-" + body.Email,
 				"user": fiber.Map{
-					"id":          "a0000001-0000-0000-0000-000000000001",
+					"id":          realID,
 					"email":       body.Email,
-					"full_name":   "Dev " + body.Role,
-					"role":        body.Role,
-					"district_id": "d0000001-0000-0000-0000-000000000001",
+					"full_name":   realName,
+					"role":        realRole,
+					"district_id": realDistrictID,
 				},
 			},
 		})
@@ -419,7 +492,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	users := api.Group("/users")
 	users.Get("/me", userHandler.GetMe)
 	users.Get("/field-officers",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "GWL_MANAGER", "FIELD_SUPERVISOR"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "GWL_MANAGER", "FIELD_SUPERVISOR", "GRA_OFFICER"),
 		userHandler.GetFieldOfficers,
 	)
 
@@ -448,7 +521,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// Admin/supervisor: list all field jobs with optional status/alert_level/district_id filters.
 	// Used by admin portal FieldJobsPage to display the full job queue.
 	fieldJobs.Get("/",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "GRA_OFFICER"),
 		fieldJobHandler.ListAllJobs,
 	)
 	// Admin/supervisor: create a new field job dispatch.
@@ -456,8 +529,12 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
 		fieldJobHandler.CreateFieldJob,
 	)
+	fieldJobs.Get("/:id",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_OFFICER"),
+		fieldJobHandler.GetFieldJob,
+	)
 	fieldJobs.Get("/my-jobs",
-		middleware.RequireRoles("FIELD_OFFICER"),
+		middleware.RequireRoles("FIELD_OFFICER", "GRA_OFFICER"),
 		fieldJobHandler.GetMyJobs,
 	)
 	// Admin/supervisor: assign a field officer to a job.
@@ -503,14 +580,14 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── NRW Reports ───────────────────────────────────────────────────────────
 	// Anomaly flags
 	anomalyFlags := api.Group("/anomaly-flags",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "GRA_OFFICER"),
 	)
 	anomalyFlags.Get("/", flagHandler.ListAnomalyFlags)
 
 	// ── Sentinel routes (admin portal compatibility) ───────────────────────────
 	// The admin portal hooks use /sentinel/* paths — proxy to anomaly-flags handler
 	sentinel := api.Group("/sentinel",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_OFFICER", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_OFFICER", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "GRA_OFFICER"),
 	)
 	sentinel.Get("/anomalies", flagHandler.ListAnomalyFlags)
 	sentinel.Post("/anomalies", flagHandler.CreateAnomalyFlag)
@@ -560,7 +637,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_SUPERVISOR"),
 		nrwHandler.GetNRWSummary)
 	reports.Get("/nrw/my-district",
-		middleware.RequireRoles("FIELD_OFFICER", "GWL_MANAGER", "FIELD_SUPERVISOR"),
+		middleware.RequireRoles("FIELD_OFFICER", "GWL_MANAGER", "FIELD_SUPERVISOR", "GRA_OFFICER"),
 		nrwHandler.GetMyDistrictSummary,
 	)
 	reports.Get("/nrw/:district_id/trend", nrwHandler.GetDistrictNRWTrend)

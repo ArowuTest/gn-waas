@@ -2,8 +2,10 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/cache"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
@@ -15,11 +17,12 @@ import (
 // DistrictHandler handles district HTTP requests
 type DistrictHandler struct {
 	districtRepo *repository.DistrictRepository
+	cache        *cache.Client
 	logger       *zap.Logger
 }
 
-func NewDistrictHandler(districtRepo *repository.DistrictRepository, logger *zap.Logger) *DistrictHandler {
-	return &DistrictHandler{districtRepo: districtRepo, logger: logger}
+func NewDistrictHandler(districtRepo *repository.DistrictRepository, cacheClient *cache.Client, logger *zap.Logger) *DistrictHandler {
+	return &DistrictHandler{districtRepo: districtRepo, cache: cacheClient, logger: logger}
 }
 
 // logAdminAction writes an entry to the audit_trail table for compliance.
@@ -41,11 +44,24 @@ func (h *DistrictHandler) logAdminAction(ctx context.Context, actorID, entityTyp
 // ListDistricts godoc
 // GET /api/v1/districts
 func (h *DistrictHandler) ListDistricts(c *fiber.Ctx) error {
+	cacheKey := fmt.Sprintf("districts:all:%s", c.Query("region", "all"))
+
+	// Try cache first
+	var cached []domain.District
+	if h.cache.Get(c.UserContext(), &cached, cacheKey) {
+		c.Set("X-Cache", "HIT")
+		return response.OK(c, cached)
+	}
+
 	districts, err := h.districtRepo.GetAll(c.UserContext())
 	if err != nil {
 		h.logger.Error("GetAll districts failed", zap.Error(err))
 		return response.InternalError(c, "Failed to fetch districts")
 	}
+
+	// Store in cache
+	h.cache.Set(c.UserContext(), cache.TTLDistricts, cacheKey)(districts)
+	c.Set("X-Cache", "MISS")
 	return response.OK(c, districts)
 }
 
@@ -208,7 +224,7 @@ func (h *HealthHandler) ReadinessCheck(c *fiber.Ctx) error {
 // POST /api/v1/admin/districts
 func (h *DistrictHandler) CreateDistrict(c *fiber.Ctx) error {
 	role, _ := c.Locals("rls_user_role").(string)
-	if role != "SYSTEM_ADMIN" {
+	if role != "SYSTEM_ADMIN" && role != "SUPER_ADMIN" {
 		return response.Unauthorized(c, "Only SYSTEM_ADMIN can create districts")
 	}
 
@@ -257,7 +273,7 @@ func (h *DistrictHandler) CreateDistrict(c *fiber.Ctx) error {
 // PATCH /api/v1/admin/districts/:id
 func (h *DistrictHandler) UpdateDistrict(c *fiber.Ctx) error {
 	role, _ := c.Locals("rls_user_role").(string)
-	if role != "SYSTEM_ADMIN" {
+	if role != "SYSTEM_ADMIN" && role != "SUPER_ADMIN" {
 		return response.Unauthorized(c, "Only SYSTEM_ADMIN can update districts")
 	}
 
