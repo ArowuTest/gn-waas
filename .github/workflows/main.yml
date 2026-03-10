@@ -296,7 +296,9 @@ jobs:
         env:
           GOWORK: "off"        # Disable workspace so govulncheck resolves modules correctly
           GITHUB_ACTIONS: ""   # Prevent govulncheck from emitting ::error:: annotations
-        run: govulncheck -format text ./... 2>&1 | tee /tmp/vuln-${{ matrix.service }}.txt; exit 0
+        run: govulncheck -format text ./... > /tmp/vuln-${{ matrix.service }}.txt 2>&1 || true
+        # Output redirected to file only — prevents ::error:: annotations on commit.
+        # Findings are preserved in the uploaded artifact below.
         continue-on-error: true   # Report but don't block — findings go to security review
 
       - name: Upload vulnerability report
