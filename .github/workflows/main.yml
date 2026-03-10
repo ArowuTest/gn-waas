@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: timescale/timescaledb-ha:pg16-latest
+        image: postgres:16
         env:
           POSTGRES_DB: gnwaas_test
           POSTGRES_USER: gnwaas_user

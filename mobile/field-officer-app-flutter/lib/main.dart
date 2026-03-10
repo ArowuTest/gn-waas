@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'providers/providers.dart';
 import 'router/router.dart';
@@ -10,13 +9,9 @@ import 'router/router.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialise SQLite FFI for desktop/test environments
-  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.linux ||
-      defaultTargetPlatform == TargetPlatform.windows ||
-      defaultTargetPlatform == TargetPlatform.macOS)) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  }
+  // Note: sqflite_common_ffi (desktop SQLite FFI) is only used in test environments.
+  // It is a dev_dependency and must NOT be imported in production code.
+  // Desktop FFI initialisation is handled in test/helpers/test_setup.dart.
 
   runApp(
     const ProviderScope(

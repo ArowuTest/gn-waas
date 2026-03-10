@@ -178,7 +178,7 @@ func TestAdminUserHandler_ResetPassword_RequiresSystemAdmin(t *testing.T) {
 func TestDistrictHandler_CreateDistrict_RequiresSystemAdmin(t *testing.T) {
 	app := newTestApp()
 	// nil repo — we only test the auth guard, which fires before DB access
-	h := handler.NewDistrictHandler(nil, zap.NewNop())
+	h := handler.NewDistrictHandler(nil, nil, zap.NewNop())
 
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("rls_user_role", "READONLY_VIEWER")
@@ -197,7 +197,7 @@ func TestDistrictHandler_CreateDistrict_RequiresSystemAdmin(t *testing.T) {
 
 func TestDistrictHandler_UpdateDistrict_InvalidUUID(t *testing.T) {
 	app := newTestApp()
-	h := handler.NewDistrictHandler(nil, zap.NewNop())
+	h := handler.NewDistrictHandler(nil, nil, zap.NewNop())
 
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("rls_user_role", "SYSTEM_ADMIN")
