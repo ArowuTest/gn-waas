@@ -20,7 +20,6 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -550,9 +549,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			return response.BadRequest(c, "INVALID_ID", "Invalid district ID")
 		}
 		tx, hasTx := rls.TxFromContext(c.UserContext())
-		var q interface {
-			QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-		}
+		var q repository.Querier
 		if hasTx {
 			q = tx
 		} else {
@@ -637,9 +634,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			return response.BadRequest(c, "INVALID_ID", "Invalid account ID")
 		}
 		tx, hasTx := rls.TxFromContext(c.UserContext())
-		var q interface {
-			QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-		}
+		var q repository.Querier
 		if hasTx {
 			q = tx
 		} else {
@@ -1092,9 +1087,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 		// Use RLS transaction so district-scoped policies are enforced
 		rlsTx, hasTx := rls.TxFromContext(c.UserContext())
-		var gapQ interface {
-			QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-		}
+		var gapQ repository.Querier
 		if hasTx {
 			gapQ = rlsTx
 		} else {
@@ -1148,9 +1141,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 		// Use RLS transaction so district-scoped policies are enforced
 		gapListTx, hasGapListTx := rls.TxFromContext(c.UserContext())
-		var gapListQ interface {
-			Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
-		}
+		var gapListQ repository.Querier
 		if hasGapListTx {
 			gapListQ = gapListTx
 		} else {
@@ -1351,9 +1342,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 			// Use RLS transaction so user-scoped policies are enforced
 			syncTx, hasSyncTx := rls.TxFromContext(c.UserContext())
-			var syncQ interface {
-				Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
-			}
+			var syncQ repository.Querier
 			if hasSyncTx {
 				syncQ = syncTx
 			} else {
@@ -1408,9 +1397,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		func(c *fiber.Ctx) error {
 			// Use RLS transaction so user-scoped policies are enforced
 			devTx, hasDevTx := rls.TxFromContext(c.UserContext())
-			var devQ interface {
-				Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
-			}
+			var devQ repository.Querier
 			if hasDevTx {
 				devQ = devTx
 			} else {
