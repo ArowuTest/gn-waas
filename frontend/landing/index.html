@@ -1168,6 +1168,35 @@
     }
     .mobile-nav-cta:hover { background: #005230 !important; }
 
+    /* ── Hero Mobile CTA (hidden on desktop, shown on mobile) ── */
+    .hero-mobile-cta {
+      display: none;
+      gap: 10px;
+      margin-top: 24px;
+    }
+    .hero-mobile-btn {
+      flex: 1;
+      text-align: center;
+      padding: 13px 16px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .hero-mobile-btn:hover { transform: translateY(-1px); }
+    .hero-mobile-btn-primary {
+      background: var(--gh-gold);
+      color: var(--slate);
+    }
+    .hero-mobile-btn-primary:hover { box-shadow: 0 4px 16px rgba(252,209,22,0.4); }
+    .hero-mobile-btn-secondary {
+      background: rgba(206,17,38,0.15);
+      border: 1px solid rgba(206,17,38,0.4);
+      color: white;
+    }
+    .hero-mobile-btn-secondary:hover { background: rgba(206,17,38,0.25); }
+
 /* ═══════════════════════════════════════════════════════════
    RESPONSIVE — TABLET  (≤ 900px)
    ═══════════════════════════════════════════════════════════ */
@@ -1187,86 +1216,215 @@
       .portal-dir-grid    { grid-template-columns: 1fr; }
       .impact-grid        { grid-template-columns: repeat(2, 1fr); }
       .footer-top         { grid-template-columns: 1fr; gap: 24px; }
-    }
 
       /* Whistleblower */
       .wb-layout    { grid-template-columns: 1fr; gap: 32px; }
       .wb-info      { position: static; }
       .wb-categories { display: none; }
+    }
 
 /* ═══════════════════════════════════════════════════════════
    RESPONSIVE — MOBILE  (≤ 640px)
    ═══════════════════════════════════════════════════════════ */
     @media (max-width: 640px) {
-      /* Gov bar */
-      .gov-bar { font-size: 0.65rem; padding: 5px 1rem; gap: 6px; flex-wrap: wrap; }
+      /* ── Gov bar ── */
+      .gov-bar {
+        font-size: 0.65rem;
+        padding: 5px 1rem;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
       .gov-bar a { display: none; }
+      .gov-bar-left span:not(.flag) { display: none; }
 
-      /* Header */
+      /* ── Header ── */
       header { padding: 0 1rem; }
-      .header-inner { height: 56px; }
-      .system-name  { font-size: 1rem; }
-      .system-sub   { display: none; }
+      .header-inner {
+        height: 60px;
+        padding: 0;
+      }
+      .coat-of-arms { width: 40px; height: 40px; }
+      .system-name  { font-size: 0.95rem; }
+      .system-full  { display: none; }
+      .mandate-line { display: none; }
 
-      /* Hero */
-      .hero { padding: 40px 1rem 40px; }
-      .hero-text h1 { font-size: 1.75rem; line-height: 1.2; }
-      .hero-text p  { font-size: 0.95rem; }
-      .hero-badges  { flex-wrap: wrap; gap: 8px; }
-      .hero-badge   { font-size: 0.7rem; padding: 4px 10px; }
-      .hero-cta     { flex-direction: column; gap: 10px; }
-      .hero-cta a   { width: 100%; text-align: center; box-sizing: border-box; }
+      /* ── Hero ── */
+      .hero-mobile-cta { display: flex; }
+      .hero { padding: 36px 1rem 40px; }
+      .hero-eyebrow {
+        font-size: 0.65rem;
+        padding: 4px 10px;
+        margin-bottom: 14px;
+      }
+      .hero h1 {
+        font-size: clamp(1.55rem, 6vw, 1.9rem);
+        line-height: 1.2;
+        margin-bottom: 12px;
+      }
+      .hero-sub {
+        font-size: 0.9rem;
+        margin-bottom: 20px;
+        line-height: 1.6;
+      }
+      .hero-mandate {
+        font-size: 0.78rem;
+        padding: 10px 14px;
+        margin-bottom: 20px;
+        line-height: 1.5;
+      }
+      .hero-kpis {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 0;
+      }
+      .hero-kpi {
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .hero-kpi .kpi-val  { font-size: 1.4rem; }
+      .hero-kpi .kpi-label { font-size: 0.65rem; }
+      .hero-cta { flex-direction: column; gap: 10px; margin-top: 20px; }
+      .hero-cta a {
+        width: 100%;
+        text-align: center;
+        box-sizing: border-box;
+        padding: 13px 20px;
+        font-size: 0.9rem;
+      }
+      .hero-badges  { flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+      .hero-badge   { font-size: 0.68rem; padding: 4px 10px; }
 
-      /* Impact stats */
+      /* ── Mandate strip ── */
+      .mandate-strip { padding: 16px 1rem; }
+      .mandate-strip-inner {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .mandate-strip p { font-size: 0.8rem; }
+      .mandate-agencies { gap: 10px; }
+      .agency-tag { font-size: 0.68rem; padding: 3px 8px; }
+
+      /* ── Impact stats ── */
       .impact-grid  { grid-template-columns: repeat(2, 1fr); gap: 1px; }
       .impact-stat  { padding: 20px 12px; }
-      .impact-stat .stat-value { font-size: 1.6rem; }
+      .impact-stat .stat-value { font-size: 1.5rem; }
+      .impact-stat .stat-label { font-size: 0.7rem; }
 
-      /* Sections */
+      /* ── Sections ── */
       .section      { padding: 40px 1rem; }
-      .section-title { font-size: 1.4rem; }
-      .section-sub  { font-size: 0.9rem; }
+      .section-label { font-size: 0.65rem; }
+      .section-title { font-size: 1.3rem; line-height: 1.3; }
+      .section-sub  { font-size: 0.88rem; }
 
-      /* Pillars */
-      .pillar-card  { padding: 20px; }
+      /* ── Pillars ── */
+      .pillar-card  { padding: 18px; }
+      .pillar-icon  { font-size: 1.5rem; margin-bottom: 10px; }
+      .pillar-card h3 { font-size: 0.95rem; }
+      .pillar-card p  { font-size: 0.82rem; }
 
-      /* Portal directory cards */
+      /* ── Portal directory ── */
       .portal-dir-grid { grid-template-columns: 1fr; }
-      .portal-dir-card { padding: 20px; }
-      .portal-card-header { flex-direction: column; align-items: flex-start; gap: 8px; }
-      .portal-badge { font-size: 0.65rem; }
+      .portal-dir-card { padding: 18px; }
+      .portal-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .portal-badge { font-size: 0.62rem; }
+      .pdc-features { gap: 6px; }
+      .pdc-feature  { font-size: 0.78rem; }
+      .pdc-roles    { flex-wrap: wrap; gap: 4px; }
+      .pdc-role     { font-size: 0.68rem; padding: 3px 8px; }
+      .pdc-cta      { font-size: 0.8rem; }
 
-      /* Portal directory */
-      .portal-dir-card { padding: 20px; }
+      /* ── Oversight ── */
+      .oversight-grid { gap: 20px; }
+      .oversight-item { padding: 16px; }
+      .compliance-box { padding: 18px; }
+      .compliance-box h4 { font-size: 0.88rem; }
+      .compliance-item-row { font-size: 0.78rem; padding: 8px 0; gap: 8px; }
+      .ci-ref { font-size: 0.65rem; }
+      .oversight-list li { font-size: 0.82rem; gap: 10px; padding: 12px 0; }
+      .oversight-list .ol-icon { width: 28px; height: 28px; font-size: 0.8rem; }
 
-      /* Oversight */
-      .oversight-grid { gap: 24px; }
-
-      /* Footer */
-      .footer-top   { gap: 20px; }
-      .footer-bottom { flex-direction: column; gap: 8px; text-align: center; font-size: 0.75rem; }
-      .footer-legal { flex-wrap: wrap; justify-content: center; gap: 8px; }
-
-      /* Whistleblower */
-      .wb-section   { padding: 48px 1rem; }
-      .wb-layout    { grid-template-columns: 1fr; gap: 32px; }
+      /* ── Whistleblower ── */
+      .wb-section   { padding: 40px 1rem; }
+      .wb-layout    { grid-template-columns: 1fr; gap: 28px; }
       .wb-info      { position: static; }
-      .wb-info h2   { font-size: 1.6rem; }
-      .wb-stats     { grid-template-columns: repeat(2, 1fr); }
+      .wb-info h2   { font-size: 1.4rem; }
+      .wb-info > p  { font-size: 0.85rem; }
+      .wb-stats     { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .wb-stat      { padding: 12px; }
+      .wb-stat-val  { font-size: 1.3rem; }
+      .wb-stat-label { font-size: 0.68rem; }
+      .wb-shield    { padding: 12px; }
+      .wb-shield-text { font-size: 0.78rem; }
+      .wb-categories { display: none; }
       .wb-form-grid { grid-template-columns: 1fr; }
       .wb-card      { padding: 20px; }
-      .wb-categories { display: none; }
+      .wb-tabs      { }
+      .wb-tab       { padding: 13px 12px; font-size: 0.8rem; }
+      .wb-input,
+      .wb-select,
+      .wb-textarea  { font-size: 0.9rem; padding: 11px 12px; }
+      .wb-submit-btn { padding: 13px 20px; font-size: 0.9rem; }
+      .wb-reward-notice { padding: 12px; }
+      .wb-reward-notice p { font-size: 0.78rem; }
+      .wb-ref-number { font-size: 1.2rem; }
+
+      /* ── Footer ── */
+      .footer-top   { gap: 20px; }
+      .footer-brand-desc { font-size: 0.78rem; }
+      .footer-col h5 { font-size: 0.7rem; }
+      .footer-col a  { font-size: 0.8rem; }
+      .footer-bottom {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+        font-size: 0.72rem;
+      }
+      .footer-legal {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+      }
     }
 
 /* ═══════════════════════════════════════════════════════════
    RESPONSIVE — SMALL MOBILE  (≤ 400px)
    ═══════════════════════════════════════════════════════════ */
     @media (max-width: 400px) {
-      .impact-grid  { grid-template-columns: 1fr; }
-      .wb-stats     { grid-template-columns: 1fr 1fr; }
-      .wb-card      { padding: 16px; }
-      .hero-text h1 { font-size: 1.5rem; }
-      .impact-stat .stat-value { font-size: 1.4rem; }
+      /* Header */
+      .coat-of-arms { width: 34px; height: 34px; }
+      .system-name  { font-size: 0.88rem; }
+
+      /* Hero */
+      .hero { padding: 28px 0.875rem 32px; }
+      .hero h1 { font-size: 1.45rem; }
+      .hero-kpis { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .hero-kpi .kpi-val { font-size: 1.25rem; }
+
+      /* Impact */
+      .impact-grid  { grid-template-columns: repeat(2, 1fr); }
+      .impact-stat .stat-value { font-size: 1.3rem; }
+
+      /* Sections */
+      .section { padding: 32px 0.875rem; }
+      .section-title { font-size: 1.2rem; }
+
+      /* Whistleblower */
+      .wb-section   { padding: 32px 0.875rem; }
+      .wb-stats     { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+      .wb-card      { padding: 14px; }
+      .wb-info h2   { font-size: 1.25rem; }
+      .wb-tab       { padding: 11px 8px; font-size: 0.75rem; }
+
+      /* Footer */
+      footer { padding: 32px 0.875rem 24px; }
     }
 
     </style>
@@ -1376,6 +1534,16 @@
           <div class="kpi-val">1.2M</div>
           <div class="kpi-label">Accounts Under Audit</div>
         </div>
+      </div>
+
+      <!-- Mobile-only portal CTA (access card is hidden on mobile) -->
+      <div class="hero-mobile-cta">
+        <a href="#portals" class="hero-mobile-btn hero-mobile-btn-primary">
+          🔐 Access Portals
+        </a>
+        <a href="#report-fraud" class="hero-mobile-btn hero-mobile-btn-secondary">
+          🚨 Report Fraud
+        </a>
       </div>
     </div>
 
