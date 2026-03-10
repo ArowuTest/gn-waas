@@ -32,7 +32,7 @@ func (r *VATConfigRepository) GetActiveConfig(
 		SELECT
 			id, rate_percentage, components,
 			effective_from, effective_to,
-			regulatory_ref, is_active, created_at
+			COALESCE(regulatory_ref, ''), is_active, created_at
 		FROM vat_config
 		WHERE is_active = TRUE
 		  AND effective_from <= $1
@@ -70,7 +70,7 @@ func (r *VATConfigRepository) GetAll(ctx context.Context) ([]*entities.VATConfig
 		SELECT
 			id, rate_percentage, components,
 			effective_from, effective_to,
-			regulatory_ref, is_active, created_at
+			COALESCE(regulatory_ref, ''), is_active, created_at
 		FROM vat_config
 		ORDER BY effective_from DESC`
 
@@ -114,7 +114,7 @@ func (r *VATConfigRepository) Create(ctx context.Context, cfg *entities.VATConfi
 	query := `
 		INSERT INTO vat_config (
 			rate_percentage, components, effective_from,
-			effective_to, regulatory_ref, is_active
+			effective_to, COALESCE(regulatory_ref, ''), is_active
 		) VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at`
 

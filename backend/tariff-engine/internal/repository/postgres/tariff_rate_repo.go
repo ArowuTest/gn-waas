@@ -36,7 +36,7 @@ func (r *TariffRateRepository) GetActiveRatesForCategory(
 			min_volume_m3, max_volume_m3,
 			rate_per_m3, service_charge_ghs,
 			effective_from, effective_to,
-			approved_by, regulatory_ref, is_active,
+			COALESCE(approved_by, ''), COALESCE(regulatory_ref, ''), is_active,
 			created_at, updated_at
 		FROM tariff_rates
 		WHERE category = $1
@@ -62,7 +62,7 @@ func (r *TariffRateRepository) GetByID(ctx context.Context, id uuid.UUID) (*enti
 			min_volume_m3, max_volume_m3,
 			rate_per_m3, service_charge_ghs,
 			effective_from, effective_to,
-			approved_by, regulatory_ref, is_active,
+			COALESCE(approved_by, ''), COALESCE(regulatory_ref, ''), is_active,
 			created_at, updated_at
 		FROM tariff_rates
 		WHERE id = $1`
@@ -86,7 +86,7 @@ func (r *TariffRateRepository) GetAll(ctx context.Context) ([]*entities.TariffRa
 			min_volume_m3, max_volume_m3,
 			rate_per_m3, service_charge_ghs,
 			effective_from, effective_to,
-			approved_by, regulatory_ref, is_active,
+			COALESCE(approved_by, ''), COALESCE(regulatory_ref, ''), is_active,
 			created_at, updated_at
 		FROM tariff_rates
 		ORDER BY category, min_volume_m3 ASC`
@@ -106,7 +106,7 @@ func (r *TariffRateRepository) Create(ctx context.Context, rate *entities.Tariff
 		INSERT INTO tariff_rates (
 			category, tier_name, min_volume_m3, max_volume_m3,
 			rate_per_m3, service_charge_ghs, effective_from, effective_to,
-			approved_by, regulatory_ref, is_active
+			COALESCE(approved_by, ''), COALESCE(regulatory_ref, ''), is_active
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id, created_at, updated_at`
 
