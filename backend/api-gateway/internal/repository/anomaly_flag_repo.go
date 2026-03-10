@@ -82,8 +82,11 @@ const anomalyFlagSelectCols = `
 	title, description, estimated_loss_ghs, status, assigned_to,
 	resolved_at, resolution_notes, false_positive, confirmed_fraud,
 	recovered_amount_ghs,
-	leakage_category, monthly_leakage_ghs, annualised_leakage_ghs,
-	confirmed_leakage_ghs, field_outcome,
+	NULL::text AS leakage_category,
+	COALESCE(estimated_loss_ghs, 0) AS monthly_leakage_ghs,
+	COALESCE(estimated_loss_ghs * 12, 0) AS annualised_leakage_ghs,
+	NULL::numeric AS confirmed_leakage_ghs,
+	NULL::text AS field_outcome,
 	created_at, updated_at`
 
 func scanAnomalyFlag(row interface {
@@ -152,7 +155,7 @@ func (r *AnomalyFlagRepository) ListAnomalyFlags(
 	dataSQL := `SELECT ` + anomalyFlagSelectCols + `
 		FROM anomaly_flags
 		` + where + `
-		ORDER BY monthly_leakage_ghs DESC NULLS LAST, created_at DESC
+		ORDER BY COALESCE(estimated_loss_ghs, 0) DESC NULLS LAST, created_at DESC
 		LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
 
 	rows, err := r.q(ctx).Query(ctx, dataSQL, args...)
@@ -243,7 +246,7 @@ func (r *AnomalyFlagRepository) ListAnomalyFlagsTx(
 	dataSQL := `SELECT ` + anomalyFlagSelectCols + `
 		FROM anomaly_flags
 		` + where + `
-		ORDER BY monthly_leakage_ghs DESC NULLS LAST, created_at DESC
+		ORDER BY COALESCE(estimated_loss_ghs, 0) DESC NULLS LAST, created_at DESC
 		LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
 
 	rows, err := q.Query(ctx, dataSQL, args...)
