@@ -25,6 +25,7 @@ linter:
     # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
     prefer_const_constructors: false   # Disabled: too noisy in widget-heavy code
     depend_on_referenced_packages: false  # Disabled: dev deps used in conditional code
+    unnecessary_import: false              # Disabled: flutter/material.dart re-exports foundation
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

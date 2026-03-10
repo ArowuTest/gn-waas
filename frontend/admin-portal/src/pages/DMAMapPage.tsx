@@ -17,6 +17,7 @@ interface District {
   gps_latitude?: number
   gps_longitude?: number
   loss_ratio_pct?: number
+  nrw_percentage?: number
   total_connections?: number
   open_anomalies?: number
 }

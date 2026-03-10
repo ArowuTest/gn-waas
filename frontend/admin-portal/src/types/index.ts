@@ -256,6 +256,7 @@ export interface NRWSummary {
   nrw_m3: number
   nrw_pct: number
   data_confidence_grade: string
+  zone_type?: string
   period_start: string
   period_end: string
 }

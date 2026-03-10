@@ -1,3 +1,4 @@
+import React from 'react'
 /**
  * GRA Compliance Page — Admin Portal
  *
@@ -31,6 +32,7 @@ interface GRAComplianceRecord {
   gra_signed_at: string | null // GRA lock timestamp
   gra_status: string           // SIGNED | PENDING | FAILED | EXEMPT
   status: string               // audit lifecycle status
+  vat_amount_ghs: number | null  // VAT amount from GRA receipt
   created_at: string
 }
 
@@ -97,7 +99,7 @@ function useGRAComplianceSummary(period: string, districtId: string) {
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: GRAComplianceRecord['status'] }) {
-  const map = {
+  const map: Record<string, { icon: React.ElementType; cls: string; label: string }> = {
     SIGNED:  { icon: CheckCircle,    cls: 'bg-green-100 text-green-700',  label: 'Signed' },
     PENDING: { icon: Clock,          cls: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
     FAILED:  { icon: XCircle,        cls: 'bg-red-100 text-red-700',      label: 'Failed' },
