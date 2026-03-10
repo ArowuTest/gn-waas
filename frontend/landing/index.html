@@ -1653,23 +1653,31 @@
   // ── WHISTLEBLOWER SYSTEM ─────────────────────────────────────────────────
   const WB_API = 'https://gnwaas-api-gateway.onrender.com/api/v1';
 
-  // Load districts into dropdown
+  // Load districts dynamically from API — admin-managed, never hardcoded
   (async function loadDistricts() {
     try {
       const r = await fetch(WB_API + '/public/districts');
-      if (!r.ok) throw new Error();
+      if (!r.ok) throw new Error('HTTP ' + r.status);
       const data = await r.json();
       const sel = document.getElementById('wb-district');
-      if (sel && data.districts) {
-        data.districts.forEach(d => {
-          const opt = document.createElement('option');
-          opt.value = d.district_code || d.code || '';
-          opt.textContent = d.name || d.district_name || d.district_code;
-          sel.appendChild(opt);
-        });
-      }
+      if (!sel || !data.districts || !data.districts.length) return;
+      // Group by region for better UX
+      let lastRegion = '';
+      data.districts.forEach(d => {
+        if (d.region && d.region !== lastRegion) {
+          const og = document.createElement('optgroup');
+          og.label = '── ' + d.region + ' ──';
+          sel.appendChild(og);
+          lastRegion = d.region;
+        }
+        const opt = document.createElement('option');
+        opt.value = d.district_code;
+        opt.textContent = d.name;
+        sel.appendChild(opt);
+      });
     } catch(e) {
-      // Districts are optional — silently ignore if endpoint unavailable
+      // District dropdown is optional — form still works without it
+      console.warn('Could not load districts:', e.message);
     }
   })();
 

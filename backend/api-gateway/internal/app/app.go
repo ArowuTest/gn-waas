@@ -1095,7 +1095,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		}
 		// Direct query — RLS policy on districts is USING(true) so all rows visible
 		rows, err := db.Query(c.Context(),
-			`SELECT district_code, name, region FROM districts ORDER BY name`)
+			`SELECT district_code, district_name, region FROM districts ORDER BY district_name`)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "failed to fetch districts"})
 		}
