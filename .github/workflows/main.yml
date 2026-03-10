@@ -183,6 +183,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [go-services, frontend-portals, flutter-mobile, db-migrations]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
