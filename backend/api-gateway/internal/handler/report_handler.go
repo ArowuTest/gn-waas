@@ -369,12 +369,15 @@ func (h *ReportHandler) GetGRAComplianceCSV(c *fiber.Ctx) error {
 	periodStr := c.Query("period", time.Now().AddDate(0, -1, 0).Format("2006-01"))
 	districtIDStr := c.Query("district_id")
 
-	if districtIDStr == "" {
-		return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id is required")
-	}
-	districtID, err := uuid.Parse(districtIDStr)
-	if err != nil {
-		return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+	// district_id is optional for SUPER_ADMIN/SYSTEM_ADMIN (gets all districts).
+	// Other roles must supply a specific district.
+	var districtID uuid.UUID
+	if districtIDStr != "" {
+		var parseErr error
+		districtID, parseErr = uuid.Parse(districtIDStr)
+		if parseErr != nil {
+			return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+		}
 	}
 
 	// Fetch all audit events for the period (no pagination — full export)
@@ -439,12 +442,14 @@ func (h *ReportHandler) GetAuditTrailCSV(c *fiber.Ctx) error {
 	periodStr := c.Query("period", time.Now().AddDate(0, -1, 0).Format("2006-01"))
 	districtIDStr := c.Query("district_id")
 
-	if districtIDStr == "" {
-		return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id is required")
-	}
-	districtID, err := uuid.Parse(districtIDStr)
-	if err != nil {
-		return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+	// district_id is optional for admins
+	var districtID uuid.UUID
+	if districtIDStr != "" {
+		var parseErr error
+		districtID, parseErr = uuid.Parse(districtIDStr)
+		if parseErr != nil {
+			return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+		}
 	}
 
 	events, _, err := h.auditRepo.GetByDistrict(c.UserContext(), districtID, "", "", 1000, 0)

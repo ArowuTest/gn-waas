@@ -111,11 +111,19 @@ func (r *AuditEventRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 	return event, nil
 }
 
-// GetByDistrict returns audit events for a district with pagination
+// GetByDistrict returns audit events for a district with pagination.
+// If districtID is uuid.Nil, returns events for ALL districts (admin use).
 func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uuid.UUID, status, graStatus string, limit, offset int) ([]*domain.AuditEvent, int, error) {
-	args := []interface{}{districtID}
-	where := "district_id = $1"
-	argIdx := 2
+	var args []interface{}
+	var where string
+	argIdx := 1
+	if districtID != uuid.Nil {
+		args = append(args, districtID)
+		where = "district_id = $1"
+		argIdx = 2
+	} else {
+		where = "1=1" // all districts
+	}
 
 	if status != "" {
 		where += fmt.Sprintf(" AND status = $%d::audit_status", argIdx)

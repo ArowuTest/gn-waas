@@ -535,7 +535,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		fieldJobHandler.GetMyJobs,
 	)
 	fieldJobs.Get("/:id",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_OFFICER"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_OFFICER", "GRA_OFFICER", "MOF_AUDITOR"),
 		fieldJobHandler.GetFieldJob,
 	)
 	// Admin/supervisor: assign a field officer to a job.
