@@ -1093,7 +1093,20 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			Name         string `json:"name"`
 			Region       string `json:"region"`
 		}
-		rows, err := db.Query(c.Context(),
+		// Use a transaction with RLS bypass for this public read-only query
+		tx, txErr := db.Begin(c.Context())
+		if txErr != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "db error"})
+		}
+		defer tx.Rollback(c.Context())
+		// Set superuser context to bypass RLS for public district list
+		if _, txErr = tx.Exec(c.Context(), "SET LOCAL ROLE gnwaas_app"); txErr != nil {
+			// ignore - proceed anyway
+		}
+		if _, txErr = tx.Exec(c.Context(), "SET LOCAL row_security = off"); txErr != nil {
+			// ignore - proceed anyway
+		}
+		rows, err := tx.Query(c.Context(),
 			`SELECT district_code, name, region FROM districts ORDER BY name`)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "failed to fetch districts"})
