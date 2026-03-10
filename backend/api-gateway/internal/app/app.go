@@ -20,6 +20,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -540,6 +541,80 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	districts := api.Group("/districts")
 	districts.Get("/", districtHandler.ListDistricts)
 	districts.Get("/:id", districtHandler.GetDistrict)
+	// GET /districts/:id/heatmap — DMA anomaly heatmap data for a district
+	// Returns district detail enriched with anomaly counts and NRW metrics
+	// for rendering the DMA heatmap on the Operations Portal.
+	districts.Get("/:id/heatmap", func(c *fiber.Ctx) error {
+		districtID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return response.BadRequest(c, "INVALID_ID", "Invalid district ID")
+		}
+		tx, hasTx := rls.TxFromContext(c.UserContext())
+		var q interface {
+			QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+		}
+		if hasTx {
+			q = tx
+		} else {
+			q = db
+		}
+		var heatmap struct {
+			DistrictID       string   `json:"district_id"`
+			DistrictCode     string   `json:"district_code"`
+			DistrictName     string   `json:"district_name"`
+			Region           string   `json:"region"`
+			ZoneType         string   `json:"zone_type"`
+			LossRatioPct     *float64 `json:"loss_ratio_pct"`
+			TotalConnections int      `json:"total_connections"`
+			OpenAnomalies    int      `json:"open_anomalies"`
+			CriticalFlags    int      `json:"critical_flags"`
+			HighFlags        int      `json:"high_flags"`
+			ActiveJobs       int      `json:"active_jobs"`
+			NRWGrade         string   `json:"nrw_grade"`
+		}
+		err = q.QueryRow(c.UserContext(), `
+			SELECT
+				d.id::text,
+				d.district_code,
+				d.district_name,
+				d.region,
+				d.zone_type::text,
+				d.loss_ratio_pct,
+				d.total_connections,
+				COALESCE((SELECT COUNT(*) FROM anomaly_flags af
+				          WHERE af.district_id = d.id AND af.status = 'OPEN'), 0),
+				COALESCE((SELECT COUNT(*) FROM anomaly_flags af
+				          WHERE af.district_id = d.id AND af.status = 'OPEN'
+				            AND af.alert_level = 'CRITICAL'), 0),
+				COALESCE((SELECT COUNT(*) FROM anomaly_flags af
+				          WHERE af.district_id = d.id AND af.status = 'OPEN'
+				            AND af.alert_level = 'HIGH'), 0),
+				COALESCE((SELECT COUNT(*) FROM field_jobs fj
+				          WHERE fj.district_id = d.id
+				            AND fj.status NOT IN ('COMPLETED','CANCELLED','FAILED')), 0),
+				CASE
+					WHEN d.loss_ratio_pct IS NULL THEN 'UNKNOWN'
+					WHEN d.loss_ratio_pct <= 15   THEN 'A'
+					WHEN d.loss_ratio_pct <= 25   THEN 'B'
+					WHEN d.loss_ratio_pct <= 35   THEN 'C'
+					WHEN d.loss_ratio_pct <= 50   THEN 'D'
+					ELSE 'F'
+				END
+			FROM districts d
+			WHERE d.id = $1
+		`, districtID).Scan(
+			&heatmap.DistrictID, &heatmap.DistrictCode, &heatmap.DistrictName,
+			&heatmap.Region, &heatmap.ZoneType, &heatmap.LossRatioPct,
+			&heatmap.TotalConnections, &heatmap.OpenAnomalies,
+			&heatmap.CriticalFlags, &heatmap.HighFlags,
+			&heatmap.ActiveJobs, &heatmap.NRWGrade,
+		)
+		if err != nil {
+			logger.Error("District heatmap query failed", zap.Error(err), zap.String("district_id", districtID.String()))
+			return response.NotFound(c, "District")
+		}
+		return response.OK(c, heatmap)
+	})
 
 	// ── Users ─────────────────────────────────────────────────────────────────
 	users := api.Group("/users")
@@ -554,6 +629,70 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	accounts.Get("/search", accountHandler.SearchAccounts)
 	accounts.Get("/", accountHandler.GetAccountsByDistrict)
 	accounts.Get("/:id", accountHandler.GetAccount)
+	// GET /accounts/:id/nrw — NRW summary for a specific water account
+	// Returns meter readings, billing variance and loss ratio for the account.
+	accounts.Get("/:id/nrw", func(c *fiber.Ctx) error {
+		accountID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return response.BadRequest(c, "INVALID_ID", "Invalid account ID")
+		}
+		tx, hasTx := rls.TxFromContext(c.UserContext())
+		var q interface {
+			QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+		}
+		if hasTx {
+			q = tx
+		} else {
+			q = db
+		}
+		var result struct {
+			AccountID        string   `json:"account_id"`
+			GWLAccountNumber string   `json:"gwl_account_number"`
+			AccountHolder    string   `json:"account_holder_name"`
+			Category         string   `json:"category"`
+			DistrictID       string   `json:"district_id"`
+			LatestReadingM3  *float64 `json:"latest_reading_m3"`
+			ShadowBillGHS    *float64 `json:"shadow_bill_ghs"`
+			GWLBilledGHS     *float64 `json:"gwl_billed_ghs"`
+			VarianceGHS      *float64 `json:"variance_ghs"`
+			VariancePct      *float64 `json:"variance_pct"`
+			AuditCount       int      `json:"audit_count"`
+			OpenAnomalies    int      `json:"open_anomalies"`
+		}
+		err = q.QueryRow(c.UserContext(), `
+			SELECT
+				wa.id::text,
+				COALESCE(wa.gwl_account_number, ''),
+				COALESCE(wa.account_holder_name, ''),
+				wa.category::text,
+				wa.district_id::text,
+				(SELECT mr.reading_m3 FROM meter_readings mr
+				 WHERE mr.account_id = wa.id ORDER BY mr.reading_date DESC LIMIT 1),
+				(SELECT ae.shadow_bill_ghs FROM audit_events ae
+				 WHERE ae.account_id = wa.id ORDER BY ae.created_at DESC LIMIT 1),
+				(SELECT ae.gwl_billed_ghs FROM audit_events ae
+				 WHERE ae.account_id = wa.id ORDER BY ae.created_at DESC LIMIT 1),
+				(SELECT ae.confirmed_loss_ghs FROM audit_events ae
+				 WHERE ae.account_id = wa.id ORDER BY ae.created_at DESC LIMIT 1),
+				(SELECT ae.variance_pct FROM audit_events ae
+				 WHERE ae.account_id = wa.id ORDER BY ae.created_at DESC LIMIT 1),
+				(SELECT COUNT(*) FROM audit_events ae WHERE ae.account_id = wa.id),
+				(SELECT COUNT(*) FROM anomaly_flags af WHERE af.account_id = wa.id AND af.status = 'OPEN')
+			FROM water_accounts wa
+			WHERE wa.id = $1
+		`, accountID).Scan(
+			&result.AccountID, &result.GWLAccountNumber, &result.AccountHolder,
+			&result.Category, &result.DistrictID,
+			&result.LatestReadingM3, &result.ShadowBillGHS, &result.GWLBilledGHS,
+			&result.VarianceGHS, &result.VariancePct,
+			&result.AuditCount, &result.OpenAnomalies,
+		)
+		if err != nil {
+			logger.Error("Account NRW query failed", zap.Error(err), zap.String("account_id", accountID.String()))
+			return response.NotFound(c, "Account")
+		}
+		return response.OK(c, result)
+	})
 
 	// ── Audit Events ──────────────────────────────────────────────────────────
 	audits := api.Group("/audits")
@@ -619,6 +758,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		fieldJobHandler.RecordFieldJobOutcome,
 	)
 	fieldJobs.Post("/:id/submit",
+		middleware.RequireRoles("FIELD_OFFICER", "GRA_OFFICER"),
+		fieldJobHandler.SubmitJobEvidence,
+	)
+	// /evidence is the canonical REST name; /submit kept for backwards compat
+	fieldJobs.Post("/:id/evidence",
 		middleware.RequireRoles("FIELD_OFFICER", "GRA_OFFICER"),
 		fieldJobHandler.SubmitJobEvidence,
 	)
@@ -828,6 +972,13 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	adminTariffs.Get("/vat",                 tariffAdminHandler.ListVATConfigs)
 	adminTariffs.Post("/vat",                tariffAdminHandler.CreateVATConfig)
 
+	// /admin/vat is a convenience alias for /admin/tariffs/vat
+	adminVAT := api.Group("/admin/vat",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN"),
+	)
+	adminVAT.Get("/",  tariffAdminHandler.ListVATConfigs)
+	adminVAT.Post("/", tariffAdminHandler.CreateVATConfig)
+
 	// ── Geocoding (Q6: Address fallback when GWL GIS unavailable) ────────────
 	geocodingSvc := gwsvc.NewGeocodingService(db, logger)
 	geocoding := api.Group("/admin/geocoding",
@@ -939,7 +1090,17 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			AvgDaysToRecovery      float64 `json:"avg_days_to_recovery"`
 		}
 
-		err := db.QueryRow(c.Context(), fmt.Sprintf(`
+		// Use RLS transaction so district-scoped policies are enforced
+		rlsTx, hasTx := rls.TxFromContext(c.UserContext())
+		var gapQ interface {
+			QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+		}
+		if hasTx {
+			gapQ = rlsTx
+		} else {
+			gapQ = db
+		}
+		err := gapQ.QueryRow(c.UserContext(), fmt.Sprintf(`
 			SELECT
 				COUNT(ae.id)                                                    AS total_gaps,
 				COALESCE(SUM(ae.confirmed_loss_ghs), 0)                        AS total_gap_value,
@@ -985,7 +1146,17 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		}
 		offset := (page - 1) * limit
 
-		rows, err := db.Query(c.Context(), `
+		// Use RLS transaction so district-scoped policies are enforced
+		gapListTx, hasGapListTx := rls.TxFromContext(c.UserContext())
+		var gapListQ interface {
+			Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+		}
+		if hasGapListTx {
+			gapListQ = gapListTx
+		} else {
+			gapListQ = db
+		}
+		rows, err := gapListQ.Query(c.UserContext(), `
 			SELECT
 				ae.id,
 				ae.audit_reference,
@@ -1178,7 +1349,17 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			query += fmt.Sprintf(" ORDER BY osq.created_at DESC LIMIT $%d", argIdx)
 			args = append(args, limitVal)
 
-			rows, err := db.Query(c.Context(), query, args...)
+			// Use RLS transaction so user-scoped policies are enforced
+			syncTx, hasSyncTx := rls.TxFromContext(c.UserContext())
+			var syncQ interface {
+				Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+			}
+			if hasSyncTx {
+				syncQ = syncTx
+			} else {
+				syncQ = db
+			}
+			rows, err := syncQ.Query(c.UserContext(), query, args...)
 			if err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": "failed to fetch sync queue"})
 			}
@@ -1225,7 +1406,17 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	api.Get("/admin/sync/devices",
 		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN", "MOF_AUDITOR"),
 		func(c *fiber.Ctx) error {
-			rows, err := db.Query(c.Context(), `
+			// Use RLS transaction so user-scoped policies are enforced
+			devTx, hasDevTx := rls.TxFromContext(c.UserContext())
+			var devQ interface {
+				Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+			}
+			if hasDevTx {
+				devQ = devTx
+			} else {
+				devQ = db
+			}
+			rows, err := devQ.Query(c.UserContext(), `
 				SELECT
 					ud.device_id,
 					COALESCE(u.full_name, 'Unknown') AS user_name,

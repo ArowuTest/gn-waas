@@ -549,6 +549,22 @@ func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
 	}
 
+	// Validate and normalise ocr_status — must be a valid ocr_status enum value.
+	// CONFIRMED and MANUAL were added in migration 041; SUCCESS is the safe fallback.
+	validOCRStatuses := map[string]bool{
+		"SUCCESS": true, "CONFIRMED": true, "MANUAL": true,
+		"FAILED": true, "BLURRY": true, "TAMPERED": true,
+		"CONFLICT": true, "PENDING": true,
+	}
+	if req.OCRStatus == "" {
+		req.OCRStatus = "SUCCESS"
+	}
+	if !validOCRStatuses[req.OCRStatus] {
+		req.OCRStatus = "SUCCESS" // safe fallback for unknown values
+		h.logger.Warn("Unknown ocr_status received, defaulting to SUCCESS",
+			zap.String("job_id", jobID.String()))
+	}
+
 	// 1. Mark job as COMPLETED with officer GPS (non-fatal if already completed)
 	lat, lng := req.GPSLat, req.GPSLng
 	if err := h.fieldJobRepo.UpdateStatus(c.UserContext(), jobID, "COMPLETED", &lat, &lng); err != nil {
