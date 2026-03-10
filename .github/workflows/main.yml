@@ -294,6 +294,14 @@ jobs:
       - name: Run vulnerability check on ${{ matrix.service }}
         working-directory: backend/${{ matrix.service }}
         env:
-          GOWORK: "off"   # Disable workspace so govulncheck resolves modules correctly
-        run: govulncheck ./... || true   # exit 3 = vulnerabilities found (informational)
+          GOWORK: "off"        # Disable workspace so govulncheck resolves modules correctly
+          GITHUB_ACTIONS: ""   # Prevent govulncheck from emitting ::error:: annotations
+        run: govulncheck -format text ./... 2>&1 | tee /tmp/vuln-${{ matrix.service }}.txt; exit 0
         continue-on-error: true   # Report but don't block — findings go to security review
+
+      - name: Upload vulnerability report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vuln-report-${{ matrix.service }}
+          path: /tmp/vuln-${{ matrix.service }}.txt
