@@ -1,8 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -974,6 +978,98 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	)
 	adminVAT.Get("/",  tariffAdminHandler.ListVATConfigs)
 	adminVAT.Post("/", tariffAdminHandler.CreateVATConfig)
+
+	// ── Tariff Engine Proxy (Q10: Shadow billing calculation) ──────────────────
+	// Proxies /tariff/* requests to the tariff-engine microservice.
+	// Handles field aliasing: reading_m3 → consumption_m3 for backwards compat.
+	tariffEngineURL := cfg.Services.TariffURL
+	if tariffEngineURL == "" {
+		tariffEngineURL = "https://gnwaas-tariff-engine.onrender.com"
+	}
+	tariffProxy := api.Group("/tariff",
+		middleware.RequireRoles(
+			"SUPER_ADMIN", "SYSTEM_ADMIN", "AUDIT_MANAGER", "GRA_AUDITOR",
+			"GRA_OFFICER", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_SUPERVISOR",
+		),
+	)
+
+	// proxyToTariffEngine forwards a request body to the tariff-engine and
+	// streams the response back. It also aliases reading_m3 → consumption_m3
+	// so callers that use the field name from the spec still work.
+	proxyToTariffEngine := func(c *fiber.Ctx, upstreamPath string) error {
+		body := c.Body()
+
+		// Field alias: if the caller sent reading_m3, rename it to consumption_m3
+		if len(body) > 0 && bytes.Contains(body, []byte(`"reading_m3"`)) {
+			var raw map[string]interface{}
+			if jsonErr := json.Unmarshal(body, &raw); jsonErr == nil {
+				if v, ok := raw["reading_m3"]; ok {
+					raw["consumption_m3"] = v
+					delete(raw, "reading_m3")
+					if reencoded, encErr := json.Marshal(raw); encErr == nil {
+						body = reencoded
+					}
+				}
+			}
+		}
+
+		upstreamURL := tariffEngineURL + upstreamPath
+		httpMethod := c.Method()
+
+		var reqBody io.Reader
+		if len(body) > 0 {
+			reqBody = bytes.NewReader(body)
+		}
+
+		httpReq, err := http.NewRequestWithContext(c.UserContext(), httpMethod, upstreamURL, reqBody)
+		if err != nil {
+			logger.Error("tariff proxy: failed to build request", zap.Error(err), zap.String("url", upstreamURL))
+			return c.Status(502).JSON(fiber.Map{"error": "tariff engine unavailable"})
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Accept", "application/json")
+
+		httpClient := &http.Client{Timeout: 30 * time.Second}
+		resp, err := httpClient.Do(httpReq)
+		if err != nil {
+			logger.Error("tariff proxy: upstream call failed", zap.Error(err), zap.String("url", upstreamURL))
+			return c.Status(502).JSON(fiber.Map{"error": "tariff engine unreachable: " + err.Error()})
+		}
+		defer resp.Body.Close()
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return c.Status(502).JSON(fiber.Map{"error": "failed to read tariff engine response"})
+		}
+
+		c.Set("Content-Type", "application/json")
+		return c.Status(resp.StatusCode).Send(respBody)
+	}
+
+	// POST /api/v1/tariff/calculate — shadow bill for a single account
+	tariffProxy.Post("/calculate", func(c *fiber.Ctx) error {
+		return proxyToTariffEngine(c, "/api/v1/tariff/calculate")
+	})
+	// POST /api/v1/tariff/calculate/batch — shadow bills for multiple accounts
+	tariffProxy.Post("/calculate/batch", func(c *fiber.Ctx) error {
+		return proxyToTariffEngine(c, "/api/v1/tariff/calculate/batch")
+	})
+	// GET /api/v1/tariff/rates — all active tariff rates
+	tariffProxy.Get("/rates", func(c *fiber.Ctx) error {
+		return proxyToTariffEngine(c, "/api/v1/tariff/rates")
+	})
+	// GET /api/v1/tariff/rates/:category — rates for a specific category
+	tariffProxy.Get("/rates/:category", func(c *fiber.Ctx) error {
+		return proxyToTariffEngine(c, "/api/v1/tariff/rates/"+c.Params("category"))
+	})
+	// GET /api/v1/tariff/vat — active VAT configuration
+	tariffProxy.Get("/vat", func(c *fiber.Ctx) error {
+		return proxyToTariffEngine(c, "/api/v1/tariff/vat")
+	})
+	// GET /api/v1/tariff/variance/:district_id — variance summary for a district
+	tariffProxy.Get("/variance/:district_id", func(c *fiber.Ctx) error {
+		return proxyToTariffEngine(c, "/api/v1/tariff/variance/"+c.Params("district_id"))
+	})
 
 	// ── Geocoding (Q6: Address fallback when GWL GIS unavailable) ────────────
 	geocodingSvc := gwsvc.NewGeocodingService(db, logger)
