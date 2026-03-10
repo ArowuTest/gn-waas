@@ -244,7 +244,7 @@ export function NRWAnalysisPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={v => `${v}%`} tick={{ fontSize: 11 }} domain={[0, 100]} />
-              <Tooltip formatter={(v: number) => [`${v}%`, 'NRW'] as any} />
+              <Tooltip formatter={((v: number) => [`${v}%`, 'NRW']) as any} />
               <ReferenceLine y={20} stroke="#16a34a" strokeDasharray="4 4"
                 label={{ value: 'IWA Target 20%', fill: '#16a34a', fontSize: 11, position: 'insideTopRight' }} />
               <ReferenceLine y={51.6} stroke="#dc2626" strokeDasharray="4 4"

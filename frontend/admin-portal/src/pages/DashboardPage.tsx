@@ -167,7 +167,7 @@ function RevenuePanel({ districtId }: { districtId?: string }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="name" tick={{ fontSize: 10 }} />
             <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip formatter={(v: number) => formatCurrency(v) as any} />
+            <Tooltip formatter={((v: number) => formatCurrency(v)) as any} />
             <Bar dataKey="recovered" name="Recovered" fill="#10b981" radius={[3,3,0,0]} />
             <Bar dataKey="fee" name="Success Fee" fill="#3b82f6" radius={[3,3,0,0]} />
           </BarChart>
