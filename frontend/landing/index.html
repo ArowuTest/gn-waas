@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>GN-WAAS — Ghana National Water Audit & Assurance System</title>
   <meta name="description" content="The official portal for the Ghana National Water Audit and Assurance System. An independent oversight platform mandated to recover non-revenue water losses and ensure GRA E-VAT compliance across Ghana's water sector." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -673,347 +673,98 @@
     .fs { width: 16px; height: 6px; border-radius: 1px; }
 
     /* ── RESPONSIVE ─────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — TABLET  (≤ 900px)
+   ═══════════════════════════════════════════════════════════ */
     @media (max-width: 900px) {
-      .hero-inner { grid-template-columns: 1fr; }
-      .access-card { display: none; }
-      .pillars-grid { grid-template-columns: 1fr; }
-      .impact-grid { grid-template-columns: repeat(2, 1fr); }
-      .oversight-grid { grid-template-columns: 1fr; }
-      .portal-dir-grid { grid-template-columns: 1fr; }
-      .footer-top { grid-template-columns: 1fr; gap: 24px; }
+      /* Header */
       .header-nav { display: none; }
-    }
-    @media (max-width: 640px) {
-      .gov-bar { font-size: 0.68rem; }
-      .hero { padding: 48px 1rem 48px; }
-      .section { padding: 48px 1rem; }
-      .impact-grid { grid-template-columns: repeat(2, 1fr); }
+      .hamburger  { display: flex; }
+
+      /* Hero */
+      .hero-inner { grid-template-columns: 1fr; gap: 32px; }
+      .access-card { display: none; }
+      .hero-text h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); }
+
+      /* Sections */
+      .pillars-grid       { grid-template-columns: 1fr; }
+      .oversight-grid     { grid-template-columns: 1fr; }
+      .portal-dir-grid    { grid-template-columns: 1fr; }
+      .impact-grid        { grid-template-columns: repeat(2, 1fr); }
+      .footer-top         { grid-template-columns: 1fr; gap: 24px; }
     }
 
-    /* ── WHISTLEBLOWER SECTION ──────────────────────────────── */
-    .wb-section {
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      padding: 5rem 2rem;
-      position: relative;
-      overflow: hidden;
-    }
-    .wb-section::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, #CE1126, #FCD116, #006B3F);
-    }
-    .wb-inner {
-      max-width: 900px;
-      margin: 0 auto;
-    }
-    .wb-header {
-      text-align: center;
-      margin-bottom: 2.5rem;
-    }
-    .wb-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(252,209,22,0.15);
-      border: 1px solid rgba(252,209,22,0.4);
-      color: #FCD116;
-      font-size: 0.75rem;
-      font-weight: 700;
-      padding: 5px 14px;
-      border-radius: 20px;
-      margin-bottom: 1rem;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-    .wb-badge .wb-dot {
-      width: 6px; height: 6px;
-      background: #FCD116;
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-    .wb-header h2 {
-      font-size: 2rem;
-      font-weight: 800;
-      color: white;
-      margin-bottom: 0.75rem;
-    }
-    .wb-header h2 span { color: #FCD116; }
-    .wb-header p {
-      color: rgba(255,255,255,0.65);
-      font-size: 0.95rem;
-      max-width: 600px;
-      margin: 0 auto 1.5rem;
-      line-height: 1.7;
-    }
-    .wb-confidential {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(0,107,63,0.25);
-      border: 1px solid rgba(0,107,63,0.5);
-      color: #4ade80;
-      font-size: 0.8rem;
-      font-weight: 600;
-      padding: 6px 16px;
-      border-radius: 8px;
-    }
-    /* Tabs */
-    .wb-tabs {
-      display: flex;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px;
-      padding: 4px;
-      margin-bottom: 1.5rem;
-      gap: 4px;
-    }
-    .wb-tab {
-      flex: 1;
-      padding: 10px 16px;
-      border: none;
-      background: transparent;
-      color: rgba(255,255,255,0.5);
-      font-size: 0.875rem;
-      font-weight: 600;
-      border-radius: 9px;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-family: 'Inter', sans-serif;
-    }
-    .wb-tab.active {
-      background: white;
-      color: #0f172a;
-    }
-    .wb-tab:hover:not(.active) {
-      color: rgba(255,255,255,0.8);
-      background: rgba(255,255,255,0.08);
-    }
-    /* Card */
-    .wb-card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 16px;
-      padding: 2rem;
-    }
-    /* Form */
-    .wb-form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-    }
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE  (≤ 640px)
+   ═══════════════════════════════════════════════════════════ */
     @media (max-width: 640px) {
+      /* Gov bar */
+      .gov-bar { font-size: 0.65rem; padding: 5px 1rem; gap: 6px; flex-wrap: wrap; }
+      .gov-bar a { display: none; }
+
+      /* Header */
+      header { padding: 0 1rem; }
+      .header-inner { height: 56px; }
+      .system-name  { font-size: 1rem; }
+      .system-sub   { display: none; }
+
+      /* Hero */
+      .hero { padding: 40px 1rem 40px; }
+      .hero-text h1 { font-size: 1.75rem; line-height: 1.2; }
+      .hero-text p  { font-size: 0.95rem; }
+      .hero-badges  { flex-wrap: wrap; gap: 8px; }
+      .hero-badge   { font-size: 0.7rem; padding: 4px 10px; }
+      .hero-cta     { flex-direction: column; gap: 10px; }
+      .hero-cta a   { width: 100%; text-align: center; box-sizing: border-box; }
+
+      /* Impact stats */
+      .impact-grid  { grid-template-columns: repeat(2, 1fr); gap: 1px; }
+      .impact-stat  { padding: 20px 12px; }
+      .impact-stat .stat-value { font-size: 1.6rem; }
+
+      /* Sections */
+      .section      { padding: 40px 1rem; }
+      .section-title { font-size: 1.4rem; }
+      .section-sub  { font-size: 0.9rem; }
+
+      /* Pillars */
+      .pillar-card  { padding: 20px; }
+
+      /* Portal directory cards */
+      .portal-dir-grid { grid-template-columns: 1fr; }
+      .portal-dir-card { padding: 20px; }
+      .portal-card-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .portal-badge { font-size: 0.65rem; }
+
+      /* Portal directory */
+      .portal-dir-card { padding: 20px; }
+
+      /* Oversight */
+      .oversight-grid { gap: 24px; }
+
+      /* Footer */
+      .footer-top   { gap: 20px; }
+      .footer-bottom { flex-direction: column; gap: 8px; text-align: center; font-size: 0.75rem; }
+      .footer-legal { flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+      /* Whistleblower */
       .wb-form-grid { grid-template-columns: 1fr; }
-      .wb-header h2 { font-size: 1.5rem; }
+      .wb-header h2 { font-size: 1.4rem; }
+      .wb-tabs      { flex-direction: column; gap: 4px; }
+      .wb-tab       { width: 100%; text-align: center; }
+      .wb-card      { padding: 20px; }
+      .wb-section   { padding: 40px 1rem; }
     }
-    .wb-field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — SMALL MOBILE  (≤ 400px)
+   ═══════════════════════════════════════════════════════════ */
+    @media (max-width: 400px) {
+      .impact-grid  { grid-template-columns: 1fr; }
+      .wb-stats     { grid-template-columns: 1fr; }
+      .hero-text h1 { font-size: 1.5rem; }
+      .impact-stat .stat-value { font-size: 1.4rem; }
     }
-    .wb-field.full { grid-column: 1 / -1; }
-    .wb-label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: rgba(255,255,255,0.7);
-      letter-spacing: 0.03em;
-    }
-    .wb-label .wb-optional {
-      font-weight: 400;
-      color: rgba(255,255,255,0.35);
-      margin-left: 4px;
-    }
-    .wb-input, .wb-select, .wb-textarea {
-      background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 8px;
-      color: white;
-      font-size: 0.875rem;
-      font-family: 'Inter', sans-serif;
-      padding: 10px 14px;
-      transition: border-color 0.2s;
-      outline: none;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .wb-input::placeholder, .wb-textarea::placeholder {
-      color: rgba(255,255,255,0.3);
-    }
-    .wb-input:focus, .wb-select:focus, .wb-textarea:focus {
-      border-color: #FCD116;
-      background: rgba(255,255,255,0.1);
-    }
-    .wb-select option { background: #1e293b; color: white; }
-    .wb-textarea { resize: vertical; min-height: 110px; }
-    .wb-char-count {
-      font-size: 0.72rem;
-      color: rgba(255,255,255,0.35);
-      text-align: right;
-      margin-top: 2px;
-    }
-    .wb-char-count.warn { color: #FCD116; }
-    /* Reward notice */
-    .wb-reward-notice {
-      background: rgba(252,209,22,0.08);
-      border: 1px solid rgba(252,209,22,0.25);
-      border-radius: 10px;
-      padding: 0.875rem 1rem;
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      margin-top: 0.5rem;
-    }
-    .wb-reward-notice p {
-      font-size: 0.8rem;
-      color: rgba(255,255,255,0.65);
-      margin: 0;
-      line-height: 1.5;
-    }
-    .wb-reward-notice strong { color: #FCD116; }
-    /* Submit button */
-    .wb-submit-btn {
-      width: 100%;
-      padding: 13px;
-      background: #FCD116;
-      color: #0f172a;
-      border: none;
-      border-radius: 10px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      font-family: 'Inter', sans-serif;
-      cursor: pointer;
-      transition: background 0.2s, transform 0.1s;
-      margin-top: 1rem;
-    }
-    .wb-submit-btn:hover:not(:disabled) { background: #f5c800; }
-    .wb-submit-btn:active:not(:disabled) { transform: scale(0.99); }
-    .wb-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    /* Success state */
-    .wb-success {
-      text-align: center;
-      padding: 1.5rem 0;
-    }
-    .wb-success-icon {
-      width: 64px; height: 64px;
-      background: rgba(0,107,63,0.2);
-      border: 2px solid #006B3F;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.8rem;
-      margin: 0 auto 1.25rem;
-    }
-    .wb-success h3 {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: white;
-      margin-bottom: 0.5rem;
-    }
-    .wb-success p {
-      color: rgba(255,255,255,0.6);
-      font-size: 0.875rem;
-      margin-bottom: 1.25rem;
-    }
-    .wb-ref-box {
-      background: rgba(252,209,22,0.1);
-      border: 2px solid #FCD116;
-      border-radius: 12px;
-      padding: 1rem 1.5rem;
-      margin: 0 auto 1.25rem;
-      max-width: 320px;
-    }
-    .wb-ref-label {
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: rgba(255,255,255,0.5);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 4px;
-    }
-    .wb-ref-number {
-      font-size: 1.5rem;
-      font-weight: 800;
-      color: #FCD116;
-      letter-spacing: 0.05em;
-    }
-    .wb-success-note {
-      font-size: 0.8rem;
-      color: rgba(255,255,255,0.4);
-      margin-top: 0.5rem;
-    }
-    .wb-new-tip-btn {
-      background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
-      color: rgba(255,255,255,0.7);
-      padding: 9px 20px;
-      border-radius: 8px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      font-family: 'Inter', sans-serif;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .wb-new-tip-btn:hover { border-color: rgba(255,255,255,0.4); color: white; }
-    /* Status check */
-    .wb-status-form { display: flex; flex-direction: column; gap: 1rem; }
-    .wb-status-result {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 12px;
-      padding: 1.25rem;
-      margin-top: 0.5rem;
-    }
-    .wb-status-result h4 {
-      font-size: 0.875rem;
-      font-weight: 700;
-      color: white;
-      margin-bottom: 0.75rem;
-    }
-    .wb-status-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 6px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      font-size: 0.8rem;
-    }
-    .wb-status-row:last-child { border-bottom: none; }
-    .wb-status-key { color: rgba(255,255,255,0.45); }
-    .wb-status-val { color: white; font-weight: 600; }
-    .wb-status-badge {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 20px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-    }
-    .wb-status-NEW { background: rgba(59,130,246,0.2); color: #93c5fd; }
-    .wb-status-UNDER_REVIEW { background: rgba(234,179,8,0.2); color: #fde047; }
-    .wb-status-INVESTIGATING { background: rgba(249,115,22,0.2); color: #fdba74; }
-    .wb-status-CONFIRMED { background: rgba(239,68,68,0.2); color: #fca5a5; }
-    .wb-status-DISMISSED { background: rgba(100,116,139,0.2); color: #94a3b8; }
-    .wb-status-REWARDED { background: rgba(34,197,94,0.2); color: #86efac; }
-    /* Error */
-    .wb-error {
-      background: rgba(239,68,68,0.1);
-      border: 1px solid rgba(239,68,68,0.3);
-      border-radius: 8px;
-      padding: 10px 14px;
-      color: #fca5a5;
-      font-size: 0.8rem;
-      margin-top: 0.5rem;
-    }
-    /* Stats strip */
-    .wb-stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-      margin-bottom: 2rem;
-    }
-    @media (max-width: 480px) { .wb-stats { grid-template-columns: 1fr; } }
     .wb-stat {
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
@@ -1032,7 +783,93 @@
       color: rgba(255,255,255,0.5);
       font-weight: 500;
     }
-  </style>
+  
+    /* ── Hamburger + Mobile Nav ─────────────────────────────── */
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      gap: 5px;
+      width: 40px;
+      height: 40px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .hamburger:hover { background: rgba(0,107,63,0.08); }
+    .hamburger span {
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: var(--slate);
+      border-radius: 2px;
+      transition: transform 0.3s, opacity 0.3s;
+    }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+    .mobile-nav.open { display: block; }
+    .mobile-nav-panel {
+      position: absolute;
+      top: 0; right: 0;
+      width: min(320px, 85vw);
+      height: 100%;
+      background: white;
+      padding: 24px 20px;
+      overflow-y: auto;
+      box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .mobile-nav-close {
+      align-self: flex-end;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--slate);
+      padding: 4px 8px;
+      margin-bottom: 12px;
+    }
+    .mobile-nav-panel a {
+      display: block;
+      padding: 12px 16px;
+      color: var(--slate);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .mobile-nav-panel a:hover { background: #f0faf5; color: var(--gh-green); }
+    .mobile-nav-panel .mobile-nav-divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 8px 0;
+    }
+    .mobile-nav-panel .mobile-nav-cta {
+      margin-top: 12px;
+      background: var(--gh-green);
+      color: white !important;
+      text-align: center;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+    .mobile-nav-panel .mobile-nav-cta:hover { background: #005230 !important; }
+
+    </style>
 </head>
 <body>
 
@@ -1086,8 +923,27 @@
       <a href="#report-fraud" style="color:rgba(255,255,255,0.85);background:rgba(206,17,38,0.15);border:1px solid rgba(206,17,38,0.4);padding:8px 16px;border-radius:6px;font-size:0.82rem;font-weight:600;">🔒 Report Fraud</a>
       <a href="#portals" class="login-btn">Authorised Access →</a>
     </nav>
+      <!-- Hamburger (mobile only) -->
+      <button class="hamburger" id="hamburger-btn" aria-label="Open navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
   </div>
 </header>
+  <!-- ── Mobile Navigation Overlay ─────────────────────────────────────── -->
+  <div class="mobile-nav" id="mobile-nav" role="dialog" aria-modal="true" aria-label="Navigation menu">
+    <div class="mobile-nav-panel">
+      <button class="mobile-nav-close" id="mobile-nav-close" aria-label="Close navigation">✕</button>
+      <a href="#mandate" class="mobile-nav-link">Our Mandate</a>
+      <a href="#oversight" class="mobile-nav-link">Oversight Framework</a>
+      <a href="#portals" class="mobile-nav-link">Portal Directory</a>
+      <div class="mobile-nav-divider"></div>
+      <a href="#report-fraud" class="mobile-nav-link">🚨 Report Water Fraud</a>
+      <div class="mobile-nav-divider"></div>
+      <a href="#portals" class="mobile-nav-link mobile-nav-cta">Authorised Access →</a>
+    </div>
+  </div>
+
+
 
 <!-- Hero -->
 <section class="hero">
@@ -1853,6 +1709,46 @@
     }
   }
   // ── END WHISTLEBLOWER ────────────────────────────────────────────────────
+
+
+  // ── Mobile Navigation ──────────────────────────────────────────────────────
+  (function() {
+    const btn    = document.getElementById('hamburger-btn');
+    const nav    = document.getElementById('mobile-nav');
+    const close  = document.getElementById('mobile-nav-close');
+    if (!btn || !nav) return;
+
+    function openNav() {
+      nav.classList.add('open');
+      btn.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeNav() {
+      nav.classList.remove('open');
+      btn.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+    }
+
+    btn.addEventListener('click', openNav);
+    if (close) close.addEventListener('click', closeNav);
+
+    // Close when clicking the backdrop
+    nav.addEventListener('click', function(e) {
+      if (e.target === nav) closeNav();
+    });
+
+    // Close when a link is clicked
+    nav.querySelectorAll('a').forEach(function(a) {
+      a.addEventListener('click', closeNav);
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeNav();
+    });
+  })();
 
 </script>
 
