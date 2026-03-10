@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accessibility Statement — GN-WAAS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --gh-green: #006B3F; --gh-gold: #FCD116; --primary: #006B3F; --primary-d: #005230; --slate: #0f172a; --slate-m: #334155; --slate-l: #64748b; --border: #e2e8f0; --bg: #f8fafc; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--slate); line-height: 1.7; }
+    .gov-bar { background: var(--gh-green); color: rgba(255,255,255,0.9); font-size: 0.75rem; padding: 6px 2rem; display: flex; align-items: center; justify-content: space-between; }
+    .gov-bar a { color: rgba(255,255,255,0.8); text-decoration: none; }
+    header { background: white; border-bottom: 3px solid var(--gh-gold); padding: 0 2rem; }
+    .header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
+    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .brand-logo { width: 44px; height: 44px; background: var(--gh-green); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+    .brand-name { font-size: 1.1rem; font-weight: 800; color: var(--gh-green); }
+    .brand-sub { font-size: 0.72rem; color: var(--slate-l); }
+    .back-btn { background: var(--primary); color: white; padding: 8px 18px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; text-decoration: none; }
+    .page-hero { background: linear-gradient(135deg, #0c4a6e 0%, #082f49 100%); color: white; padding: 3rem 2rem; }
+    .page-hero-inner { max-width: 900px; margin: 0 auto; }
+    .page-tag { display: inline-block; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.9); font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; margin-bottom: 1rem; letter-spacing: 0.05em; text-transform: uppercase; }
+    .page-hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .page-hero p { color: rgba(255,255,255,0.8); font-size: 0.95rem; }
+    .page-meta { display: flex; gap: 2rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    .page-meta span { font-size: 0.8rem; color: rgba(255,255,255,0.7); }
+    .page-meta strong { color: rgba(255,255,255,0.95); }
+    main { max-width: 900px; margin: 0 auto; padding: 3rem 2rem; }
+    .compliance-badge { background: white; border: 2px solid #0284c7; border-radius: 12px; padding: 1.5rem; margin-bottom: 2.5rem; display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
+    .badge-item { text-align: center; }
+    .badge-icon { font-size: 2rem; margin-bottom: 0.3rem; }
+    .badge-label { font-size: 0.75rem; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.05em; }
+    .badge-status { font-size: 0.8rem; color: var(--slate-m); }
+    .toc { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2.5rem; }
+    .toc h3 { font-size: 0.85rem; font-weight: 700; color: var(--slate-m); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+    .toc ol { padding-left: 1.2rem; }
+    .toc li { margin-bottom: 0.4rem; }
+    .toc a { color: var(--primary); text-decoration: none; font-size: 0.9rem; }
+    section.legal { margin-bottom: 2.5rem; padding-bottom: 2.5rem; border-bottom: 1px solid var(--border); }
+    section.legal:last-child { border-bottom: none; }
+    section.legal h2 { font-size: 1.25rem; font-weight: 700; color: var(--slate); margin-bottom: 1rem; }
+    section.legal h3 { font-size: 1rem; font-weight: 600; color: var(--slate-m); margin: 1.2rem 0 0.6rem; }
+    section.legal p { color: var(--slate-m); margin-bottom: 0.8rem; font-size: 0.95rem; }
+    section.legal ul { padding-left: 1.5rem; margin-bottom: 0.8rem; }
+    section.legal li { color: var(--slate-m); font-size: 0.95rem; margin-bottom: 0.4rem; }
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .status-card { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+    .status-card .status-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+    .status-card h4 { font-size: 0.9rem; font-weight: 700; color: var(--slate); margin-bottom: 0.3rem; }
+    .status-card p { font-size: 0.8rem; color: var(--slate-m); margin: 0; }
+    .pass { color: #16a34a; }
+    .partial { color: #d97706; }
+    .planned { color: #0284c7; }
+    .highlight-box { background: #f0f9ff; border-left: 4px solid #0284c7; border-radius: 0 8px 8px 0; padding: 1rem 1.2rem; margin: 1rem 0; }
+    .highlight-box p { margin: 0; color: var(--slate); font-size: 0.9rem; }
+    footer { background: #0f172a; color: white; padding: 2rem; margin-top: 4rem; }
+    .footer-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .footer-links a { color: rgba(255,255,255,0.6); text-decoration: none; font-size: 0.8rem; }
+    .ghana-stripe { display: flex; gap: 3px; }
+    .fs { width: 12px; height: 16px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div class="gov-bar">
+  <span>🇬🇭 &nbsp; Official Government of Ghana System — Ministry of Water Resources &amp; Sanitation</span>
+  <a href="https://mwhwr.gov.gh" target="_blank" rel="noopener">mwhwr.gov.gh</a>
+</div>
+
+<header>
+  <div class="header-inner">
+    <a href="/" class="brand">
+      <div class="brand-logo">💧</div>
+      <div>
+        <div class="brand-name">GN-WAAS</div>
+        <div class="brand-sub">Ghana National Water Audit &amp; Assurance System</div>
+      </div>
+    </a>
+    <a href="/" class="back-btn">← Back to Home</a>
+  </div>
+</header>
+
+<div class="page-hero">
+  <div class="page-hero-inner">
+    <div class="page-tag">Accessibility</div>
+    <h1>Accessibility Statement</h1>
+    <p>GN-WAAS is committed to ensuring digital accessibility for all users, including persons with disabilities, in accordance with Ghana's digital inclusion standards.</p>
+    <div class="page-meta">
+      <span><strong>Standard:</strong> WCAG 2.1 Level AA</span>
+      <span><strong>Last Reviewed:</strong> 10 March 2026</span>
+      <span><strong>Next Review:</strong> 10 September 2026</span>
+    </div>
+  </div>
+</div>
+
+<main>
+  <div class="compliance-badge">
+    <div class="badge-item">
+      <div class="badge-icon">♿</div>
+      <div class="badge-label">WCAG 2.1</div>
+      <div class="badge-status">Level AA Target</div>
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <p style="font-size:0.9rem;color:var(--slate-m);margin:0;">GN-WAAS aims to conform to the Web Content Accessibility Guidelines (WCAG) 2.1 at Level AA. This statement was prepared on 10 March 2026 and reflects the current accessibility status of the platform.</p>
+    </div>
+  </div>
+
+  <div class="toc">
+    <h3>Table of Contents</h3>
+    <ol>
+      <li><a href="#s1">Our Commitment</a></li>
+      <li><a href="#s2">Conformance Status</a></li>
+      <li><a href="#s3">Known Accessibility Issues</a></li>
+      <li><a href="#s4">Technical Specifications</a></li>
+      <li><a href="#s5">Assistive Technology Support</a></li>
+      <li><a href="#s6">Feedback &amp; Contact</a></li>
+      <li><a href="#s7">Enforcement Procedure</a></li>
+    </ol>
+  </div>
+
+  <section class="legal" id="s1">
+    <h2>1. Our Commitment</h2>
+    <p>The Ministry of Water Resources &amp; Sanitation is committed to making GN-WAAS accessible to all authorised users, including those with visual, auditory, motor, or cognitive disabilities. We believe that government digital services must be usable by everyone.</p>
+    <p>This commitment extends to all GN-WAAS portals:</p>
+    <ul>
+      <li>Landing Page (gnwaas-landing.vercel.app)</li>
+      <li>Operations &amp; Audit Portal (gnwaas-admin.vercel.app)</li>
+      <li>GWL Case Management Portal (gnwaas-gwl.vercel.app)</li>
+      <li>Regulatory Oversight Portal (gnwaas-authority.vercel.app)</li>
+      <li>Field Officer Mobile App (gnwaas-mobile.vercel.app)</li>
+    </ul>
+  </section>
+
+  <section class="legal" id="s2">
+    <h2>2. Conformance Status</h2>
+    <p>GN-WAAS is <strong>partially conformant</strong> with WCAG 2.1 Level AA. Partial conformance means that some parts of the content do not fully conform to the accessibility standard. We are actively working to achieve full conformance.</p>
+    <div class="status-grid">
+      <div class="status-card">
+        <div class="status-label pass">✅ Conformant</div>
+        <h4>Colour Contrast</h4>
+        <p>All text meets minimum 4.5:1 contrast ratio against backgrounds.</p>
+      </div>
+      <div class="status-card">
+        <div class="status-label pass">✅ Conformant</div>
+        <h4>Keyboard Navigation</h4>
+        <p>All interactive elements are accessible via keyboard (Tab, Enter, Space, Arrow keys).</p>
+      </div>
+      <div class="status-card">
+        <div class="status-label pass">✅ Conformant</div>
+        <h4>Text Alternatives</h4>
+        <p>All non-decorative images have descriptive alt text. Icons include aria-labels.</p>
+      </div>
+      <div class="status-card">
+        <div class="status-label pass">✅ Conformant</div>
+        <h4>Form Labels</h4>
+        <p>All form inputs have associated labels. Error messages are descriptive and programmatically associated.</p>
+      </div>
+      <div class="status-card">
+        <div class="status-label partial">⚠️ Partial</div>
+        <h4>Data Tables</h4>
+        <p>Most data tables have headers. Complex audit tables are being updated with full ARIA table roles.</p>
+      </div>
+      <div class="status-card">
+        <div class="status-label partial">⚠️ Partial</div>
+        <h4>Map Accessibility</h4>
+        <p>The DMA heatmap provides a text alternative summary. Full screen-reader map navigation is planned.</p>
+      </div>
+      <div class="status-card">
+        <div class="status-label planned">🔵 Planned</div>
+        <h4>PDF Reports</h4>
+        <p>GRA-signed PDF reports will be updated to include tagged PDF structure for screen readers by Q3 2026.</p>
+      </div>
+      <div class="status-card">
+        <div class="status-label planned">🔵 Planned</div>
+        <h4>Mobile App (Flutter)</h4>
+        <p>Full Flutter accessibility semantics (Semantics widgets) are planned for the field officer app in v2.0.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="legal" id="s3">
+    <h2>3. Known Accessibility Issues</h2>
+    <p>The following known issues are being actively addressed:</p>
+    <ul>
+      <li><strong>DMA Heatmap (Admin Portal):</strong> The interactive map does not fully support screen reader navigation. A text-based district summary table is provided as an alternative.</li>
+      <li><strong>PDF Reports:</strong> Downloaded PDF reports are not yet tagged for screen reader compatibility. We aim to resolve this by Q3 2026.</li>
+      <li><strong>Complex Data Tables:</strong> Some audit event tables with merged cells may not be fully navigable by screen readers. We are refactoring these tables.</li>
+      <li><strong>Mobile App:</strong> The Flutter field officer app has limited accessibility semantics in the current version. This is a known limitation being addressed in v2.0.</li>
+    </ul>
+    <div class="highlight-box">
+      <p>If you encounter an accessibility barrier not listed here, please report it using the contact details in Section 6. We aim to respond within 5 working days.</p>
+    </div>
+  </section>
+
+  <section class="legal" id="s4">
+    <h2>4. Technical Specifications</h2>
+    <p>GN-WAAS relies on the following technologies for accessibility:</p>
+    <ul>
+      <li><strong>HTML5</strong> — semantic markup with appropriate landmark roles</li>
+      <li><strong>WAI-ARIA</strong> — ARIA roles, states, and properties for dynamic content</li>
+      <li><strong>CSS3</strong> — responsive design supporting 200% text zoom without horizontal scrolling</li>
+      <li><strong>React 18</strong> — component-based UI with focus management for modal dialogs</li>
+      <li><strong>Flutter 3.19</strong> — mobile app with Semantics widget support (partial)</li>
+    </ul>
+    <p>The portals have been tested with the following browsers and assistive technologies:</p>
+    <ul>
+      <li>Chrome 120+ with NVDA 2024.1 (Windows)</li>
+      <li>Safari 17+ with VoiceOver (macOS)</li>
+      <li>Firefox 121+ with JAWS 2024 (Windows)</li>
+      <li>Chrome for Android with TalkBack</li>
+    </ul>
+  </section>
+
+  <section class="legal" id="s5">
+    <h2>5. Assistive Technology Support</h2>
+    <p>GN-WAAS is designed to work with the following assistive technologies:</p>
+    <ul>
+      <li><strong>Screen readers:</strong> NVDA, JAWS, VoiceOver, TalkBack</li>
+      <li><strong>Magnification software:</strong> ZoomText, Windows Magnifier, macOS Zoom</li>
+      <li><strong>Voice control:</strong> Dragon NaturallySpeaking, Windows Speech Recognition</li>
+      <li><strong>Switch access:</strong> Keyboard-only navigation is fully supported across all portals</li>
+      <li><strong>High contrast mode:</strong> All portals support Windows High Contrast mode</li>
+    </ul>
+  </section>
+
+  <section class="legal" id="s6">
+    <h2>6. Feedback &amp; Contact</h2>
+    <p>We welcome feedback on the accessibility of GN-WAAS. If you experience any accessibility barriers or have suggestions for improvement, please contact us:</p>
+    <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-top:1rem;">
+      <p><strong>GN-WAAS Accessibility Team</strong></p>
+      <p style="margin-top:0.5rem;">Email: accessibility@mwhwr.gov.gh</p>
+      <p>Phone: +233 (0) 302 664 697</p>
+      <p>Response time: Within 5 working days</p>
+    </div>
+    <p style="margin-top:1rem;">When contacting us, please include:</p>
+    <ul>
+      <li>The URL of the page where you encountered the issue</li>
+      <li>A description of the accessibility barrier</li>
+      <li>The assistive technology you are using (if applicable)</li>
+      <li>Your preferred contact method for our response</li>
+    </ul>
+  </section>
+
+  <section class="legal" id="s7">
+    <h2>7. Enforcement Procedure</h2>
+    <p>If you are not satisfied with our response to your accessibility complaint, you may escalate to:</p>
+    <ul>
+      <li><strong>National Information Technology Agency (NITA)</strong> — responsible for digital accessibility standards in Ghana government systems: <a href="https://nita.gov.gh" target="_blank" rel="noopener" style="color:var(--primary);">nita.gov.gh</a></li>
+      <li><strong>Commission on Human Rights and Administrative Justice (CHRAJ)</strong> — for complaints about discrimination in access to public services: <a href="https://chraj.gov.gh" target="_blank" rel="noopener" style="color:var(--primary);">chraj.gov.gh</a></li>
+    </ul>
+    <p>This accessibility statement was last reviewed on <strong>10 March 2026</strong> and will be reviewed again by <strong>10 September 2026</strong>.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div style="font-weight:700;margin-bottom:0.3rem;">🇬🇭 GN-WAAS</div>
+      <div style="font-size:0.75rem;color:rgba(255,255,255,0.5);">© 2026 Republic of Ghana · Ministry of Water Resources &amp; Sanitation</div>
+    </div>
+    <div class="footer-links">
+      <a href="/privacy-policy.html">Privacy Policy</a>
+      <a href="/terms-of-use.html">Terms of Use</a>
+      <a href="/data-protection.html">Data Protection</a>
+      <a href="/evat-compliance.html">E-VAT Compliance</a>
+      <a href="/accessibility.html">Accessibility</a>
+    </div>
+    <div class="ghana-stripe">
+      <div class="fs" style="background:#CE1126"></div>
+      <div class="fs" style="background:#FCD116"></div>
+      <div class="fs" style="background:#006B3F"></div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-VAT Compliance (Act 1151) — GN-WAAS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --gh-green: #006B3F; --gh-gold: #FCD116; --gh-red: #CE1126; --primary: #006B3F; --primary-d: #005230; --slate: #0f172a; --slate-m: #334155; --slate-l: #64748b; --border: #e2e8f0; --bg: #f8fafc; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--slate); line-height: 1.7; }
+    .gov-bar { background: var(--gh-green); color: rgba(255,255,255,0.9); font-size: 0.75rem; padding: 6px 2rem; display: flex; align-items: center; justify-content: space-between; }
+    .gov-bar a { color: rgba(255,255,255,0.8); text-decoration: none; }
+    header { background: white; border-bottom: 3px solid var(--gh-gold); padding: 0 2rem; }
+    .header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
+    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .brand-logo { width: 44px; height: 44px; background: var(--gh-green); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+    .brand-name { font-size: 1.1rem; font-weight: 800; color: var(--gh-green); }
+    .brand-sub { font-size: 0.72rem; color: var(--slate-l); }
+    .back-btn { background: var(--primary); color: white; padding: 8px 18px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; text-decoration: none; }
+    .page-hero { background: linear-gradient(135deg, #92400e 0%, #5c2a06 100%); color: white; padding: 3rem 2rem; }
+    .page-hero-inner { max-width: 900px; margin: 0 auto; }
+    .page-tag { display: inline-block; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.9); font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; margin-bottom: 1rem; letter-spacing: 0.05em; text-transform: uppercase; }
+    .page-hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .page-hero p { color: rgba(255,255,255,0.8); font-size: 0.95rem; }
+    .page-meta { display: flex; gap: 2rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    .page-meta span { font-size: 0.8rem; color: rgba(255,255,255,0.7); }
+    .page-meta strong { color: rgba(255,255,255,0.95); }
+    main { max-width: 900px; margin: 0 auto; padding: 3rem 2rem; }
+    .act-banner { background: white; border: 2px solid #d97706; border-radius: 12px; padding: 1.5rem; margin-bottom: 2.5rem; display: flex; gap: 1rem; align-items: flex-start; }
+    .act-icon { font-size: 2rem; flex-shrink: 0; }
+    .act-banner h3 { font-size: 1rem; font-weight: 700; color: #92400e; margin-bottom: 0.3rem; }
+    .act-banner p { font-size: 0.875rem; color: var(--slate-m); margin: 0; }
+    .toc { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2.5rem; }
+    .toc h3 { font-size: 0.85rem; font-weight: 700; color: var(--slate-m); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+    .toc ol { padding-left: 1.2rem; }
+    .toc li { margin-bottom: 0.4rem; }
+    .toc a { color: var(--primary); text-decoration: none; font-size: 0.9rem; }
+    section.legal { margin-bottom: 2.5rem; padding-bottom: 2.5rem; border-bottom: 1px solid var(--border); }
+    section.legal:last-child { border-bottom: none; }
+    section.legal h2 { font-size: 1.25rem; font-weight: 700; color: var(--slate); margin-bottom: 1rem; }
+    section.legal h3 { font-size: 1rem; font-weight: 600; color: var(--slate-m); margin: 1.2rem 0 0.6rem; }
+    section.legal p { color: var(--slate-m); margin-bottom: 0.8rem; font-size: 0.95rem; }
+    section.legal ul, section.legal ol { padding-left: 1.5rem; margin-bottom: 0.8rem; }
+    section.legal li { color: var(--slate-m); font-size: 0.95rem; margin-bottom: 0.4rem; }
+    .flow-steps { display: flex; flex-direction: column; gap: 0; margin: 1.5rem 0; }
+    .flow-step { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; background: white; border: 1px solid var(--border); border-radius: 0; }
+    .flow-step:first-child { border-radius: 10px 10px 0 0; }
+    .flow-step:last-child { border-radius: 0 0 10px 10px; }
+    .flow-step + .flow-step { border-top: none; }
+    .step-num { width: 28px; height: 28px; background: #d97706; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+    .step-content h4 { font-size: 0.9rem; font-weight: 700; color: var(--slate); margin-bottom: 0.3rem; }
+    .step-content p { font-size: 0.85rem; color: var(--slate-m); margin: 0; }
+    .tariff-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+    .tariff-table th { background: #92400e; color: white; padding: 10px 12px; text-align: left; font-weight: 600; }
+    .tariff-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--slate-m); }
+    .tariff-table tr:last-child td { border-bottom: none; }
+    .tariff-table tr:nth-child(even) td { background: #fafafa; }
+    .highlight-box { background: #fffbeb; border-left: 4px solid #d97706; border-radius: 0 8px 8px 0; padding: 1rem 1.2rem; margin: 1rem 0; }
+    .highlight-box p { margin: 0; color: var(--slate); font-size: 0.9rem; }
+    footer { background: #0f172a; color: white; padding: 2rem; margin-top: 4rem; }
+    .footer-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .footer-links a { color: rgba(255,255,255,0.6); text-decoration: none; font-size: 0.8rem; }
+    .ghana-stripe { display: flex; gap: 3px; }
+    .fs { width: 12px; height: 16px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div class="gov-bar">
+  <span>🇬🇭 &nbsp; Official Government of Ghana System — Ministry of Water Resources &amp; Sanitation</span>
+  <a href="https://mwhwr.gov.gh" target="_blank" rel="noopener">mwhwr.gov.gh</a>
+</div>
+
+<header>
+  <div class="header-inner">
+    <a href="/" class="brand">
+      <div class="brand-logo">💧</div>
+      <div>
+        <div class="brand-name">GN-WAAS</div>
+        <div class="brand-sub">Ghana National Water Audit &amp; Assurance System</div>
+      </div>
+    </a>
+    <a href="/" class="back-btn">← Back to Home</a>
+  </div>
+</header>
+
+<div class="page-hero">
+  <div class="page-hero-inner">
+    <div class="page-tag">Regulatory Compliance</div>
+    <h1>E-VAT Compliance (Act 1151)</h1>
+    <p>How GN-WAAS enforces Electronic VAT compliance across Ghana's water sector under the Value Added Tax (Amendment) Act, 2023 (Act 1151).</p>
+    <div class="page-meta">
+      <span><strong>Statute:</strong> VAT (Amendment) Act, 2023 (Act 1151)</span>
+      <span><strong>Enforcing Authority:</strong> Ghana Revenue Authority (GRA)</span>
+      <span><strong>Sector:</strong> Water Utilities</span>
+    </div>
+  </div>
+</div>
+
+<main>
+  <div class="act-banner">
+    <div class="act-icon">🧾</div>
+    <div>
+      <h3>Value Added Tax (Amendment) Act, 2023 — Act 1151</h3>
+      <p>Act 1151 mandates real-time electronic VAT reporting for all utility service providers in Ghana, including water utilities. GN-WAAS is the government's enforcement mechanism for water sector E-VAT compliance, integrating directly with the GRA's VSDC (VAT Service Data Centre) API to validate and sign all audit reports.</p>
+    </div>
+  </div>
+
+  <div class="toc">
+    <h3>Table of Contents</h3>
+    <ol>
+      <li><a href="#s1">Statutory Mandate</a></li>
+      <li><a href="#s2">How GN-WAAS Enforces E-VAT</a></li>
+      <li><a href="#s3">PURC 2026 Tariff Rates &amp; VAT</a></li>
+      <li><a href="#s4">Shadow Bill Reconciliation</a></li>
+      <li><a href="#s5">GRA VSDC Integration</a></li>
+      <li><a href="#s6">Audit Report Signing</a></li>
+      <li><a href="#s7">Penalties for Non-Compliance</a></li>
+      <li><a href="#s8">Contact GRA</a></li>
+    </ol>
+  </div>
+
+  <section class="legal" id="s1">
+    <h2>1. Statutory Mandate</h2>
+    <p>The <strong>Value Added Tax (Amendment) Act, 2023 (Act 1151)</strong> requires all utility service providers — including Ghana Water Limited (GWL) — to:</p>
+    <ul>
+      <li>Issue VAT-compliant electronic invoices for all billable services</li>
+      <li>Submit real-time billing data to the GRA's VSDC system</li>
+      <li>Maintain auditable records of all VAT collected and remitted</li>
+      <li>Allow government audit of billing systems to detect VAT evasion</li>
+    </ul>
+    <p>GN-WAAS was established under this mandate to provide an independent audit layer that detects discrepancies between GWL's actual billing and the correct VAT-inclusive amounts calculated using PURC 2026 tariff rates.</p>
+  </section>
+
+  <section class="legal" id="s2">
+    <h2>2. How GN-WAAS Enforces E-VAT</h2>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>Mirror GWL Billing Database</h4>
+          <p>GN-WAAS maintains a read-only Change Data Capture (CDC) replica of GWL's billing system, updated in near real-time.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h4>Calculate Shadow Bills</h4>
+          <p>The Sentinel engine independently calculates the correct bill for each account using PURC 2026 tiered tariff rates plus 20% VAT.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h4>Detect Variances</h4>
+          <p>Where GWL's actual bill differs from the shadow bill by more than 15%, an anomaly flag is raised for audit investigation.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h4>Classify Fraud Type</h4>
+          <p>Variances are classified as: Shadow Bill Variance, Category Downgrade, VAT Evasion, Reading Collusion, or Phantom Billing.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <h4>GRA VSDC Submission</h4>
+          <p>Validated audit findings are submitted to the GRA VSDC API, which generates a QR-code signed compliance report.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">6</div>
+        <div class="step-content">
+          <h4>Recovery &amp; Enforcement</h4>
+          <p>GRA-signed reports are used to initiate billing reclassification, back-billing, and where applicable, criminal prosecution.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="legal" id="s3">
+    <h2>3. PURC 2026 Tariff Rates &amp; VAT</h2>
+    <p>GN-WAAS uses the following PURC-approved 2026 tariff rates for shadow bill calculation:</p>
+    <table class="tariff-table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Consumption Band</th>
+          <th>Rate (GHS/m³)</th>
+          <th>VAT (20%)</th>
+          <th>Total (GHS/m³)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Residential</td>
+          <td>0 – 5 m³ (lifeline)</td>
+          <td>6.1225</td>
+          <td>1.2245</td>
+          <td>7.3470</td>
+        </tr>
+        <tr>
+          <td>Residential</td>
+          <td>&gt; 5 m³</td>
+          <td>10.8320</td>
+          <td>2.1664</td>
+          <td>12.9984</td>
+        </tr>
+        <tr>
+          <td>Commercial (Small)</td>
+          <td>Fixed + usage</td>
+          <td>18.5000</td>
+          <td>3.7000</td>
+          <td>22.2000</td>
+        </tr>
+        <tr>
+          <td>Commercial (Large)</td>
+          <td>Fixed GHS 25,000 + usage</td>
+          <td>25.0000</td>
+          <td>5.0000</td>
+          <td>30.0000</td>
+        </tr>
+        <tr>
+          <td>Industrial</td>
+          <td>Bulk metered</td>
+          <td>32.0000</td>
+          <td>6.4000</td>
+          <td>38.4000</td>
+        </tr>
+        <tr>
+          <td>Government / Institutional</td>
+          <td>All consumption</td>
+          <td>14.2000</td>
+          <td>2.8400</td>
+          <td>17.0400</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="highlight-box">
+      <p><strong>Category Downgrade Fraud:</strong> A common fraud pattern involves billing commercial or industrial accounts at residential rates, evading the higher VAT-inclusive tariff. GN-WAAS automatically detects this via the Shadow Bill Reconciler.</p>
+    </div>
+  </section>
+
+  <section class="legal" id="s4">
+    <h2>4. Shadow Bill Reconciliation</h2>
+    <p>The GN-WAAS Sentinel engine performs a three-way reconciliation:</p>
+    <ul>
+      <li><strong>GWL Actual Bill:</strong> The amount GWL actually charged the customer</li>
+      <li><strong>Sentinel Shadow Bill:</strong> The correct amount calculated using PURC 2026 tariffs + 20% VAT</li>
+      <li><strong>GRA VSDC Record:</strong> The amount reported to GRA for VAT purposes</li>
+    </ul>
+    <p>A variance threshold of <strong>15%</strong> triggers an anomaly flag. Variances above <strong>50%</strong> are automatically escalated to CRITICAL severity and assigned to an Audit Manager for immediate investigation.</p>
+  </section>
+
+  <section class="legal" id="s5">
+    <h2>5. GRA VSDC Integration</h2>
+    <p>GN-WAAS integrates with the Ghana Revenue Authority's <strong>VAT Service Data Centre (VSDC) API</strong> to:</p>
+    <ul>
+      <li>Submit audit findings for GRA validation and digital signing</li>
+      <li>Receive QR-code receipts confirming GRA acknowledgement of each audit report</li>
+      <li>Cross-reference GWL's VAT submissions against GN-WAAS shadow calculations</li>
+      <li>Flag accounts where VAT was collected but not remitted to GRA</li>
+    </ul>
+    <p>All GRA-signed reports are stored immutably in the GN-WAAS audit trail and are available for download by authorised GRA Auditors and PURC representatives.</p>
+  </section>
+
+  <section class="legal" id="s6">
+    <h2>6. Audit Report Signing</h2>
+    <p>GN-WAAS generates the following GRA-signed compliance reports:</p>
+    <ul>
+      <li><strong>Monthly NRW Analysis Report:</strong> District-level water balance, apparent vs. real losses, revenue recovery summary</li>
+      <li><strong>GRA Compliance Report:</strong> VAT variance analysis, category fraud summary, VSDC submission status</li>
+      <li><strong>Audit Trail Export:</strong> Complete immutable log of all audit actions, field visits, and case outcomes</li>
+      <li><strong>Field Jobs Summary:</strong> GPS-verified field officer activity, meter reading outcomes, evidence chain of custody</li>
+    </ul>
+    <p>All PDF reports are digitally signed by GRA and include a QR code for verification. Reports are available for download by authorised personnel from the GRA Compliance section of the Admin Portal.</p>
+  </section>
+
+  <section class="legal" id="s7">
+    <h2>7. Penalties for Non-Compliance</h2>
+    <p>Under Act 1151 and the VAT Act (Act 870), utilities found to be in non-compliance face:</p>
+    <ul>
+      <li>Back-billing for all under-collected VAT, plus interest at the Bank of Ghana base rate + 5%</li>
+      <li>Administrative penalties of up to GHS 500,000 per billing period</li>
+      <li>Criminal prosecution for deliberate VAT evasion (up to 5 years imprisonment)</li>
+      <li>Suspension of operating licence pending remediation (subject to PURC order)</li>
+    </ul>
+  </section>
+
+  <section class="legal" id="s8">
+    <h2>8. Contact GRA</h2>
+    <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+      <p><strong>Ghana Revenue Authority — Domestic Tax Revenue Division</strong></p>
+      <p style="margin-top:0.5rem;">Website: <a href="https://gra.gov.gh" target="_blank" rel="noopener" style="color:var(--primary);">gra.gov.gh</a></p>
+      <p>Helpline: 0800 900 110 (toll-free)</p>
+      <p>Email: info@gra.gov.gh</p>
+      <p>Address: Ministries, Accra, Ghana</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div style="font-weight:700;margin-bottom:0.3rem;">🇬🇭 GN-WAAS</div>
+      <div style="font-size:0.75rem;color:rgba(255,255,255,0.5);">© 2026 Republic of Ghana · Ministry of Water Resources &amp; Sanitation</div>
+    </div>
+    <div class="footer-links">
+      <a href="/privacy-policy.html">Privacy Policy</a>
+      <a href="/terms-of-use.html">Terms of Use</a>
+      <a href="/data-protection.html">Data Protection</a>
+      <a href="/evat-compliance.html">E-VAT Compliance</a>
+      <a href="/accessibility.html">Accessibility</a>
+    </div>
+    <div class="ghana-stripe">
+      <div class="fs" style="background:#CE1126"></div>
+      <div class="fs" style="background:#FCD116"></div>
+      <div class="fs" style="background:#006B3F"></div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

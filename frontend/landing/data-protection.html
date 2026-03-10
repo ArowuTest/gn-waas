@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Protection (Act 843) — GN-WAAS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --gh-green: #006B3F; --gh-gold: #FCD116; --primary: #006B3F; --primary-d: #005230; --slate: #0f172a; --slate-m: #334155; --slate-l: #64748b; --border: #e2e8f0; --bg: #f8fafc; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--slate); line-height: 1.7; }
+    .gov-bar { background: var(--gh-green); color: rgba(255,255,255,0.9); font-size: 0.75rem; padding: 6px 2rem; display: flex; align-items: center; justify-content: space-between; }
+    .gov-bar a { color: rgba(255,255,255,0.8); text-decoration: none; }
+    header { background: white; border-bottom: 3px solid var(--gh-gold); padding: 0 2rem; }
+    .header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
+    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .brand-logo { width: 44px; height: 44px; background: var(--gh-green); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+    .brand-name { font-size: 1.1rem; font-weight: 800; color: var(--gh-green); }
+    .brand-sub { font-size: 0.72rem; color: var(--slate-l); }
+    .back-btn { background: var(--primary); color: white; padding: 8px 18px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; text-decoration: none; }
+    .page-hero { background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); color: white; padding: 3rem 2rem; }
+    .page-hero-inner { max-width: 900px; margin: 0 auto; }
+    .page-tag { display: inline-block; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.9); font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; margin-bottom: 1rem; letter-spacing: 0.05em; text-transform: uppercase; }
+    .page-hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .page-hero p { color: rgba(255,255,255,0.8); font-size: 0.95rem; }
+    .page-meta { display: flex; gap: 2rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    .page-meta span { font-size: 0.8rem; color: rgba(255,255,255,0.7); }
+    .page-meta strong { color: rgba(255,255,255,0.95); }
+    main { max-width: 900px; margin: 0 auto; padding: 3rem 2rem; }
+    .act-banner { background: white; border: 2px solid #7c3aed; border-radius: 12px; padding: 1.5rem; margin-bottom: 2.5rem; display: flex; gap: 1rem; align-items: flex-start; }
+    .act-icon { font-size: 2rem; flex-shrink: 0; }
+    .act-banner h3 { font-size: 1rem; font-weight: 700; color: #4c1d95; margin-bottom: 0.3rem; }
+    .act-banner p { font-size: 0.875rem; color: var(--slate-m); margin: 0; }
+    .toc { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2.5rem; }
+    .toc h3 { font-size: 0.85rem; font-weight: 700; color: var(--slate-m); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+    .toc ol { padding-left: 1.2rem; }
+    .toc li { margin-bottom: 0.4rem; }
+    .toc a { color: var(--primary); text-decoration: none; font-size: 0.9rem; }
+    section.legal { margin-bottom: 2.5rem; padding-bottom: 2.5rem; border-bottom: 1px solid var(--border); }
+    section.legal:last-child { border-bottom: none; }
+    section.legal h2 { font-size: 1.25rem; font-weight: 700; color: var(--slate); margin-bottom: 1rem; }
+    section.legal h3 { font-size: 1rem; font-weight: 600; color: var(--slate-m); margin: 1.2rem 0 0.6rem; }
+    section.legal p { color: var(--slate-m); margin-bottom: 0.8rem; font-size: 0.95rem; }
+    section.legal ul { padding-left: 1.5rem; margin-bottom: 0.8rem; }
+    section.legal li { color: var(--slate-m); font-size: 0.95rem; margin-bottom: 0.4rem; }
+    .principle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .principle-card { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+    .principle-card .num { font-size: 0.75rem; font-weight: 700; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+    .principle-card h4 { font-size: 0.9rem; font-weight: 700; color: var(--slate); margin-bottom: 0.4rem; }
+    .principle-card p { font-size: 0.8rem; color: var(--slate-m); margin: 0; }
+    .highlight-box { background: #f5f3ff; border-left: 4px solid #7c3aed; border-radius: 0 8px 8px 0; padding: 1rem 1.2rem; margin: 1rem 0; }
+    .highlight-box p { margin: 0; color: var(--slate); font-size: 0.9rem; }
+    footer { background: #0f172a; color: white; padding: 2rem; margin-top: 4rem; }
+    .footer-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .footer-links a { color: rgba(255,255,255,0.6); text-decoration: none; font-size: 0.8rem; }
+    .ghana-stripe { display: flex; gap: 3px; }
+    .fs { width: 12px; height: 16px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div class="gov-bar">
+  <span>🇬🇭 &nbsp; Official Government of Ghana System — Ministry of Water Resources &amp; Sanitation</span>
+  <a href="https://mwhwr.gov.gh" target="_blank" rel="noopener">mwhwr.gov.gh</a>
+</div>
+
+<header>
+  <div class="header-inner">
+    <a href="/" class="brand">
+      <div class="brand-logo">💧</div>
+      <div>
+        <div class="brand-name">GN-WAAS</div>
+        <div class="brand-sub">Ghana National Water Audit &amp; Assurance System</div>
+      </div>
+    </a>
+    <a href="/" class="back-btn">← Back to Home</a>
+  </div>
+</header>
+
+<div class="page-hero">
+  <div class="page-hero-inner">
+    <div class="page-tag">Legal Compliance</div>
+    <h1>Data Protection</h1>
+    <p>GN-WAAS compliance with the Data Protection Act, 2012 (Act 843) of the Republic of Ghana.</p>
+    <div class="page-meta">
+      <span><strong>Statute:</strong> Data Protection Act, 2012 (Act 843)</span>
+      <span><strong>Regulator:</strong> Data Protection Commission of Ghana</span>
+      <span><strong>Last Updated:</strong> 10 March 2026</span>
+    </div>
+  </div>
+</div>
+
+<main>
+  <div class="act-banner">
+    <div class="act-icon">⚖️</div>
+    <div>
+      <h3>Data Protection Act, 2012 (Act 843)</h3>
+      <p>GN-WAAS is registered with the Data Protection Commission of Ghana and processes personal data in full compliance with Act 843. This page explains how the eight data protection principles are implemented within the GN-WAAS platform.</p>
+    </div>
+  </div>
+
+  <div class="toc">
+    <h3>Table of Contents</h3>
+    <ol>
+      <li><a href="#s1">The Eight Data Protection Principles</a></li>
+      <li><a href="#s2">Registration &amp; Accountability</a></li>
+      <li><a href="#s3">Data Categories &amp; Sensitivity</a></li>
+      <li><a href="#s4">Technical Safeguards</a></li>
+      <li><a href="#s5">Data Subject Rights</a></li>
+      <li><a href="#s6">Cross-Border Transfer Restrictions</a></li>
+      <li><a href="#s7">Breach Notification</a></li>
+      <li><a href="#s8">Data Protection Officer</a></li>
+    </ol>
+  </div>
+
+  <section class="legal" id="s1">
+    <h2>1. The Eight Data Protection Principles</h2>
+    <p>GN-WAAS implements all eight principles of Act 843 as follows:</p>
+    <div class="principle-grid">
+      <div class="principle-card">
+        <div class="num">Principle 1</div>
+        <h4>Accountability</h4>
+        <p>The Ministry of Water Resources &amp; Sanitation is the registered data controller. A designated Data Protection Officer oversees compliance.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">Principle 2</div>
+        <h4>Lawfulness of Processing</h4>
+        <p>All processing is authorised by statutory mandate (Act 1151, PURC regulations) or explicit user consent at account creation.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">Principle 3</div>
+        <h4>Specification of Purpose</h4>
+        <p>Data is collected exclusively for water audit, NRW analysis, and GRA VAT compliance. No secondary commercial use.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">Principle 4</div>
+        <h4>Compatibility of Purpose</h4>
+        <p>Data is never used for purposes incompatible with the original audit mandate without fresh consent or legal authority.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">Principle 5</div>
+        <h4>Quality of Information</h4>
+        <p>Billing data is sourced from GWL's authoritative read-only replica. Field data is GPS-locked and OCR-verified for accuracy.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">Principle 6</div>
+        <h4>Openness</h4>
+        <p>This privacy notice and data protection statement are publicly available. Data subjects are informed at point of collection.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">Principle 7</div>
+        <h4>Data Security Safeguards</h4>
+        <p>AES-256 encryption at rest, TLS 1.3 in transit, RBAC with Row-Level Security, immutable audit trail, NITA-certified hosting.</p>
+      </div>
+      <div class="principle-card">
+        <div class="num">Principle 8</div>
+        <h4>Data Subject Participation</h4>
+        <p>Data subjects may request access, correction, or deletion of their personal data via the Data Protection Officer.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="legal" id="s2">
+    <h2>2. Registration &amp; Accountability</h2>
+    <p>GN-WAAS is registered with the <strong>Data Protection Commission of Ghana</strong> as a data controller under Act 843. The Ministry of Water Resources &amp; Sanitation bears ultimate accountability for all personal data processed through the system.</p>
+    <p>A Data Protection Impact Assessment (DPIA) was conducted prior to system launch, identifying and mitigating risks associated with processing water account holder data and field officer location data.</p>
+  </section>
+
+  <section class="legal" id="s3">
+    <h2>3. Data Categories &amp; Sensitivity</h2>
+    <h3>Standard Personal Data</h3>
+    <ul>
+      <li>System user names, email addresses, employee IDs, phone numbers</li>
+      <li>Water account holder names and billing addresses</li>
+      <li>Consumption records and billing history</li>
+    </ul>
+    <h3>Sensitive / Special Category Data</h3>
+    <ul>
+      <li><strong>Location data:</strong> GPS coordinates of field officers during active jobs (processed under statutory mandate)</li>
+      <li><strong>Biometric-adjacent:</strong> Device ID binding for field officers (not biometric data per se, but treated with equivalent care)</li>
+    </ul>
+    <div class="highlight-box">
+      <p>GN-WAAS does not process health data, racial or ethnic origin data, political opinions, religious beliefs, or criminal record data.</p>
+    </div>
+  </section>
+
+  <section class="legal" id="s4">
+    <h2>4. Technical Safeguards</h2>
+    <ul>
+      <li><strong>Encryption:</strong> AES-256 at rest; TLS 1.3 in transit for all API communications</li>
+      <li><strong>Access Control:</strong> Role-Based Access Control (RBAC) with PostgreSQL Row-Level Security (RLS) — users can only access data within their assigned district and role scope</li>
+      <li><strong>Audit Trail:</strong> All data access and modifications are logged in an immutable audit table. Logs cannot be altered or deleted by any user, including administrators</li>
+      <li><strong>Authentication:</strong> bcrypt password hashing (cost factor 12); multi-factor authentication for administrators</li>
+      <li><strong>Infrastructure:</strong> Hosted on NITA-certified data centres within Ghana; no data leaves Ghanaian jurisdiction</li>
+      <li><strong>Penetration Testing:</strong> Annual third-party security assessments</li>
+    </ul>
+  </section>
+
+  <section class="legal" id="s5">
+    <h2>5. Data Subject Rights</h2>
+    <p>Under Act 843, data subjects have the right to:</p>
+    <ul>
+      <li><strong>Access:</strong> Obtain confirmation of whether data is held and receive a copy — respond within 30 days</li>
+      <li><strong>Rectification:</strong> Correct inaccurate personal data — respond within 21 days</li>
+      <li><strong>Erasure:</strong> Request deletion where data is no longer necessary (subject to 7-year statutory audit retention)</li>
+      <li><strong>Objection:</strong> Object to processing causing unwarranted substantial damage or distress</li>
+      <li><strong>Restriction:</strong> Request restriction of processing pending resolution of a dispute</li>
+    </ul>
+    <p>Submit requests to: <strong>dataprotection@mwhwr.gov.gh</strong></p>
+  </section>
+
+  <section class="legal" id="s6">
+    <h2>6. Cross-Border Transfer Restrictions</h2>
+    <p>In compliance with Section 43 of Act 843, GN-WAAS does not transfer personal data to any country outside Ghana unless:</p>
+    <ul>
+      <li>The receiving country provides an adequate level of data protection as determined by the Data Protection Commission; or</li>
+      <li>The transfer is necessary for the performance of a contract with the data subject; or</li>
+      <li>The data subject has given explicit consent</li>
+    </ul>
+    <p><strong>Current status:</strong> All GN-WAAS data is stored and processed exclusively within Ghana on NITA-certified infrastructure. No international transfers are made.</p>
+  </section>
+
+  <section class="legal" id="s7">
+    <h2>7. Breach Notification</h2>
+    <p>In the event of a personal data breach, GN-WAAS will:</p>
+    <ul>
+      <li>Notify the <strong>Data Protection Commission</strong> within 72 hours of becoming aware of the breach</li>
+      <li>Notify affected data subjects without undue delay where the breach is likely to result in high risk to their rights and freedoms</li>
+      <li>Document all breaches in the internal breach register, including remediation actions taken</li>
+    </ul>
+    <p>To report a suspected data breach: <strong>security@mwhwr.gov.gh</strong></p>
+  </section>
+
+  <section class="legal" id="s8">
+    <h2>8. Data Protection Officer</h2>
+    <p>The Ministry of Water Resources &amp; Sanitation has appointed a Data Protection Officer (DPO) responsible for overseeing Act 843 compliance across GN-WAAS.</p>
+    <div style="background:white;border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-top:1rem;">
+      <p><strong>Data Protection Officer</strong></p>
+      <p style="margin-top:0.5rem;">Ministry of Water Resources &amp; Sanitation</p>
+      <p>Email: dataprotection@mwhwr.gov.gh</p>
+      <p>Phone: +233 (0) 302 664 697</p>
+      <p>Address: P.O. Box M212, Accra, Ghana</p>
+      <p style="margin-top:0.8rem;font-size:0.85rem;color:var(--slate-l);">Complaints may also be directed to the <a href="https://dataprotection.org.gh" target="_blank" rel="noopener" style="color:var(--primary);">Data Protection Commission of Ghana</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div style="font-weight:700;margin-bottom:0.3rem;">🇬🇭 GN-WAAS</div>
+      <div style="font-size:0.75rem;color:rgba(255,255,255,0.5);">© 2026 Republic of Ghana · Ministry of Water Resources &amp; Sanitation</div>
+    </div>
+    <div class="footer-links">
+      <a href="/privacy-policy.html">Privacy Policy</a>
+      <a href="/terms-of-use.html">Terms of Use</a>
+      <a href="/data-protection.html">Data Protection</a>
+      <a href="/evat-compliance.html">E-VAT Compliance</a>
+      <a href="/accessibility.html">Accessibility</a>
+    </div>
+    <div class="ghana-stripe">
+      <div class="fs" style="background:#CE1126"></div>
+      <div class="fs" style="background:#FCD116"></div>
+      <div class="fs" style="background:#006B3F"></div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
