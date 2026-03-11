@@ -12,27 +12,82 @@ const navGroups = [
   {
     label: 'Overview',
     items: [
-      { to: '/district', icon: LayoutDashboard, label: 'My District', roles: ['GWL_MANAGER','FIELD_SUPERVISOR','FIELD_OFFICER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
-      { to: '/nrw',      icon: BarChart3,        label: 'NRW Summary', roles: ['GWL_MANAGER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
+      {
+        to: '/district',
+        icon: LayoutDashboard,
+        label: 'My District',
+        roles: ['GRA_OFFICER', 'GWL_MANAGER', 'FIELD_SUPERVISOR', 'FIELD_OFFICER', 'MOF_AUDITOR', 'MINISTER_VIEW', 'GWL_ANALYST', 'GWL_EXECUTIVE'],
+      },
+      {
+        to: '/nrw',
+        icon: BarChart3,
+        label: 'NRW Summary',
+        roles: ['GRA_OFFICER', 'GWL_MANAGER', 'MOF_AUDITOR', 'MINISTER_VIEW', 'GWL_ANALYST', 'GWL_EXECUTIVE'],
+      },
     ],
   },
   {
     label: 'Field Work',
     items: [
-      { to: '/accounts',      icon: Search,       label: 'Account Search', roles: ['GWL_MANAGER','FIELD_SUPERVISOR','FIELD_OFFICER','GWL_ANALYST'] },
-      { to: '/meter-reading', icon: BookOpen,      label: 'Meter Reading',  roles: ['FIELD_OFFICER','FIELD_SUPERVISOR'] },
-      { to: '/report-issue',  icon: AlertTriangle, label: 'Report Issue',   roles: ['GWL_MANAGER','FIELD_SUPERVISOR','FIELD_OFFICER'] },
-      { to: '/my-jobs',       icon: Briefcase,     label: 'My Jobs',        roles: ['FIELD_OFFICER','FIELD_SUPERVISOR'] },
+      {
+        to: '/accounts',
+        icon: Search,
+        label: 'Account Search',
+        roles: ['GRA_OFFICER', 'GWL_MANAGER', 'FIELD_SUPERVISOR', 'FIELD_OFFICER', 'GWL_ANALYST'],
+      },
+      {
+        to: '/meter-reading',
+        icon: BookOpen,
+        label: 'Meter Reading',
+        roles: ['FIELD_OFFICER', 'FIELD_SUPERVISOR'],
+      },
+      {
+        to: '/report-issue',
+        icon: AlertTriangle,
+        label: 'Report Issue',
+        roles: ['GRA_OFFICER', 'GWL_MANAGER', 'FIELD_SUPERVISOR', 'FIELD_OFFICER'],
+      },
+      {
+        to: '/my-jobs',
+        icon: Briefcase,
+        label: 'My Jobs',
+        roles: ['FIELD_OFFICER', 'FIELD_SUPERVISOR'],
+      },
     ],
   },
   {
     label: 'Management',
     items: [
-      { to: '/job-assignment', icon: UserCheck,    label: 'Job Assignment', roles: ['GWL_MANAGER','FIELD_SUPERVISOR'] },
-      { to: '/field-officers', icon: Users,        label: 'Field Officers', roles: ['GWL_MANAGER','FIELD_SUPERVISOR'] },
-      { to: '/anomaly-flags',  icon: Flag,         label: 'Anomaly Flags',  roles: ['GWL_MANAGER','FIELD_SUPERVISOR','MOF_AUDITOR','GWL_ANALYST','GWL_EXECUTIVE'] },
-      { to: '/audit-events',   icon: ClipboardList,label: 'Audit Events',   roles: ['GWL_MANAGER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
-      { to: '/reporting',      icon: FileDown,     label: 'Reports',        roles: ['GWL_MANAGER','MOF_AUDITOR','MINISTER_VIEW','GWL_ANALYST','GWL_EXECUTIVE'] },
+      {
+        to: '/job-assignment',
+        icon: UserCheck,
+        label: 'Job Assignment',
+        roles: ['GRA_OFFICER', 'GWL_MANAGER', 'FIELD_SUPERVISOR'],
+      },
+      {
+        to: '/field-officers',
+        icon: Users,
+        label: 'Field Officers',
+        roles: ['GRA_OFFICER', 'GWL_MANAGER', 'FIELD_SUPERVISOR'],
+      },
+      {
+        to: '/anomaly-flags',
+        icon: Flag,
+        label: 'Anomaly Flags',
+        roles: ['GRA_OFFICER', 'GWL_MANAGER', 'FIELD_SUPERVISOR', 'MOF_AUDITOR', 'GWL_ANALYST', 'GWL_EXECUTIVE'],
+      },
+      {
+        to: '/audit-events',
+        icon: ClipboardList,
+        label: 'Audit Events',
+        roles: ['GRA_OFFICER', 'GWL_MANAGER', 'MOF_AUDITOR', 'MINISTER_VIEW', 'GWL_ANALYST', 'GWL_EXECUTIVE'],
+      },
+      {
+        to: '/reporting',
+        icon: FileDown,
+        label: 'Reports',
+        roles: ['GRA_OFFICER', 'GWL_MANAGER', 'MOF_AUDITOR', 'MINISTER_VIEW', 'GWL_ANALYST', 'GWL_EXECUTIVE'],
+      },
     ],
   },
 ]
