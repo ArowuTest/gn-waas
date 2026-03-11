@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
@@ -909,7 +908,7 @@ func (h *FieldJobHandler) ReportIllegalConnection(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		h.logger.Error("Failed to save illegal connection report", zap.Error(err))
-		return response.InternalError(c, "Failed to save report")
+		return response.InternalError(c, fmt.Sprintf("Failed to save report: %v", err))
 	}
 
 	h.logger.Info("Illegal connection reported",
