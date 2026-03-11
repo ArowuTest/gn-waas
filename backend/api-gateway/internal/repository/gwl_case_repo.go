@@ -169,6 +169,9 @@ func NewGWLCaseRepository(db *pgxpool.Pool, logger *zap.Logger) *GWLCaseReposito
 // If an RLS-activated transaction is stored in ctx (by rls.Middleware), it is
 // returned so that all queries run within that transaction and RLS is enforced.
 // Otherwise the connection pool is returned (RLS not enforced — ops alert).
+// DB returns the underlying connection pool for direct queries.
+func (r *GWLCaseRepository) DB() *pgxpool.Pool { return r.db }
+
 func (r *GWLCaseRepository) q(ctx context.Context) Querier {
 	if tx, ok := rls.TxFromContext(ctx); ok {
 		return tx

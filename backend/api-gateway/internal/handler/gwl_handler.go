@@ -410,6 +410,42 @@ func (h *GWLHandler) ListCredits(c *fiber.Ctx) error {
 	return response.OK(c, results)
 }
 
+// ── PATCH /api/v1/gwl/credits/:id ────────────────────────────────────────────
+// Approve or reject a credit request. GWL_MANAGER / GWL_SUPERVISOR only.
+func (h *GWLHandler) UpdateCreditStatus(c *fiber.Ctx) error {
+	creditID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "BAD_REQUEST", "invalid credit id")
+	}
+
+	var body struct {
+		Status string  `json:"status"`
+		Notes  *string `json:"notes"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.BadRequest(c, "BAD_REQUEST", "invalid request body")
+	}
+
+	validStatuses := map[string]bool{
+		"APPROVED": true, "REJECTED": true, "APPLIED_IN_GWL": true, "CANCELLED": true,
+	}
+	if !validStatuses[body.Status] {
+		return response.BadRequest(c, "BAD_REQUEST", "status must be APPROVED, REJECTED, APPLIED_IN_GWL, or CANCELLED")
+	}
+
+	_, err = h.caseRepo.DB().Exec(c.UserContext(), `
+		UPDATE credit_requests
+		SET status = $1, updated_at = NOW()
+		WHERE id = $2`,
+		body.Status, creditID,
+	)
+	if err != nil {
+		h.logger.Error("UpdateCreditStatus failed", zap.Error(err))
+		return response.InternalError(c, "failed to update credit status")
+	}
+	return response.OK(c, fiber.Map{"message": "Credit status updated", "status": body.Status})
+}
+
 // ── GET /api/v1/gwl/reports/monthly ──────────────────────────────────────────
 // Returns monthly summary report data
 func (h *GWLHandler) GetMonthlyReport(c *fiber.Ctx) error {

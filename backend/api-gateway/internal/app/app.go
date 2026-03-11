@@ -883,6 +883,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// Reclassification and credit management
 	gwl.Get("/reclassifications", gwlHandler.ListReclassifications)
 	gwl.Get("/credits", gwlHandler.ListCredits)
+	gwl.Patch("/credits/:id", gwlHandler.UpdateCreditStatus)
 
 	// Monthly reports
 	gwl.Get("/reports/monthly", gwlHandler.GetMonthlyReport)

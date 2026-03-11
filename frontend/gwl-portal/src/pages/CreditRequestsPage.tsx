@@ -11,6 +11,8 @@
 import { useState } from 'react';
 import { CreditCard, RefreshCw, Download, CheckCircle, Clock, XCircle, AlertTriangle } from 'lucide-react';
 import { useCredits, useDistricts } from '../hooks/useQueries';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { api as apiClient } from '../utils/api';
 import { KPICard, Badge, Button, Select, Spinner, EmptyState, Table } from '../components/ui';
 import { formatGHS, formatDate, exportToCSV } from '../utils/helpers';
 import type { CreditRequest } from '../types';
@@ -42,6 +44,20 @@ export default function CreditRequestsPage() {
       }).filter(([, v]) => v !== undefined) as [string, string][]
     )
   );
+
+  const queryClient = useQueryClient();
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const updateCreditMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      await apiClient.patch(`/gwl/credits/${id}`, { status });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['credits'] });
+      refetch();
+    },
+    onSettled: () => setActionLoading(null),
+  });
 
   const creditList: CreditRequest[] = credits || [];
 
@@ -142,6 +158,31 @@ export default function CreditRequestsPage() {
           {r.reason ?? '—'}
         </p>
       ),
+    },
+    {
+      header: 'Actions',
+      accessor: (r: CreditRequest) => {
+        if (r.status !== 'PENDING') return <span className="text-xs text-gray-400">—</span>;
+        const isLoading = actionLoading === r.id;
+        return (
+          <div className="flex gap-1">
+            <button
+              disabled={isLoading}
+              onClick={() => { setActionLoading(r.id); updateCreditMutation.mutate({ id: r.id, status: 'APPROVED' }); }}
+              className="px-2 py-1 text-xs font-semibold bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+            >
+              {isLoading ? '…' : 'Approve'}
+            </button>
+            <button
+              disabled={isLoading}
+              onClick={() => { setActionLoading(r.id); updateCreditMutation.mutate({ id: r.id, status: 'REJECTED' }); }}
+              className="px-2 py-1 text-xs font-semibold bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+            >
+              Reject
+            </button>
+          </div>
+        );
+      },
     },
   ];
 

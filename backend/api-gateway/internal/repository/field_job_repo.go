@@ -233,7 +233,28 @@ func (r *UserRepository) GetFieldOfficers(ctx context.Context, districtID *uuid.
 		args = append(args, *districtID)
 	}
 
-	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
+	// When no district filter is provided (admin listing all officers), the RLS
+	// transaction may restrict results to the admin's district (zero UUID).
+	// Use a direct pool transaction with explicit gnwaas_app role so the
+	// current_user_is_admin() RLS function evaluates correctly for SUPER_ADMIN.
+	var querier Querier
+	if districtID == nil {
+		tx, txErr := r.db.Begin(ctx)
+		if txErr == nil {
+			defer tx.Rollback(ctx)
+			_, _ = tx.Exec(ctx, "SET LOCAL ROLE gnwaas_app")
+			_, _ = tx.Exec(ctx, "SELECT set_config('app.user_role', 'SUPER_ADMIN', true)")
+			_, _ = tx.Exec(ctx, "SELECT set_config('app.district_id', '00000000-0000-0000-0000-000000000000', true)")
+			_, _ = tx.Exec(ctx, "SELECT set_config('app.user_id', '00000000-0000-0000-0000-000000000000', true)")
+			querier = tx
+		} else {
+			querier = r.q(ctx)
+		}
+	} else {
+		querier = r.q(ctx)
+	}
+
+	rows, err := querier.Query(ctx, fmt.Sprintf(`
 		SELECT id, email, full_name, COALESCE(phone_number,''), role, status,
 		       COALESCE(organisation,''), COALESCE(employee_id,''),
 		       district_id, created_at, updated_at

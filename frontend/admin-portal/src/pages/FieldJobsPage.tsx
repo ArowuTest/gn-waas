@@ -247,9 +247,14 @@ export function FieldJobsPage() {
   const { data: officersData } = useQuery({
     queryKey: ['field-officers'],
     queryFn: async () => {
-      const res = await apiClient.get('/users/field-officers')
-      return res.data.data as FieldOfficer[]
+      try {
+        const res = await apiClient.get('/users/field-officers')
+        return (res.data.data ?? []) as FieldOfficer[]
+      } catch {
+        return [] as FieldOfficer[]
+      }
     },
+    retry: false,
   })
 
   const assignMutation = useMutation({
