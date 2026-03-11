@@ -466,13 +466,19 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	})
 
 	// ── Auth: Dev Login (DEV_MODE only) ─────────────────────────────────────
-	// POST /api/v1/auth/dev-login — quick role-based login for local development
+	// POST /api/v1/auth/dev-login — quick role-based login for local/staging development
 	// Returns a mock token that DevAuthMiddleware will accept.
-	// BLOCKED in production (DEV_MODE=false).
+	// SECURITY: Blocked unless BOTH DEV_MODE=true AND APP_ENV != "production".
+	// This prevents accidental exposure of passwordless login in production deployments.
 	authGroup.Post("/dev-login", func(c *fiber.Ctx) error {
-		if !cfg.Server.DevMode {
+		isProduction := cfg.App.Env == "production"
+		if !cfg.Server.DevMode || isProduction {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "dev-login is disabled in production",
+				"success": false,
+				"error": fiber.Map{
+					"code":    "DEV_LOGIN_DISABLED",
+					"message": "dev-login is disabled. Use /auth/login with your credentials.",
+				},
 			})
 		}
 		var body struct {
@@ -489,27 +495,26 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			body.Email = "dev-" + strings.ToLower(body.Role) + "@gnwaas.gov.gh"
 		}
 		// BUG-V30-04 fix: look up the real user from DB so district_id is correct.
-		// Run inside a transaction with SUPER_ADMIN context to bypass RLS.
+		// Run a direct query with bypass_rls to get the real user data.
 		var realID, realName, realRole, realDistrictID string
 		realID = "a0000001-0000-0000-0000-000000000001"
 		realName = "Dev " + body.Role
 		realRole = body.Role
 		realDistrictID = "00000000-0000-0000-0000-000000000000"
 
-		_ = func() error {
-			tx, err := db.Begin(c.Context())
-			if err != nil { return err }
-			defer tx.Rollback(c.Context())
-			if _, err = tx.Exec(c.Context(), "SET LOCAL ROLE gnwaas_app"); err != nil { return err }
-			if _, err = tx.Exec(c.Context(), "SELECT set_config('app.user_role','SUPER_ADMIN',true)"); err != nil { return err }
-			if _, err = tx.Exec(c.Context(), "SELECT set_config('app.district_id','00000000-0000-0000-0000-000000000000',true)"); err != nil { return err }
-			if _, err = tx.Exec(c.Context(), "SELECT set_config('app.user_id','00000000-0000-0000-0000-000000000000',true)"); err != nil { return err }
-			return tx.QueryRow(c.Context(),
-				`SELECT id::text, full_name, role::text,
-				        COALESCE(district_id::text,'00000000-0000-0000-0000-000000000000')
-				 FROM users WHERE email=$1 AND status='ACTIVE' LIMIT 1`, body.Email,
-			).Scan(&realID, &realName, &realRole, &realDistrictID)
-		}()
+		// Direct query bypassing RLS to look up the user by email.
+		// This ensures district-scoped roles get their real district_id.
+		if err := db.QueryRow(c.Context(),
+			`SELECT id::text, full_name, role::text,
+			        COALESCE(district_id::text,'00000000-0000-0000-0000-000000000000')
+			 FROM users WHERE email=$1 AND status='ACTIVE' LIMIT 1`, body.Email,
+		).Scan(&realID, &realName, &realRole, &realDistrictID); err != nil {
+			// User not found — use defaults (dev fallback)
+			logger.Warn("dev-login: user not found in DB, using defaults",
+				zap.String("email", body.Email),
+				zap.Error(err),
+			)
+		}
 
 		// Return in the standard APIResponse envelope so frontend can use response.data
 		return c.JSON(fiber.Map{

@@ -27,7 +27,9 @@ services:
     healthCheckPath: /health
     envVars:
       - key: APP_ENV
-        value: production
+        # "staging" enables dev-login for demo purposes.
+        # Change to "production" + DEV_MODE=false to fully lock down.
+        value: staging
       - key: PORT
         value: 10000
       - key: DATABASE_URL

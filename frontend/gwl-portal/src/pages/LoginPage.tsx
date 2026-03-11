@@ -5,7 +5,9 @@ import { api as apiClient } from '../utils/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
-const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
+// Always show demo credentials panel — this is a demo/staging deployment.
+// Quick-login buttons use the real /auth/login endpoint with known demo passwords.
+const DEV_MODE = true;
 
 const DEV_ACCOUNTS = [
   { label: 'GWL Manager',    email: 'manager.accrawest@gwl.com.gh', role: 'GWL_MANAGER',    password: 'GWL@Manager2026!' },

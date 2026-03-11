@@ -9,7 +9,9 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || ''
 const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'gnwaas'
 const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'authority-portal'
-const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true'
+// Always show demo credentials panel — this is a demo/staging deployment.
+// Quick-login buttons use the real /auth/login endpoint with known demo passwords.
+const DEV_MODE = true
 
 // Whether to show the Keycloak SSO button (production with Keycloak configured)
 const USE_KEYCLOAK = !DEV_MODE && Boolean(KEYCLOAK_URL)

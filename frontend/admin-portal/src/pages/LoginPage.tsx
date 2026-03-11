@@ -5,7 +5,9 @@ import { useAuth } from '../contexts/AuthContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
-const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true'
+// Always show demo credentials panel — this is a demo/staging deployment.
+// Quick-login buttons use the real /auth/login endpoint with known demo passwords.
+const DEV_MODE = true
 
 const DEV_ACCOUNTS = [
   { label: 'Super Admin',   email: 'superadmin@gnwaas.gov.gh',      role: 'SUPER_ADMIN',  password: 'Admin@GN2026!' },

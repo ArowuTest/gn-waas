@@ -69,19 +69,33 @@ func (h *AccountHandler) GetAccount(c *fiber.Ctx) error {
 
 // GetAccountsByDistrict godoc
 // GET /api/v1/accounts?district_id=&limit=&offset=
+// district_id is optional for SUPER_ADMIN/SYSTEM_ADMIN (returns all districts).
 func (h *AccountHandler) GetAccountsByDistrict(c *fiber.Ctx) error {
 	districtIDStr := c.Query("district_id")
+	limit := c.QueryInt("limit", 50)
+	offset := c.QueryInt("offset", 0)
+
 	if districtIDStr == "" {
-		return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id is required")
+		// Admins may omit district_id to list all accounts
+		role, _ := c.Locals("rls_user_role").(string)
+		if role != "SUPER_ADMIN" && role != "SYSTEM_ADMIN" && role != "AUDIT_MANAGER" {
+			return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id is required")
+		}
+		accounts, total, err := h.accountRepo.GetAll(c.UserContext(), limit, offset)
+		if err != nil {
+			return response.InternalError(c, "Failed to fetch accounts")
+		}
+		return response.OKWithMeta(c, accounts, &response.Meta{
+			Total:    &total,
+			Page:     intPtr(offset/limit + 1),
+			PageSize: &limit,
+		})
 	}
 
 	districtID, err := uuid.Parse(districtIDStr)
 	if err != nil {
 		return response.BadRequest(c, "INVALID_DISTRICT_ID", "Invalid district ID")
 	}
-
-	limit := c.QueryInt("limit", 50)
-	offset := c.QueryInt("offset", 0)
 
 	accounts, total, err := h.accountRepo.GetByDistrict(c.UserContext(), districtID, limit, offset)
 	if err != nil {

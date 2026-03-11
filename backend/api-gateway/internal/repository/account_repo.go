@@ -185,3 +185,38 @@ func (r *AccountRepository) GetByDistrict(ctx context.Context, districtID uuid.U
 	}
 	return accounts, total, rows.Err()
 }
+
+// GetAll returns all accounts across all districts with pagination (admin only)
+func (r *AccountRepository) GetAll(ctx context.Context, limit, offset int) ([]*domain.WaterAccount, int, error) {
+	var total int
+	r.q(ctx).QueryRow(ctx, "SELECT COUNT(*) FROM water_accounts").Scan(&total)
+
+	rows, err := r.q(ctx).Query(ctx, `
+		SELECT id, gwl_account_number, account_holder_name, account_holder_tin,
+		       category, status, district_id, meter_number, address_line1,
+		       gps_latitude, gps_longitude, is_within_network,
+		       monthly_avg_consumption, is_phantom_flagged, created_at, updated_at
+		FROM water_accounts
+		ORDER BY account_holder_name ASC
+		LIMIT $1 OFFSET $2`, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var accounts []*domain.WaterAccount
+	for rows.Next() {
+		a := &domain.WaterAccount{}
+		err := rows.Scan(
+			&a.ID, &a.GWLAccountNumber, &a.AccountHolderName, &a.AccountHolderTIN,
+			&a.Category, &a.Status, &a.DistrictID, &a.MeterNumber, &a.AddressLine1,
+			&a.GPSLatitude, &a.GPSLongitude, &a.IsWithinNetwork,
+			&a.MonthlyAvgConsumption, &a.IsPhantomFlagged, &a.CreatedAt, &a.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		accounts = append(accounts, a)
+	}
+	return accounts, total, rows.Err()
+}
