@@ -192,8 +192,9 @@ func (r *UserRepository) q(ctx context.Context) Querier {
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	user := &domain.User{}
 	err := r.q(ctx).QueryRow(ctx, `
-		SELECT id, email, full_name, phone_number, role, status,
-		       organisation, employee_id, district_id, keycloak_id, last_login_at, created_at, updated_at
+		SELECT id, email, full_name, COALESCE(phone_number,''), role, status,
+		       COALESCE(organisation,''), COALESCE(employee_id,''),
+		       district_id, keycloak_id, last_login_at, created_at, updated_at
 		FROM users WHERE id = $1`, id,
 	).Scan(
 		&user.ID, &user.Email, &user.FullName, &user.PhoneNumber, &user.Role, &user.Status,
@@ -209,8 +210,9 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Use
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	user := &domain.User{}
 	err := r.q(ctx).QueryRow(ctx, `
-		SELECT id, email, full_name, phone_number, role, status,
-		       organisation, employee_id, district_id, keycloak_id, last_login_at, created_at, updated_at
+		SELECT id, email, full_name, COALESCE(phone_number,''), role, status,
+		       COALESCE(organisation,''), COALESCE(employee_id,''),
+		       district_id, keycloak_id, last_login_at, created_at, updated_at
 		FROM users WHERE email = $1`, email,
 	).Scan(
 		&user.ID, &user.Email, &user.FullName, &user.PhoneNumber, &user.Role, &user.Status,
@@ -232,8 +234,9 @@ func (r *UserRepository) GetFieldOfficers(ctx context.Context, districtID *uuid.
 	}
 
 	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
-		SELECT id, email, full_name, phone_number, role, status,
-		       organisation, employee_id, district_id, created_at, updated_at
+		SELECT id, email, full_name, COALESCE(phone_number,''), role, status,
+		       COALESCE(organisation,''), COALESCE(employee_id,''),
+		       district_id, created_at, updated_at
 		FROM users WHERE %s ORDER BY full_name`, where), args...)
 	if err != nil {
 		return nil, err
