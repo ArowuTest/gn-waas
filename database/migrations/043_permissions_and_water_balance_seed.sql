@@ -49,6 +49,9 @@ END $$;
 --   Water Losses        = Real Losses + Apparent Losses
 --   NRW                 = Unbilled Authorised + Water Losses
 
+-- NOTE: total_authorised_m3, total_apparent_losses_m3, total_real_losses_m3, and
+-- total_nrw_m3 are GENERATED ALWAYS AS (STORED) columns — PostgreSQL computes them
+-- automatically from the base columns. They must NOT appear in the INSERT list.
 INSERT INTO water_balance_records (
     district_id,
     period_start,
@@ -58,16 +61,12 @@ INSERT INTO water_balance_records (
     billed_unmetered_m3,
     unbilled_metered_m3,
     unbilled_unmetered_m3,
-    total_authorised_m3,
     unauthorised_consumption_m3,
     metering_inaccuracies_m3,
     data_handling_errors_m3,
-    total_apparent_losses_m3,
     main_leakage_m3,
     storage_overflow_m3,
     service_conn_leakage_m3,
-    total_real_losses_m3,
-    total_nrw_m3,
     nrw_percent,
     ili_score,
     iwa_grade,
@@ -100,10 +99,6 @@ SELECT
     ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.005, 2)
         AS unbilled_unmetered_m3,
 
-    -- Total authorised = billed metered + billed unmetered + unbilled metered + unbilled unmetered
-    ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.505, 2)
-        AS total_authorised_m3,
-
     -- Apparent losses — unauthorised consumption (ghost accounts, bypasses): ~8 %
     ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.08, 2)
         AS unauthorised_consumption_m3,
@@ -116,10 +111,6 @@ SELECT
     ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.01, 2)
         AS data_handling_errors_m3,
 
-    -- Total apparent losses: ~12 %
-    ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.12, 2)
-        AS total_apparent_losses_m3,
-
     -- Real losses — main leakage: ~20 %
     ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.20, 2)
         AS main_leakage_m3,
@@ -131,14 +122,6 @@ SELECT
     -- Real losses — service connection leakage: ~14.5 %
     ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.145, 2)
         AS service_conn_leakage_m3,
-
-    -- Total real losses: ~39.5 %
-    ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.395, 2)
-        AS total_real_losses_m3,
-
-    -- Total NRW = apparent + real + unbilled authorised ≈ 51.5 %
-    ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.515, 2)
-        AS total_nrw_m3,
 
     -- NRW % (varies 45–58 % by district)
     ROUND((45.0 + ABS(hashtext(d.id::text || gs.period_start::text) % 13))::numeric, 2)
