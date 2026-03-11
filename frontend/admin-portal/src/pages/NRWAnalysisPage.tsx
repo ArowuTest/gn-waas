@@ -343,7 +343,7 @@ export function NRWAnalysisPage() {
                 </td>
               </tr>
             ) : summaries.map(s => {
-              const grade = getDataConfidenceGrade(s.nrw_pct)
+              const grade = getDataConfidenceGrade(s.nrw_pct ?? s.loss_ratio_pct ?? 0)
               const zone = s.zone_type ?? 'GREY'
               const zoneColors: Record<string, string> = {
                 RED: 'bg-red-100 text-red-700',
@@ -359,15 +359,15 @@ export function NRWAnalysisPage() {
                       {zone}
                     </span>
                   </td>
-                  <td className="font-mono text-sm">{formatNumber(s.production_m3, 0)}</td>
-                  <td className="font-mono text-sm">{formatNumber(s.billed_m3, 0)}</td>
-                  <td className="font-mono text-sm text-red-600">{formatNumber(s.nrw_m3, 0)}</td>
+                  <td className="font-mono text-sm">{formatNumber(s.production_m3 ?? 0, 0)}</td>
+                  <td className="font-mono text-sm">{formatNumber(s.billed_m3 ?? 0, 0)}</td>
+                  <td className="font-mono text-sm text-red-600">{formatNumber(s.nrw_m3 ?? 0, 0)}</td>
                   <td>
                     <span className={`font-mono font-bold text-sm ${
-                      s.nrw_pct > 40 ? 'text-red-600' :
-                      s.nrw_pct > 20 ? 'text-amber-600' : 'text-emerald-600'
+                      (s.nrw_pct ?? s.loss_ratio_pct ?? 0) > 40 ? 'text-red-600' :
+                      (s.nrw_pct ?? s.loss_ratio_pct ?? 0) > 20 ? 'text-amber-600' : 'text-emerald-600'
                     }`}>
-                      {s.nrw_pct.toFixed(1)}%
+                      {((s.nrw_pct ?? s.loss_ratio_pct ?? 0) as number).toFixed(1)}%
                     </span>
                   </td>
                   <td>
