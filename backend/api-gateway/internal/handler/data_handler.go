@@ -346,7 +346,7 @@ func (h *DataHandler) ListWaterBalance(c *fiber.Ctx) error {
 			wb.total_real_losses_m3,
 			wb.total_nrw_m3,
 			wb.nrw_percent,
-			wb.estimated_revenue_recovery_ghs,
+			COALESCE(wb.estimated_revenue_recovery_ghs, 0),
 			wb.ili_score,
 			wb.data_confidence_score,
 			wb.computed_at,
@@ -392,7 +392,7 @@ func (h *DataHandler) ListWaterBalance(c *fiber.Ctx) error {
 		ILI                       *float64  `json:"ili"`
 		IWAGrade                  string    `json:"iwa_grade"`               // computed from ILI
 		DataConfidenceScore       *int      `json:"data_confidence_score"`
-		ComputedAt                time.Time `json:"computed_at"`
+		ComputedAt                *time.Time `json:"computed_at,omitempty"`
 		DistrictName              string    `json:"district_name"`
 		DistrictCode              string    `json:"district_code"`
 	}

@@ -136,10 +136,17 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 		argIdx++
 	}
 
-	// Qualify district_id in WHERE to avoid ambiguity with JOINed tables
+	// Qualify column names in WHERE to avoid ambiguity with JOINed tables.
+	// IMPORTANT: replace "gra_status" BEFORE "status" to avoid double-replacement
+	// (e.g. "gra_status" → "ae.gra_status" then "status" → "ae.status" would produce
+	// "ae.gra_ae.status" which is invalid SQL).
 	qualifiedWhere := strings.ReplaceAll(where, "district_id", "ae.district_id")
-	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, "status", "ae.status")
 	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, "gra_status", "ae.gra_status")
+	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, "ae.gra_ae.status", "ae.gra_status") // safety net
+	// Only replace bare "status" (not "gra_status" which is already qualified)
+	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, " status ", " ae.status ")
+	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, " status=", " ae.status=")
+	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, "AND status", "AND ae.status")
 
 	var total int
 	r.q(ctx).QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM audit_events ae WHERE %s", qualifiedWhere), args...).Scan(&total)
