@@ -1,0 +1,22 @@
+# ============================================================
+# GitHub Linguist overrides
+# ============================================================
+# Flutter web build output — compiled from Dart source, not hand-written JS.
+# Marking as generated so GitHub Linguist counts Dart/Go/TypeScript correctly.
+frontend/mobile-web/**          linguist-generated=true
+
+# Mock Service Worker — vendored library file (not project source code)
+**/public/mockServiceWorker.js  linguist-vendored=true
+
+# Build tool config files — not application source
+**/postcss.config.js            linguist-documentation=true
+**/tailwind.config.js           linguist-documentation=true
+**/vite.config.ts               linguist-documentation=true
+
+# Compiled/minified output in dist and build directories
+**/dist/**                      linguist-generated=true
+**/build/**                     linguist-generated=true
+
+# Go workspace and module files — not counted as source by default,
+# but explicitly mark vendor directories if present
+**/vendor/**                    linguist-vendored=true
