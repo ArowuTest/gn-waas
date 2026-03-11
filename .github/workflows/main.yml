@@ -146,11 +146,12 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        # P2-01 FIX: Use timescaledb-ha image — migration 001 creates the
-        # timescaledb extension and migrations 003/004/005/016 call
-        # create_hypertable(). The plain postgres:16 image lacks this extension
-        # and fails at the first CREATE EXTENSION IF NOT EXISTS "timescaledb".
-        image: timescale/timescaledb-ha:pg16-latest
+        # P2-01 FIX: Use timescaledb-ha:pg16 image — migration 001 requires both
+        # the timescaledb extension (for create_hypertable) and the postgis extension
+        # (migration 002 uses GEOMETRY column type for district boundaries).
+        # timescale/timescaledb-ha:pg16 bundles both extensions.
+        # IMPORTANT: The correct tag is "pg16" — "pg16-latest" does NOT exist.
+        image: timescale/timescaledb-ha:pg16
         env:
           POSTGRES_DB: gnwaas_test
           POSTGRES_USER: gnwaas_user
@@ -169,18 +170,20 @@ jobs:
         env:
           PGPASSWORD: test_password
         run: |
-          for f in database/migrations/*.sql; do
+          set -e
+          for f in $(ls database/migrations/*.sql | sort); do
             echo "Running migration: $f"
-            psql -h localhost -U gnwaas_user -d gnwaas_test -f "$f"
+            psql -h localhost -U gnwaas_user -d gnwaas_test -v ON_ERROR_STOP=1 -f "$f"
           done
 
       - name: Run seed data
         env:
           PGPASSWORD: test_password
         run: |
-          for f in database/seeds/*.sql; do
+          set -e
+          for f in $(ls database/seeds/*.sql | sort); do
             echo "Running seed: $f"
-            psql -h localhost -U gnwaas_user -d gnwaas_test -f "$f"
+            psql -h localhost -U gnwaas_user -d gnwaas_test -v ON_ERROR_STOP=1 -f "$f"
           done
 
   # ============================================================

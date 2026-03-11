@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS districts (
     district_name           VARCHAR(100) NOT NULL,
     region                  VARCHAR(100) NOT NULL,
     parent_district_id      UUID REFERENCES districts(id),
-    boundary_geom           GEOMETRY(MULTIPOLYGON, 4326),  -- PostGIS boundary
+    boundary_geom           TEXT,                          -- PostGIS GEOMETRY(MULTIPOLYGON,4326) when available
     total_area_km2          NUMERIC(10,2),
     population_estimate     INTEGER,
     total_connections       INTEGER NOT NULL DEFAULT 0,
@@ -91,7 +91,18 @@ CREATE TABLE IF NOT EXISTS districts (
 CREATE INDEX IF NOT EXISTS idx_districts_region ON districts(region);
 CREATE INDEX IF NOT EXISTS idx_districts_zone_type ON districts(zone_type);
 CREATE INDEX IF NOT EXISTS idx_districts_pilot ON districts(is_pilot_district) WHERE is_pilot_district = TRUE;
-CREATE INDEX IF NOT EXISTS idx_districts_boundary ON districts USING GIST(boundary_geom);
+-- PostGIS spatial index (only created when postgis extension is available)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'postgis') THEN
+    -- Alter column to proper geometry type and create spatial index
+    ALTER TABLE districts ALTER COLUMN boundary_geom TYPE GEOMETRY(MULTIPOLYGON, 4326)
+      USING CASE WHEN boundary_geom IS NULL THEN NULL
+                 ELSE ST_GeomFromText(boundary_geom, 4326) END;
+    CREATE INDEX IF NOT EXISTS idx_districts_boundary ON districts USING GIST(boundary_geom);
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'PostGIS spatial index skipped: %', SQLERRM;
+END $$;
 
 COMMENT ON TABLE districts IS 'GWL District Metered Areas (DMAs). Boundaries from ArcGIS.';
 

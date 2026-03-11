@@ -7,7 +7,14 @@
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "postgis";        -- GIS for network boundary checks
+-- PostGIS for district boundary geometry (GEOMETRY column in districts table).
+-- Wrapped in DO block so migration succeeds on plain PostgreSQL without PostGIS.
+-- The boundary_geom column will be TEXT type if PostGIS is unavailable (see migration 002).
+DO $$ BEGIN
+  CREATE EXTENSION IF NOT EXISTS "postgis";
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'postgis extension not available, skipping (district boundary GIS features disabled)';
+END $$;
 DO $$ BEGIN
   CREATE EXTENSION IF NOT EXISTS "timescaledb";
 EXCEPTION WHEN OTHERS THEN
