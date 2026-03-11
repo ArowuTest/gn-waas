@@ -161,17 +161,19 @@ export function NRWAnalysisPage() {
   // Chart data
   const chartData = summaries.map(s => ({
     name: s.district_name.replace(' District', '').substring(0, 12),
-    nrw_pct: parseFloat(s.nrw_pct.toFixed(1)),
-    production: parseFloat((s.production_m3 / 1000).toFixed(1)),
-    billed: parseFloat((s.billed_m3 / 1000).toFixed(1)),
+    // nrw_pct is the canonical field; fall back to loss_ratio_pct for older API responses
+    nrw_pct: parseFloat(((s.nrw_pct ?? (s as any).loss_ratio_pct ?? 0) as number).toFixed(1)),
+    production: parseFloat(((s.production_m3 ?? 0) / 1000).toFixed(1)),
+    billed: parseFloat(((s.billed_m3 ?? 0) / 1000).toFixed(1)),
   }))
 
+  const nrwPct = (s: typeof summaries[0]) => (s.nrw_pct ?? (s as any).loss_ratio_pct ?? 0) as number
   const avgNRW = summaries.length > 0
-    ? summaries.reduce((sum, s) => sum + s.nrw_pct, 0) / summaries.length
+    ? summaries.reduce((sum, s) => sum + nrwPct(s), 0) / summaries.length
     : 0
 
-  const aboveTarget = summaries.filter(s => s.nrw_pct > 20).length
-  const criticalCount = summaries.filter(s => s.nrw_pct > 40).length
+  const aboveTarget = summaries.filter(s => nrwPct(s) > 20).length
+  const criticalCount = summaries.filter(s => nrwPct(s) > 40).length
 
   return (
     <div className="space-y-6">
@@ -253,7 +255,7 @@ export function NRWAnalysisPage() {
                 {chartData.map((entry, index) => (
                   <Cell
                     key={index}
-                    fill={entry.nrw_pct > 40 ? '#ef4444' : entry.nrw_pct > 20 ? '#f59e0b' : '#10b981'}
+                    fill={(entry.nrw_pct ?? 0) > 40 ? '#ef4444' : (entry.nrw_pct ?? 0) > 20 ? '#f59e0b' : '#10b981'}
                   />
                 ))}
               </Bar>

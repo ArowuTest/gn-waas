@@ -56,6 +56,10 @@ type NRWSummaryRow struct {
 	IsPilotDistrict     bool      `json:"is_pilot_district"`
 	Grade               string    `json:"grade"` // A/B/C/D/F derived from loss_ratio_pct
 	ZoneType            *string   `json:"zone_type,omitempty"` // FIX: added for frontend NRWSummaryPage
+	// Frontend-compatible aliases (NRWAnalysisPage expects these field names)
+	NRWPct       float64 `json:"nrw_pct"`       // alias for loss_ratio_pct (0 if null)
+	ProductionM3 float64 `json:"production_m3"` // system input volume (placeholder)
+	BilledM3     float64 `json:"billed_m3"`     // authorised consumption (placeholder)
 }
 
 // GetNRWSummary returns NRW performance per district for the given period.
@@ -152,6 +156,10 @@ func (r *NRWReportRepository) GetNRWSummary(ctx context.Context, districtID *uui
 		}
 		// Derive IWA grade from loss ratio
 		row.Grade = deriveNRWGrade(row.LossRatioPct)
+		// Populate frontend-compatible alias fields (NRWAnalysisPage expects nrw_pct)
+		if row.LossRatioPct != nil {
+			row.NRWPct = *row.LossRatioPct
+		}
 		results = append(results, row)
 	}
 

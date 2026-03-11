@@ -250,15 +250,28 @@ export interface DashboardStats {
 
 export interface NRWSummary {
   district_id: string
+  district_code?: string
   district_name: string
-  production_m3: number
-  billed_m3: number
-  nrw_m3: number
-  nrw_pct: number
-  data_confidence_grade: string
+  region?: string
+  production_m3?: number       // placeholder (0 until meter data is ingested)
+  billed_m3?: number           // placeholder (0 until meter data is ingested)
+  nrw_m3?: number
+  nrw_pct?: number             // alias for loss_ratio_pct (added in b5dcfd2b+1)
+  loss_ratio_pct?: number      // raw API field name
+  data_confidence_grade?: string | number
   zone_type?: string
-  period_start: string
-  period_end: string
+  grade?: string
+  period_start?: string
+  period_end?: string
+  total_accounts?: number
+  flagged_accounts?: number
+  open_anomalies?: number
+  critical_anomalies?: number
+  high_anomalies?: number
+  total_estimated_loss_ghs?: number
+  total_confirmed_loss_ghs?: number
+  total_recovered_ghs?: number
+  is_pilot_district?: boolean
 }
 
 export interface ApiResponse<T> {
