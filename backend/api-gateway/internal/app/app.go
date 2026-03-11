@@ -917,9 +917,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── Core Data Endpoints (BE-7) ───────────────────────────────────────────
 	// Read-only access to production, meter-reading, water-balance, billing data.
-	// Accessible by SUPER_ADMIN, SYSTEM_ADMIN, MOF_AUDITOR, GWL roles.
+	// Accessible by SUPER_ADMIN, SYSTEM_ADMIN, MOF_AUDITOR, GRA_OFFICER,
+	// AUDIT_MANAGER, and GWL roles.
 	dataRoles := middleware.RequireRoles(
 		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR",
+		"GRA_OFFICER", "AUDIT_MANAGER",
 		"GWL_EXECUTIVE", "GWL_MANAGER", "GWL_SUPERVISOR", "GWL_ANALYST",
 	)
 	api.Get("/production-records", dataRoles, dataHandler.ListProductionRecords)
