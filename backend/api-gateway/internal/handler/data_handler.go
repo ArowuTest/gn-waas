@@ -268,6 +268,82 @@ func (h *DataHandler) ListMeterReadings(c *fiber.Ctx) error {
 
 // ── GET /api/v1/water-balance ─────────────────────────────────────────────────
 // Query params: district_id (uuid), from (YYYY-MM-DD), to (YYYY-MM-DD), limit, offset
+// CreateMeterReading godoc
+// POST /api/v1/meter-readings
+// Submits a new manual meter reading from a field officer.
+// P3-04 FIX: MeterReadingPage.tsx calls POST /meter-readings but only GET existed.
+func (h *DataHandler) CreateMeterReading(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+
+	var req struct {
+		AccountID  string  `json:"account_id"`
+		DistrictID string  `json:"district_id"`
+		ReadingM3  float64 `json:"reading_m3"`
+		Notes      string  `json:"notes"`
+		Source     string  `json:"source"`
+		Latitude   float64 `json:"latitude"`
+		Longitude  float64 `json:"longitude"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+	if req.AccountID == "" {
+		return response.BadRequest(c, "MISSING_ACCOUNT_ID", "account_id is required")
+	}
+	if req.ReadingM3 <= 0 {
+		return response.BadRequest(c, "INVALID_READING", "reading_m3 must be greater than 0")
+	}
+
+	accountID, err := uuid.Parse(req.AccountID)
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account_id format")
+	}
+
+	// Get the submitting officer's user_id from JWT claims
+	readerID, _ := c.Locals("rls_user_id").(string)
+	readMethod := "MANUAL"
+	if req.Source == "FIELD_OFFICER" {
+		readMethod = "MANUAL"
+	}
+
+	var readingID string
+	err = h.q(ctx).QueryRow(ctx, `
+		INSERT INTO meter_readings (
+			account_id, reading_date, reading_m3,
+			read_method, reader_id, notes,
+			gps_latitude, gps_longitude, is_estimated
+		) VALUES (
+			$1::uuid, CURRENT_DATE, $2,
+			$3, NULLIF($4, '')::uuid, NULLIF($5, ''),
+			NULLIF($6, 0), NULLIF($7, 0), false
+		)
+		ON CONFLICT (account_id, reading_date)
+		DO UPDATE SET
+			reading_m3  = EXCLUDED.reading_m3,
+			read_method = EXCLUDED.read_method,
+			reader_id   = EXCLUDED.reader_id,
+			notes       = EXCLUDED.notes,
+			updated_at  = NOW()
+		RETURNING id::text`,
+		accountID, req.ReadingM3,
+		readMethod, readerID, req.Notes,
+		req.Latitude, req.Longitude,
+	).Scan(&readingID)
+	if err != nil {
+		h.logger.Error("create meter reading", zap.Error(err))
+		return response.InternalError(c, "Failed to save meter reading")
+	}
+
+	return response.Created(c, fiber.Map{
+		"id":          readingID,
+		"account_id":  req.AccountID,
+		"reading_m3":  req.ReadingM3,
+		"read_method": readMethod,
+		"reading_date": "today",
+		"message":     "Meter reading submitted successfully",
+	})
+}
+
 func (h *DataHandler) ListWaterBalance(c *fiber.Ctx) error {
 	ctx := c.UserContext()
 

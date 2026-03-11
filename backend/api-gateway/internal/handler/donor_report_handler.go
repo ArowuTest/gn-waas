@@ -185,8 +185,8 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE status = 'COMPLETED'),
-			COUNT(*) FILTER (WHERE gra_compliance_status = 'SIGNED'),
-			COUNT(*) FILTER (WHERE gra_compliance_status = 'PROVISIONAL')
+			COUNT(*) FILTER (WHERE gra_status = 'SIGNED'),
+			COUNT(*) FILTER (WHERE gra_status = 'PROVISIONAL')
 		FROM audit_events
 		WHERE created_at BETWEEN $1 AND $2
 	`, periodStart, periodEnd).Scan(
@@ -359,7 +359,7 @@ func (h *DonorReportHandler) GetTrend(c *fiber.Ctx) error {
 		h.db.QueryRow(c.Context(), `
 			SELECT
 				COUNT(*) FILTER (WHERE status = 'COMPLETED'),
-				COUNT(*) FILTER (WHERE gra_compliance_status = 'SIGNED')
+				COUNT(*) FILTER (WHERE gra_status = 'SIGNED')
 			FROM audit_events
 			WHERE created_at BETWEEN $1 AND $2
 		`, start, end).Scan(&total, &signed)

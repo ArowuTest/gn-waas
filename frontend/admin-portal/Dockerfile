@@ -1,5 +1,5 @@
 # DOCKER-2 fix: Accept VITE_API_URL as build argument so it can be injected at build time.
-# DOCKER-3 fix: Use --legacy-peer-deps to resolve react-leaflet@5 / React 18 conflict.
+# Use --legacy-peer-deps to resolve peer dependency conflicts.
 FROM node:22-alpine AS builder
 WORKDIR /app
 
@@ -24,7 +24,7 @@ ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
 ENV VITE_DEV_MODE=$VITE_DEV_MODE
 
 COPY package*.json ./
-# DOCKER-3 fix: --legacy-peer-deps resolves react-leaflet@5 requiring React 19
+# --legacy-peer-deps resolves peer dependency conflicts (react-leaflet@4 + React 18)
 RUN npm ci --legacy-peer-deps
 COPY . .
 RUN npm run build

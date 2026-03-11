@@ -1,6 +1,6 @@
 # DOCKER-1 fix: Build context is repo root (.) so shared/go replace directive works.
 # This Dockerfile is used by docker-compose.yml when building from the monorepo root.
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /workspace

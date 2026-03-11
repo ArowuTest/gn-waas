@@ -17,7 +17,16 @@ import (
 	"go.uber.org/zap"
 )
 
-
+// runMigrations applies all pending SQL migration files in lexicographic order.
+//
+// P1-01 FIX: The previous implementation logged a warning on SQL failure but
+// continued, marking the failed migration as "applied". This silently corrupted
+// the schema and prevented the failed script from ever being retried.
+//
+// Correct behaviour:
+//   - If a migration SQL file fails, return an error immediately.
+//   - Do NOT insert the filename into schema_migrations.
+//   - The caller (main) must treat this as a fatal error and halt startup.
 func runMigrations(ctx context.Context, dsn string, logger *zap.Logger) error {
 	logger.Info("Running database migrations...")
 
@@ -30,14 +39,14 @@ func runMigrations(ctx context.Context, dsn string, logger *zap.Logger) error {
 	// Create migrations tracking table
 	_, err = pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
-			filename TEXT PRIMARY KEY,
-			applied_at TIMESTAMPTZ DEFAULT NOW()
+			filename   TEXT        PRIMARY KEY,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`)
 	if err != nil {
 		return fmt.Errorf("migration: create tracking table: %w", err)
 	}
 
-	// Find migration files
+	// Locate migration files
 	migrationsDir := os.Getenv("MIGRATIONS_DIR")
 	if migrationsDir == "" {
 		migrationsDir = "./migrations"
@@ -59,28 +68,50 @@ func runMigrations(ctx context.Context, dsn string, logger *zap.Logger) error {
 
 	applied := 0
 	skipped := 0
+
 	for _, fname := range files {
 		// Check if already applied
 		var exists bool
-		pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE filename=$1)`, fname).Scan(&exists)
+		if err := pool.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE filename=$1)`, fname,
+		).Scan(&exists); err != nil {
+			return fmt.Errorf("migration: check applied status for %s: %w", fname, err)
+		}
 		if exists {
 			skipped++
 			continue
 		}
 
-		// Read and execute
+		// Read the SQL file
 		content, err := os.ReadFile(filepath.Join(migrationsDir, fname))
 		if err != nil {
 			return fmt.Errorf("migration: read %s: %w", fname, err)
 		}
 
-		_, err = pool.Exec(ctx, string(content))
+		// Execute inside a transaction so a partial failure rolls back cleanly.
+		tx, err := pool.Begin(ctx)
 		if err != nil {
-			logger.Warn("Migration failed (continuing)", zap.String("file", fname), zap.Error(err))
-			// Mark as applied anyway to avoid re-running partial migrations
+			return fmt.Errorf("migration: begin tx for %s: %w", fname, err)
 		}
 
-		pool.Exec(ctx, `INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING`, fname)
+		if _, err = tx.Exec(ctx, string(content)); err != nil {
+			// P1-01 FIX: Roll back and return a hard error — do NOT mark as applied.
+			_ = tx.Rollback(ctx)
+			return fmt.Errorf("migration: FAILED executing %s — halting startup: %w", fname, err)
+		}
+
+		// Record the migration only after successful execution.
+		if _, err = tx.Exec(ctx,
+			`INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING`, fname,
+		); err != nil {
+			_ = tx.Rollback(ctx)
+			return fmt.Errorf("migration: record %s: %w", fname, err)
+		}
+
+		if err = tx.Commit(ctx); err != nil {
+			return fmt.Errorf("migration: commit %s: %w", fname, err)
+		}
+
 		logger.Info("Migration applied", zap.String("file", fname))
 		applied++
 	}
@@ -92,7 +123,8 @@ func runMigrations(ctx context.Context, dsn string, logger *zap.Logger) error {
 	return nil
 }
 
-
+// runSeeds applies seed data files. Seeds are idempotent (ON CONFLICT DO NOTHING)
+// so failures are logged but do not halt startup — seed failures are non-fatal.
 func runSeeds(ctx context.Context, dsn string, logger *zap.Logger) error {
 	seedsDir := os.Getenv("SEEDS_DIR")
 	if seedsDir == "" {
@@ -140,7 +172,7 @@ func runSeeds(ctx context.Context, dsn string, logger *zap.Logger) error {
 		}
 		_, err = pool.Exec(ctx, string(fileContent))
 		if err != nil {
-			logger.Warn("Seed failed (continuing)", zap.String("file", fname), zap.Error(err))
+			logger.Warn("Seed failed (non-fatal, continuing)", zap.String("file", fname), zap.Error(err))
 			continue
 		}
 		logger.Info("Seed applied", zap.String("file", fname))
@@ -158,7 +190,7 @@ func main() {
 	// Logger
 	var logger *zap.Logger
 	var logErr error
-	if os.Getenv("APP_ENV") == "production" {
+	if os.Getenv("APP_ENV") == "production" || os.Getenv("APP_ENV") == "staging" {
 		logger, logErr = zap.NewProduction()
 	} else {
 		logger, logErr = zap.NewDevelopment()
@@ -170,7 +202,7 @@ func main() {
 
 	logger.Info("GN-WAAS API Gateway starting",
 		zap.String("version", "1.0.0"),
-		zap.String("build_date", "2026-03-10"),
+		zap.String("build_date", "2026-03-11"),
 	)
 
 	// Config
@@ -182,20 +214,23 @@ func main() {
 		logger.Fatal("Invalid configuration", zap.Error(err))
 	}
 
-	// Run migrations before starting the server
+	// Run migrations before starting the server.
+	// P1-01 FIX: A migration failure is now FATAL — the server will not start
+	// with a partially-migrated schema. This prevents silent data corruption.
 	if os.Getenv("SKIP_MIGRATIONS") != "true" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		if err := runMigrations(ctx, cfg.Database.DSN(), logger); err != nil {
-			logger.Error("Migrations failed (continuing anyway)", zap.Error(err))
+			cancel()
+			logger.Fatal("Migration failed — halting startup to prevent data corruption", zap.Error(err))
 		}
 		cancel()
 	}
 
-	// Run seeds after migrations if DB is empty
+	// Run seeds after migrations (non-fatal).
 	if os.Getenv("SKIP_MIGRATIONS") != "true" {
 		ctx2, cancel2 := context.WithTimeout(context.Background(), 3*time.Minute)
 		if err := runSeeds(ctx2, cfg.Database.DSN(), logger); err != nil {
-			logger.Error("Seeds failed (continuing anyway)", zap.Error(err))
+			logger.Warn("Seeds failed (non-fatal)", zap.Error(err))
 		}
 		cancel2()
 	}

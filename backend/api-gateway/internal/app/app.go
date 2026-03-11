@@ -14,6 +14,7 @@ import (
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/cache"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/config"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/jwtutil"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/handler"
 	gwsvc "github.com/ArowuTest/gn-waas/backend/api-gateway/internal/service"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/notification"
@@ -209,7 +210,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	})
 
 	// ── Auth middleware config ────────────────────────────────────────────────
-	authCfg := middleware.AuthConfig{
+	// Keycloak config retained for future OIDC migration.
+	_ = middleware.AuthConfig{
 		KeycloakURL: cfg.Keycloak.URL,
 		Realm:       cfg.Keycloak.Realm,
 		ClientID:    cfg.Keycloak.ClientID,
@@ -218,103 +220,57 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// In development mode, use DevAuthMiddleware to bypass JWT validation.
 	// In production, AuthMiddleware fetches JWKS from Keycloak and validates RS256 tokens.
 	var authMW fiber.Handler
-	if cfg.Server.DevMode {
-		logger.Warn("DEVELOPMENT MODE: JWT validation bypassed — DO NOT USE IN PRODUCTION")
-		// BUG-V30-04 fix: DevAuthMiddleware calls c.Next() internally. Wrapping it and
-		// calling c.Next() again causes a double-advance of the Fiber middleware chain,
-		// resulting in 404 for all authenticated routes. Fix: inline the dev auth setup
-		// directly in a single middleware that calls c.Next() exactly once.
-		authMW = func(c *fiber.Ctx) error {
-			// BUG-RLS-01 fix: Parse the actual user email from the dev token so that
-			// each user gets their real district_id and user_id from the database,
-			// not a hardcoded first-district fallback that breaks RLS isolation.
-			//
-			// Token format: "dev-mock-token-{email}"
-			// e.g. "dev-mock-token-officer.kwame@gnwaas.gov.gh"
-			authHeader := c.Get("Authorization")
-			tokenEmail := ""
-			const devPrefix = "dev-mock-token-"
-			if strings.HasPrefix(authHeader, "Bearer "+devPrefix) {
-				tokenEmail = strings.TrimPrefix(authHeader, "Bearer "+devPrefix)
-			}
-
-			// Default role/identity for unauthenticated or generic dev requests
-			devRole := c.Get("X-Dev-Role", "SUPER_ADMIN")
-			devEmail := "dev-" + strings.ToLower(devRole) + "@gnwaas.gov.gh"
-			devName := "Dev User (" + devRole + ")"
-			devUserID := "a0000001-0000-0000-0000-000000000001"
-			devDistrictID := "00000000-0000-0000-0000-000000000000"
-
-			// If a real user email is embedded in the token, look them up
-			if tokenEmail != "" {
-				// BUG-RLS-05: The users table has RLS enabled. The gnwaas app user
-				// is not a superuser, so a plain pool.QueryRow() returns 0 rows.
-				// Fix: run the lookup inside a transaction with SET LOCAL ROLE gnwaas_app
-				// and app.user_role = 'SUPER_ADMIN' so the RLS policy allows the read.
-				var dbUserID, dbRole, dbDistrictID string
-				authErr := func() error {
-					tx, txErr := db.Begin(c.Context())
-					if txErr != nil {
-						return txErr
-					}
-					defer tx.Rollback(c.Context())
-					if _, txErr = tx.Exec(c.Context(), "SET LOCAL ROLE gnwaas_app"); txErr != nil {
-						return txErr
-					}
-					if _, txErr = tx.Exec(c.Context(), "SELECT set_config('app.user_role', 'SUPER_ADMIN', true)"); txErr != nil {
-						return txErr
-					}
-					if _, txErr = tx.Exec(c.Context(), "SELECT set_config('app.district_id', '00000000-0000-0000-0000-000000000000', true)"); txErr != nil {
-						return txErr
-					}
-					if _, txErr = tx.Exec(c.Context(), "SELECT set_config('app.user_id', '00000000-0000-0000-0000-000000000000', true)"); txErr != nil {
-						return txErr
-					}
-					return tx.QueryRow(c.Context(),
-						`SELECT id::text, role::text, COALESCE(district_id::text, '00000000-0000-0000-0000-000000000000')
-						 FROM users WHERE email = $1 AND status = 'ACTIVE' LIMIT 1`,
-						tokenEmail,
-					).Scan(&dbUserID, &dbRole, &dbDistrictID)
-				}()
-				if authErr == nil {
-					devEmail = tokenEmail
-					devRole = dbRole
-					devUserID = dbUserID
-					devDistrictID = dbDistrictID
-					devName = tokenEmail
-				}
-			}
-
-			// Admin/global roles bypass district RLS (zero UUID = no district filter)
-			adminRoles := map[string]bool{
-				"SUPER_ADMIN":  true,
-				"SYSTEM_ADMIN": true,
-				"MOF_AUDITOR":  true,
-			}
-			if adminRoles[devRole] {
-				devDistrictID = "00000000-0000-0000-0000-000000000000"
-			}
-
-			c.Locals("user_id", devUserID)
-			c.Locals("user_email", devEmail)
-			c.Locals("user_name", devName)
-			c.Locals("user_roles", []string{devRole})
-			c.Locals("claims", &middleware.Claims{
-				Sub:   devUserID,
-				Email: devEmail,
-				Name:  devName,
-				RealmAccess: middleware.RealmAccess{
-					Roles: []string{devRole},
-				},
-			})
-			c.Locals("rls_user_role", devRole)
-			c.Locals("rls_user_id", devUserID)
-			c.Locals("rls_district_id", devDistrictID)
-
-			return c.Next()
+	// P1-05 FIX: Use JWT-validating middleware in ALL environments.
+	// Both /auth/login and /auth/dev-login now issue properly signed HS256 JWTs,
+	// so the same middleware works for staging and production.
+	// DEV_MODE no longer bypasses signature validation.
+	authMW = func(c *fiber.Ctx) error {
+		authHeader := c.Get("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			return c.Status(401).JSON(fiber.Map{"success": false, "error": fiber.Map{
+				"code":    "MISSING_TOKEN",
+				"message": "Authorization header required",
+			}})
 		}
-	} else {
-		authMW = middleware.AuthMiddleware(authCfg, logger)
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+
+		claims, err := jwtutil.ValidateToken(tokenStr)
+		if err != nil {
+			logger.Warn("JWT validation failed", zap.Error(err))
+			return c.Status(401).JSON(fiber.Map{"success": false, "error": fiber.Map{
+				"code":    "INVALID_TOKEN",
+				"message": "Token is invalid or expired",
+			}})
+		}
+
+		// Admin/global roles bypass district RLS (zero UUID = no district filter)
+		districtID := claims.DistrictID
+		adminRoles := map[string]bool{
+			"SUPER_ADMIN":  true,
+			"SYSTEM_ADMIN": true,
+			"MOF_AUDITOR":  true,
+		}
+		if adminRoles[claims.Role] {
+			districtID = "00000000-0000-0000-0000-000000000000"
+		}
+
+		c.Locals("user_id", claims.UserID)
+		c.Locals("user_email", claims.Email)
+		c.Locals("user_name", claims.FullName)
+		c.Locals("user_roles", []string{claims.Role})
+		c.Locals("claims", &middleware.Claims{
+			Sub:   claims.UserID,
+			Email: claims.Email,
+			Name:  claims.FullName,
+			RealmAccess: middleware.RealmAccess{
+				Roles: []string{claims.Role},
+			},
+		})
+		c.Locals("rls_user_role", claims.Role)
+		c.Locals("rls_user_id", claims.UserID)
+		c.Locals("rls_district_id", districtID)
+
+		return c.Next()
 	}
 
 	// ── API v1 routes ─────────────────────────────────────────────────────────
@@ -404,15 +360,22 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			userID,
 		)
 
-		// Issue token (same format as dev-login so frontend works identically)
-		token := "dev-mock-token-" + body.Email
+		// P1-05 FIX: Issue a properly signed HMAC-SHA256 JWT instead of a
+		// predictable mock token string. The middleware validates the signature,
+		// so tokens cannot be forged by guessing the email address.
+		accessToken, err := jwtutil.IssueToken(userID, body.Email, fullName, role, districtID)
+		if err != nil {
+			logger.Error("login: failed to issue JWT", zap.Error(err))
+			return c.Status(500).JSON(fiber.Map{"success": false, "error": fiber.Map{"code": "TOKEN_ERROR", "message": "Failed to issue token"}})
+		}
+		refreshToken, _ := jwtutil.IssueRefreshToken(userID, body.Email)
 		return c.JSON(fiber.Map{
 			"success": true,
 			"data": fiber.Map{
-				"access_token":  token,
+				"access_token":  accessToken,
 				"token_type":    "Bearer",
 				"expires_in":    86400,
-				"refresh_token": "refresh-" + body.Email,
+				"refresh_token": refreshToken,
 				"user": fiber.Map{
 					"id":          userID,
 					"email":       body.Email,
@@ -429,13 +392,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// In production: proxied to Keycloak token endpoint
 	// In dev mode: returns a new mock token
 	authGroup.Post("/refresh", func(c *fiber.Ctx) error {
-		if !cfg.Server.DevMode {
-			// Production: proxy to Keycloak token endpoint
-			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-				"error": "Use Keycloak OIDC token refresh in production",
-				"keycloak_token_url": cfg.Keycloak.URL + "/realms/" + cfg.Keycloak.Realm + "/protocol/openid-connect/token",
-			})
-		}
+		// P1-05 FIX: Validate the refresh token JWT signature and re-issue a new
+		// access token. Works in all environments (no Keycloak dependency).
 		var body struct {
 			RefreshToken string `json:"refresh_token"`
 			GrantType    string `json:"grant_type"`
@@ -446,22 +404,29 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		if body.RefreshToken == "" {
 			return c.Status(400).JSON(fiber.Map{"error": "refresh_token required"})
 		}
-		// Dev mode: validate mock refresh token and return new access token
-		if len(body.RefreshToken) < 10 {
-			return c.Status(401).JSON(fiber.Map{"error": "invalid or expired refresh token"})
+		// Validate the refresh token signature
+		refreshClaims, err := jwtutil.ValidateToken(body.RefreshToken)
+		if err != nil {
+			return c.Status(401).JSON(fiber.Map{"success": false, "error": fiber.Map{
+				"code":    "INVALID_REFRESH_TOKEN",
+				"message": "Refresh token is invalid or expired",
+			}})
 		}
+		// Re-issue a new access token with the same claims
+		newAccessToken, err := jwtutil.IssueToken(
+			refreshClaims.UserID, refreshClaims.Email,
+			refreshClaims.FullName, refreshClaims.Role, refreshClaims.DistrictID,
+		)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "failed to issue token"})
+		}
+		newRefreshToken, _ := jwtutil.IssueRefreshToken(refreshClaims.UserID, refreshClaims.Email)
 		return c.JSON(fiber.Map{
-			"access_token":  "dev-refreshed-token-" + body.RefreshToken[:8],
+			"success":       true,
+			"access_token":  newAccessToken,
 			"token_type":    "Bearer",
-			"expires_in":    3600,
-			"refresh_token": "dev-refresh-" + body.RefreshToken[:8] + "-new",
-			"user": fiber.Map{
-				"id":         "a0000001-0000-0000-0000-000000000001",
-				"email":      "officer@gnwaas.gov.gh",
-				"full_name":  "Dev Field Officer",
-				"role":       "FIELD_OFFICER",
-				"district_id": "d0000001-0000-0000-0000-000000000001",
-			},
+			"expires_in":    86400,
+			"refresh_token": newRefreshToken,
 		})
 	})
 
@@ -516,14 +481,20 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			)
 		}
 
-		// Return in the standard APIResponse envelope so frontend can use response.data
+		// P1-05 FIX: Issue a properly signed JWT (same as /auth/login).
+		// dev-login is only reachable when APP_ENV != "production" (see guard above).
+		devAccessToken, err := jwtutil.IssueToken(realID, body.Email, realName, realRole, realDistrictID)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"success": false, "error": fiber.Map{"code": "TOKEN_ERROR", "message": "Failed to issue token"}})
+		}
+		devRefreshToken, _ := jwtutil.IssueRefreshToken(realID, body.Email)
 		return c.JSON(fiber.Map{
 			"success": true,
 			"data": fiber.Map{
-				"access_token":  "dev-mock-token-" + body.Email,
+				"access_token":  devAccessToken,
 				"token_type":    "Bearer",
 				"expires_in":    3600,
-				"refresh_token": "dev-refresh-" + body.Email,
+				"refresh_token": devRefreshToken,
 				"user": fiber.Map{
 					"id":          realID,
 					"email":       body.Email,
@@ -931,6 +902,12 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	)
 	api.Get("/production-records", dataRoles, dataHandler.ListProductionRecords)
 	api.Get("/meter-readings",     dataRoles, dataHandler.ListMeterReadings)
+	// P3-04 FIX: Add POST /meter-readings for field officer manual submissions.
+	// MeterReadingPage.tsx calls this endpoint; previously only GET existed.
+	api.Post("/meter-readings",
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_OFFICER", "FIELD_SUPERVISOR", "GRA_OFFICER"),
+		dataHandler.CreateMeterReading,
+	)
 	api.Get("/water-balance",      dataRoles, dataHandler.ListWaterBalance)
 	api.Get("/billing-records",    dataRoles, dataHandler.ListBillingRecords)
 

@@ -39,7 +39,14 @@ services:
       - key: DB_SSLMODE
         value: require
       - key: DEV_MODE
-        value: "true"
+        # P1-04 FIX: DEV_MODE is now false. The mock token bypass is removed.
+        # Authentication uses proper HMAC-SHA256 signed JWTs (see jwtutil package).
+        value: "false"
+      - key: JWT_SECRET
+        # IMPORTANT: Override this with a strong random secret in the Render dashboard.
+        # Generate with: openssl rand -hex 32
+        # This default is used only if the env var is not set in the dashboard.
+        value: "gnwaas-change-this-secret-in-render-dashboard-min32chars"
       - key: LOG_LEVEL
         value: info
       - key: SENTINEL_SERVICE_URL

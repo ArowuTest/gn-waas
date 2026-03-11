@@ -5,8 +5,10 @@ import { api as apiClient } from '../utils/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
-// Always show demo credentials panel — this is a demo/staging deployment.
-// Quick-login buttons use the real /auth/login endpoint with known demo passwords.
+// DEV_MODE: Always show demo credentials panel for this staging deployment.
+// SECURITY NOTE (P3-03): Passwords below are demo-only credentials for the
+// GN-WAAS staging environment. They are NOT production secrets.
+// In a production deployment, remove this block and set DEV_MODE = false.
 const DEV_MODE = true;
 
 const DEV_ACCOUNTS = [

@@ -146,7 +146,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        # P2-01 FIX: Use timescaledb-ha image — migration 001 creates the
+        # timescaledb extension and migrations 003/004/005/016 call
+        # create_hypertable(). The plain postgres:16 image lacks this extension
+        # and fails at the first CREATE EXTENSION IF NOT EXISTS "timescaledb".
+        image: timescale/timescaledb-ha:pg16-latest
         env:
           POSTGRES_DB: gnwaas_test
           POSTGRES_USER: gnwaas_user
