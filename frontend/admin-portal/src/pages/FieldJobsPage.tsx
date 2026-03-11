@@ -230,6 +230,29 @@ export function FieldJobsPage() {
   const [alertFilter, setAlertFilter]   = useState<string>('ALL')
   const [search, setSearch]             = useState('')
   const [assigningJob, setAssigningJob] = useState<FieldJob | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newJob, setNewJob] = useState({ account_id: '', district_id: '', priority: 2, notes: '' })
+  const [createError, setCreateError] = useState('')
+
+  const createJobMutation = useMutation({
+    mutationFn: async (payload: typeof newJob) => {
+      await apiClient.post('/field-jobs', {
+        account_id: payload.account_id || undefined,
+        district_id: payload.district_id || undefined,
+        priority: payload.priority,
+        notes: payload.notes || undefined,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['field-jobs'] })
+      setShowCreate(false)
+      setNewJob({ account_id: '', district_id: '', priority: 2, notes: '' })
+      setCreateError('')
+    },
+    onError: (err: any) => {
+      setCreateError(err.response?.data?.error?.message || err.response?.data?.error || 'Failed to create job')
+    },
+  })
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: jobsData, isLoading: jobsLoading, refetch } = useQuery({
@@ -300,14 +323,94 @@ export function FieldJobsPage() {
             Manage and monitor field officer assignments in real time
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"
-        >
-          <RefreshCw size={14} />
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800"
+          >
+            + Dispatch Job
+          </button>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Create Job Modal */}
+      {showCreate && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <h3 className="font-bold text-gray-900 mb-4">Dispatch New Field Job</h3>
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Account ID (optional)</label>
+                <input
+                  type="text"
+                  value={newJob.account_id}
+                  onChange={e => setNewJob(j => ({ ...j, account_id: e.target.value }))}
+                  placeholder="UUID of the water account"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">District ID (optional)</label>
+                <input
+                  type="text"
+                  value={newJob.district_id}
+                  onChange={e => setNewJob(j => ({ ...j, district_id: e.target.value }))}
+                  placeholder="UUID of the district"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Priority</label>
+                <select
+                  value={newJob.priority}
+                  onChange={e => setNewJob(j => ({ ...j, priority: parseInt(e.target.value) }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value={1}>1 — Critical</option>
+                  <option value={2}>2 — High</option>
+                  <option value={3}>3 — Medium</option>
+                  <option value={4}>4 — Low</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Notes (optional)</label>
+                <textarea
+                  rows={2}
+                  value={newJob.notes}
+                  onChange={e => setNewJob(j => ({ ...j, notes: e.target.value }))}
+                  placeholder="Dispatch instructions..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"
+                />
+              </div>
+            </div>
+            {createError && (
+              <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-xs">{createError}</div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowCreate(false); setCreateError('') }}
+                className="flex-1 border border-gray-200 text-gray-600 font-semibold py-2 rounded-lg text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => createJobMutation.mutate(newJob)}
+                disabled={createJobMutation.isPending}
+                className="flex-1 bg-green-700 text-white font-bold py-2 rounded-lg text-sm disabled:opacity-50"
+              >
+                {createJobMutation.isPending ? 'Dispatching...' : 'Dispatch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SOS Alert Banner */}
       {sosJobs.length > 0 && (

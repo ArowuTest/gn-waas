@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { MapPin, Clock, CheckCircle, AlertTriangle, Camera, Loader2, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useMyJobs, useUpdateJobStatus, useTriggerSOS } from '../hooks/useQueries'
 import type { FieldJob } from '../types'
 
@@ -27,6 +29,30 @@ const priorityLabel: Record<number, string> = {
 function JobCard({ job }: { job: FieldJob }) {
   const updateStatus = useUpdateJobStatus()
   const triggerSOS = useTriggerSOS()
+  const navigate = useNavigate()
+  const [showOutcome, setShowOutcome] = useState(false)
+  const [outcome, setOutcome] = useState('METER_FOUND_OK')
+  const [outcomeNotes, setOutcomeNotes] = useState('')
+  const [submittingOutcome, setSubmittingOutcome] = useState(false)
+
+  const submitOutcome = async () => {
+    setSubmittingOutcome(true)
+    try {
+      const { default: apiClient } = await import('../lib/api-client')
+      await apiClient.patch(`/field-jobs/${job.id}/outcome`, {
+        outcome,
+        outcome_notes: outcomeNotes || undefined,
+        meter_found: outcome.startsWith('METER_FOUND'),
+        address_confirmed: !outcome.startsWith('ADDRESS_INVALID'),
+      })
+      setShowOutcome(false)
+      updateStatus.mutate({ jobId: job.id, status: 'COMPLETED' })
+    } catch {
+      alert('Failed to record outcome. Please try again.')
+    } finally {
+      setSubmittingOutcome(false)
+    }
+  }
 
   const handleStart = () => {
     // Get GPS if available
@@ -101,19 +127,29 @@ function JobCard({ job }: { job: FieldJob }) {
       </div>
 
       {!isCompleted && (
-        <div className="flex gap-2">
-          <button
-            onClick={handleStart}
-            disabled={updateStatus.isPending}
-            className="flex-1 flex items-center justify-center gap-2 bg-green-800 text-white text-sm font-semibold py-2 rounded-lg hover:bg-green-900 disabled:opacity-50"
-          >
-            {updateStatus.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
+        <div className="flex gap-2 flex-wrap">
+          {job.status === 'ON_SITE' ? (
+            <button
+              onClick={() => navigate('/meter-reading')}
+              className="flex-1 flex items-center justify-center gap-2 bg-green-800 text-white text-sm font-semibold py-2 rounded-lg hover:bg-green-900"
+            >
               <Camera className="w-4 h-4" />
-            )}
-            {job.status === 'ASSIGNED' ? 'Start Job' : 'Continue Audit'}
-          </button>
+              Submit Meter Reading
+            </button>
+          ) : (
+            <button
+              onClick={handleStart}
+              disabled={updateStatus.isPending}
+              className="flex-1 flex items-center justify-center gap-2 bg-green-800 text-white text-sm font-semibold py-2 rounded-lg hover:bg-green-900 disabled:opacity-50"
+            >
+              {updateStatus.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Camera className="w-4 h-4" />
+              )}
+              {job.status === 'ASSIGNED' ? 'Start Job' : 'Continue Audit'}
+            </button>
+          )}
           <button
             onClick={handleSOS}
             disabled={triggerSOS.isPending}
@@ -121,6 +157,67 @@ function JobCard({ job }: { job: FieldJob }) {
           >
             {triggerSOS.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'SOS'}
           </button>
+        </div>
+      )}
+      {job.status === 'ON_SITE' && (
+        <button
+          onClick={() => setShowOutcome(true)}
+          className="mt-2 w-full flex items-center justify-center gap-2 border border-green-700 text-green-800 text-sm font-semibold py-2 rounded-lg hover:bg-green-50"
+        >
+          <CheckCircle className="w-4 h-4" />
+          Complete Job &amp; Record Outcome
+        </button>
+      )}
+      {showOutcome && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="font-bold text-gray-900 mb-4">Record Job Outcome</h3>
+            <div className="mb-3">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Outcome</label>
+              <select
+                value={outcome}
+                onChange={e => setOutcome(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="METER_FOUND_OK">Meter Found — OK</option>
+                <option value="METER_FOUND_TAMPERED">Meter Found — Tampered</option>
+                <option value="METER_FOUND_FAULTY">Meter Found — Faulty</option>
+                <option value="METER_NOT_FOUND_INSTALL">Meter Not Found — Install Required</option>
+                <option value="ADDRESS_VALID_UNREGISTERED">Address Valid — Unregistered</option>
+                <option value="ADDRESS_INVALID">Address Invalid</option>
+                <option value="ADDRESS_DEMOLISHED">Address Demolished</option>
+                <option value="ACCESS_DENIED">Access Denied</option>
+                <option value="CATEGORY_CONFIRMED_CORRECT">Category Confirmed Correct</option>
+                <option value="CATEGORY_MISMATCH_CONFIRMED">Category Mismatch Confirmed</option>
+                <option value="ILLEGAL_CONNECTION_FOUND">Illegal Connection Found</option>
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Notes (optional)</label>
+              <textarea
+                rows={2}
+                value={outcomeNotes}
+                onChange={e => setOutcomeNotes(e.target.value)}
+                placeholder="Any observations..."
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowOutcome(false)}
+                className="flex-1 border border-gray-200 text-gray-600 font-semibold py-2 rounded-lg text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitOutcome}
+                disabled={submittingOutcome}
+                className="flex-1 bg-green-800 text-white font-bold py-2 rounded-lg text-sm disabled:opacity-50"
+              >
+                {submittingOutcome ? 'Saving...' : 'Submit'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

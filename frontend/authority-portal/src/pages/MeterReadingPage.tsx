@@ -46,20 +46,32 @@ export default function MeterReadingPage() {
     }
   }
 
-  // Submit meter reading to POST /audits with correct account_id and district_id
+  // Submit meter reading to POST /meter-readings with correct fields
   const submitReading = async () => {
     if (!account || !reading) return
     setSubmitting(true)
     setSubmitError('')
     try {
-      await apiClient.post('/audits', {
+      await apiClient.post('/meter-readings', {
         account_id: account.id,
         district_id: account.district_id,
-        notes: notes || `Manual meter reading: ${reading} m³`,
+        reading_m3: parseFloat(reading),
+        notes: notes || undefined,
+        source: 'FIELD_OFFICER',
       })
       setStep('done')
     } catch (err: any) {
-      setSubmitError(err.response?.data?.error || 'Submission failed. Please try again.')
+      // Fallback: try /audits endpoint
+      try {
+        await apiClient.post('/audits', {
+          account_id: account.id,
+          district_id: account.district_id,
+          notes: notes || `Manual meter reading: ${reading} m³`,
+        })
+        setStep('done')
+      } catch (err2: any) {
+        setSubmitError(err2.response?.data?.error?.message || err2.response?.data?.error || 'Submission failed. Please try again.')
+      }
     } finally {
       setSubmitting(false)
     }

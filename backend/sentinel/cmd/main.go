@@ -87,14 +87,20 @@ func main() {
 	defer cancel()
 
 	// ── Database ──────────────────────────────────────────────────────────────
-	dsn := fmt.Sprintf("host=%s port=%s dbname=%s user=%s password=%s sslmode=%s",
-		getEnv("DB_HOST", "localhost"),
-		getEnv("DB_PORT", "5432"),
-		getEnv("DB_NAME", "gnwaas"),
-		getEnv("DB_USER", "gnwaas_app"),
-		getEnv("DB_PASSWORD", ""),
-		getEnv("DB_SSL_MODE", "disable"),
-	)
+	// Support DATABASE_URL (Render/Heroku style) or individual DB_* vars.
+	var dsn string
+	if rawURL := os.Getenv("DATABASE_URL"); rawURL != "" {
+		dsn = rawURL
+	} else {
+		dsn = fmt.Sprintf("host=%s port=%s dbname=%s user=%s password=%s sslmode=%s",
+			getEnv("DB_HOST", "localhost"),
+			getEnv("DB_PORT", "5432"),
+			getEnv("DB_NAME", "gnwaas"),
+			getEnv("DB_USER", "gnwaas_app"),
+			getEnv("DB_PASSWORD", ""),
+			getEnv("DB_SSL_MODE", "disable"),
+		)
+	}
 
 	db, err := pgxpool.New(ctx, dsn)
 	if err != nil {
