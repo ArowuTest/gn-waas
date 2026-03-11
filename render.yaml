@@ -57,7 +57,9 @@ services:
       - key: KEYCLOAK_CLIENT_ID
         value: gnwaas-api
       - key: MIGRATIONS_DIR
-        value: ./migrations
+        value: ../../database/migrations
+      - key: SEEDS_DIR
+        value: ../../database/seeds
 
   # ── Sentinel Engine ──────────────────────────────────────────────────────────
   - type: web
