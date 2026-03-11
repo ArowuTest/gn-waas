@@ -166,6 +166,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Bootstrap database roles
+        # Create the application roles that migrations expect.
+        # Migration 012 creates gnwaas_app/gnwaas_admin (with IF NOT EXISTS guards).
+        # Migration 037 references the legacy "gnwaas" role — create it here so
+        # the ALTER ROLE / GRANT statements succeed in CI.
+        env:
+          PGPASSWORD: test_password
+        run: |
+          psql -h localhost -U gnwaas_user -d gnwaas_test << 'SQL'
+            DO $$ BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gnwaas') THEN
+                CREATE ROLE gnwaas LOGIN PASSWORD 'ci_test_password';
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gnwaas_app') THEN
+                CREATE ROLE gnwaas_app LOGIN PASSWORD 'ci_test_password';
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gnwaas_admin') THEN
+                CREATE ROLE gnwaas_admin LOGIN PASSWORD 'ci_test_password' BYPASSRLS;
+              END IF;
+            END $$;
+          SQL
+
       - name: Run migrations
         env:
           PGPASSWORD: test_password

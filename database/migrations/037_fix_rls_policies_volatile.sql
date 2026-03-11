@@ -11,14 +11,20 @@
 -- Also: Remove SUPERUSER from the app user (gnwaas) so RLS is actually enforced.
 -- Superusers bypass RLS even with FORCE ROW LEVEL SECURITY.
 
--- Remove superuser from app user
-ALTER ROLE gnwaas NOSUPERUSER;
-
--- Re-grant all necessary privileges
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO gnwaas;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO gnwaas;
-GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO gnwaas;
-GRANT USAGE ON SCHEMA public TO gnwaas;
+-- Remove superuser from app user (gnwaas role — only exists in some environments).
+-- In production (Render) the connecting user is gnwaas_app (created in migration 012).
+-- Wrapped in DO block so migration succeeds even when the gnwaas role does not exist.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gnwaas') THEN
+    ALTER ROLE gnwaas NOSUPERUSER;
+    GRANT ALL PRIVILEGES ON ALL TABLES    IN SCHEMA public TO gnwaas;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO gnwaas;
+    GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO gnwaas;
+    GRANT USAGE ON SCHEMA public TO gnwaas;
+  ELSE
+    RAISE NOTICE 'Role gnwaas does not exist — skipping NOSUPERUSER and privilege grants';
+  END IF;
+END $$;
 
 -- Fix anomaly_flags RLS policy
 DROP POLICY IF EXISTS rls_anomaly_flags_district ON anomaly_flags;
@@ -77,7 +83,12 @@ CREATE POLICY rls_meter_readings_district ON meter_readings
     )
   );
 
--- CRITICAL: Grant gnwaas_app role to gnwaas user
--- The RLS policies apply to gnwaas_app role, but the app connects as gnwaas.
--- Without this grant, gnwaas has no applicable policies -> default deny on all tables.
-GRANT gnwaas_app TO gnwaas;
+-- Grant gnwaas_app role to gnwaas user (only if gnwaas role exists).
+-- In production (Render) the app connects as gnwaas_app directly, so this is a no-op.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gnwaas') THEN
+    GRANT gnwaas_app TO gnwaas;
+  ELSE
+    RAISE NOTICE 'Role gnwaas does not exist — skipping GRANT gnwaas_app TO gnwaas';
+  END IF;
+END $$;
