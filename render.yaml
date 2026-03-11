@@ -11,14 +11,19 @@ databases:
 
 services:
   # ── API Gateway ──────────────────────────────────────────────────────────────
+  # Uses runtime: docker so the Dockerfile is used.
+  # The Dockerfile (backend/api-gateway/Dockerfile) copies database/migrations/
+  # and database/seeds/ into the image at /app/migrations/ and /app/seeds/,
+  # and sets MIGRATIONS_DIR=/app/migrations and SEEDS_DIR=/app/seeds.
+  # dockerContext must be the repo root so the Dockerfile can COPY shared/go/
+  # and COPY database/migrations/ (both relative to repo root).
   - type: web
     name: gnwaas-api-gateway
-    runtime: go
+    runtime: docker
+    dockerfilePath: ./backend/api-gateway/Dockerfile
+    dockerContext: .
     region: oregon
     plan: free
-    rootDir: backend/api-gateway
-    buildCommand: go build -o api-gateway ./cmd/main.go
-    startCommand: ./api-gateway
     healthCheckPath: /health
     envVars:
       - key: APP_ENV
@@ -56,10 +61,6 @@ services:
         value: gnwaas
       - key: KEYCLOAK_CLIENT_ID
         value: gnwaas-api
-      - key: MIGRATIONS_DIR
-        value: ../../database/migrations
-      - key: SEEDS_DIR
-        value: ../../database/seeds
 
   # ── Sentinel Engine ──────────────────────────────────────────────────────────
   - type: web

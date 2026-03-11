@@ -161,6 +161,15 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// PORT env var fallback: Render (and most PaaS) set PORT, not APP_PORT.
+	// If APP_PORT is not set but PORT is, use PORT for the server port.
+	// This ensures the Docker service listens on the port Render routes to.
+	if portStr := os.Getenv("PORT"); portStr != "" {
+		if os.Getenv("APP_PORT") == "" {
+			v.Set("server.port", portStr)
+		}
+	}
+
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)

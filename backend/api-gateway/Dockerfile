@@ -37,6 +37,6 @@ ENV TZ=Africa/Accra
 ENV MIGRATIONS_DIR=/app/migrations
 ENV SEEDS_DIR=/app/seeds
 
-EXPOSE 3000
+EXPOSE 10000
 
 ENTRYPOINT ["/app/api-gateway"]
