@@ -19,13 +19,19 @@ services:
   # and COPY database/migrations/ (both relative to repo root).
   - type: web
     name: gnwaas-api-gateway
-    runtime: docker
-    dockerfilePath: ./backend/api-gateway/Dockerfile
-    dockerContext: .
+    runtime: go
     region: oregon
     plan: free
+    autoDeploy: yes
+    rootDir: backend/api-gateway
+    buildCommand: GOWORK=off go build -ldflags="-w -s" -o api-gateway ./cmd/main.go
+    startCommand: ./api-gateway
     healthCheckPath: /health
     envVars:
+      - key: MIGRATIONS_DIR
+        value: /opt/render/project/src/database/migrations
+      - key: SEEDS_DIR
+        value: /opt/render/project/src/database/seeds
       - key: APP_ENV
         # "staging" enables dev-login for demo purposes.
         # Change to "production" + DEV_MODE=false to fully lock down.
@@ -77,6 +83,7 @@ services:
     runtime: go
     region: oregon
     plan: free
+    autoDeploy: yes
     rootDir: backend/sentinel
     buildCommand: GOWORK=off go build -o sentinel ./cmd/main.go
     startCommand: ./sentinel
@@ -97,6 +104,7 @@ services:
     runtime: go
     region: oregon
     plan: free
+    autoDeploy: yes
     rootDir: backend/tariff-engine
     buildCommand: GOWORK=off go build -o tariff-engine ./cmd/main.go
     startCommand: ./tariff-engine
@@ -119,6 +127,7 @@ services:
     runtime: go
     region: oregon
     plan: free
+    autoDeploy: yes
     rootDir: backend/gra-bridge
     buildCommand: GOWORK=off go build -o gra-bridge ./cmd/main.go
     startCommand: ./gra-bridge
