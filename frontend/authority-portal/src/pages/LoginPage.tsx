@@ -9,11 +9,11 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || ''
 const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'gnwaas'
 const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'authority-portal'
-// DEV_MODE: Always show demo credentials panel for this staging deployment.
-// SECURITY NOTE (P3-03): Passwords below are demo-only credentials for the
-// GN-WAAS staging environment. They are NOT production secrets.
-// In a production deployment, remove this block and set DEV_MODE = false.
-const DEV_MODE = true
+// DEV_MODE: Controlled exclusively via VITE_DEV_MODE environment variable.
+// Set VITE_DEV_MODE=true in .env.local for local development.
+// .env.production sets VITE_DEV_MODE=false — demo panel is hidden in production.
+// SECURITY NOTE (P3-03): Passwords below are demo-only staging credentials.
+const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true'
 
 // Whether to show the Keycloak SSO button (production with Keycloak configured)
 const USE_KEYCLOAK = !DEV_MODE && Boolean(KEYCLOAK_URL)

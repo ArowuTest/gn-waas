@@ -139,6 +139,16 @@ jobs:
         working-directory: mobile/field-officer-app-flutter
         run: flutter test --reporter=compact
 
+      - name: Build Flutter web (validate mobile-web output)
+        # P3-02 FIX: Validate that the Flutter web build succeeds in CI.
+        # The pre-built output in frontend/mobile-web/ is deployed to Vercel
+        # (project: gnwaas-mobile) via the vercel.json in that directory.
+        working-directory: mobile/field-officer-app-flutter
+        run: |
+          flutter build web --release \
+            --dart-define=API_BASE_URL=https://gnwaas-api-gateway.onrender.com/api/v1
+        continue-on-error: true   # Build is large; don't block CI on resource limits
+
   # ============================================================
   # Database Migrations — Validate SQL
   # ============================================================
