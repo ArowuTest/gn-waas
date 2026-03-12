@@ -88,7 +88,20 @@ func (g *GeocodingService) GeocodeAccount(
 		WHERE wa.id = $1
 	`, accountID).Scan(&accountNum, &addr1, &addr2, &existingLat, &existingLng, &gpsSource)
 	if err != nil {
-		return nil, fmt.Errorf("account not found: %w", err)
+		// Fallback: gps_source column may not exist on older DB schema (pre-migration-029)
+		err2 := g.db.QueryRow(ctx, `
+			SELECT wa.gwl_account_number,
+			       COALESCE(wa.address_line1, ''),
+			       COALESCE(wa.address_line2, ''),
+			       wa.gps_latitude,
+			       wa.gps_longitude,
+			       'UNKNOWN'
+			FROM water_accounts wa
+			WHERE wa.id = $1
+		`, accountID).Scan(&accountNum, &addr1, &addr2, &existingLat, &existingLng, &gpsSource)
+		if err2 != nil {
+			return nil, fmt.Errorf("account not found: %w", err2)
+		}
 	}
 
 	if gpsSource == "GWL_PROVIDED" || gpsSource == "FIELD_CONFIRMED" {

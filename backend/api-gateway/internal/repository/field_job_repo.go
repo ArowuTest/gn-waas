@@ -640,6 +640,21 @@ func (r *FieldJobRepository) GetByOfficerEnriched(ctx context.Context, officerID
 // Create inserts a new district and returns its generated UUID.
 // Uses r.q(ctx) so the INSERT runs inside the RLS-activated transaction.
 func (r *DistrictRepository) Create(ctx context.Context, d *domain.District) (uuid.UUID, error) {
+	// Apply defaults for enum fields to avoid empty-string cast errors
+	supplyStatus := d.SupplyStatus
+	if supplyStatus == "" {
+		supplyStatus = "INTERMITTENT"
+	}
+	zoneType := d.ZoneType
+	if zoneType == "" {
+		zoneType = "GREY"
+	}
+	isActive := d.IsActive
+	// Default new districts to active
+	if !isActive {
+		isActive = true
+	}
+
 	var id uuid.UUID
 	err := r.q(ctx).QueryRow(ctx, `
 		INSERT INTO districts
@@ -649,8 +664,8 @@ func (r *DistrictRepository) Create(ctx context.Context, d *domain.District) (uu
 		RETURNING id`,
 		d.DistrictCode, d.DistrictName, d.Region,
 		d.PopulationEstimate, d.TotalConnections,
-		d.SupplyStatus, d.ZoneType,
-		d.IsPilotDistrict, d.IsActive,
+		supplyStatus, zoneType,
+		d.IsPilotDistrict, isActive,
 	).Scan(&id)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("DistrictRepository.Create: %w", err)

@@ -143,17 +143,32 @@ func (h *GWLHandler) AssignToFieldOfficer(c *fiber.Ctx) error {
 	if err := c.BodyParser(&body); err != nil {
 		return response.BadRequest(c, "BAD_REQUEST", "invalid request body")
 	}
-	if body.OfficerID == "" || body.AccountID == "" {
-		return response.BadRequest(c, "BAD_REQUEST", "officer_id and account_id are required")
+	if body.OfficerID == "" {
+		return response.BadRequest(c, "BAD_REQUEST", "officer_id is required")
 	}
 
 	officerID, err := uuid.Parse(body.OfficerID)
 	if err != nil {
 		return response.BadRequest(c, "BAD_REQUEST", "invalid officer_id")
 	}
-	accountID, err := uuid.Parse(body.AccountID)
-	if err != nil {
-		return response.BadRequest(c, "BAD_REQUEST", "invalid account_id")
+
+	// Auto-populate account_id from the anomaly flag if not provided
+	var accountID uuid.UUID
+	if body.AccountID != "" {
+		accountID, err = uuid.Parse(body.AccountID)
+		if err != nil {
+			return response.BadRequest(c, "BAD_REQUEST", "invalid account_id")
+		}
+	} else {
+		var acctStr string
+		if err := h.caseRepo.DB().QueryRow(c.UserContext(),
+			`SELECT account_id FROM anomaly_flags WHERE id = $1`, flagID).Scan(&acctStr); err != nil {
+			return response.BadRequest(c, "NOT_FOUND", "case not found")
+		}
+		accountID, err = uuid.Parse(acctStr)
+		if err != nil {
+			return response.InternalError(c, "invalid account_id in case record")
+		}
 	}
 
 	dueDate := time.Now().AddDate(0, 0, 7)
@@ -263,17 +278,41 @@ func (h *GWLHandler) RequestReclassification(c *fiber.Ctx) error {
 	if err := c.BodyParser(&body); err != nil {
 		return response.BadRequest(c, "BAD_REQUEST", "invalid request body")
 	}
-	if body.AccountID == "" || body.CurrentCategory == "" || body.RecommendedCategory == "" {
-		return response.BadRequest(c, "BAD_REQUEST", "account_id, current_category, and recommended_category are required")
+	if body.RecommendedCategory == "" {
+		return response.BadRequest(c, "BAD_REQUEST", "recommended_category is required")
 	}
 
-	accountID, err := uuid.Parse(body.AccountID)
-	if err != nil {
-		return response.BadRequest(c, "BAD_REQUEST", "invalid account_id")
+	// Auto-populate account_id and district_id from the anomaly flag if not provided
+	var accountID, districtID uuid.UUID
+	if body.AccountID != "" && body.DistrictID != "" {
+		var err error
+		accountID, err = uuid.Parse(body.AccountID)
+		if err != nil {
+			return response.BadRequest(c, "BAD_REQUEST", "invalid account_id")
+		}
+		districtID, err = uuid.Parse(body.DistrictID)
+		if err != nil {
+			return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+		}
+	} else {
+		var acctStr, distStr string
+		if err := h.caseRepo.DB().QueryRow(c.UserContext(),
+			`SELECT account_id, district_id FROM anomaly_flags WHERE id = $1`, flagID).Scan(&acctStr, &distStr); err != nil {
+			return response.BadRequest(c, "NOT_FOUND", "case not found")
+		}
+		var err error
+		accountID, err = uuid.Parse(acctStr)
+		if err != nil {
+			return response.InternalError(c, "invalid account_id in case record")
+		}
+		districtID, err = uuid.Parse(distStr)
+		if err != nil {
+			return response.InternalError(c, "invalid district_id in case record")
+		}
 	}
-	districtID, err := uuid.Parse(body.DistrictID)
-	if err != nil {
-		return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+	// Use current_category from body or default to empty (will be filled by DB)
+	if body.CurrentCategory == "" {
+		body.CurrentCategory = "RESIDENTIAL"
 	}
 
 	req := &repository.ReclassificationRequest{
@@ -340,17 +379,37 @@ func (h *GWLHandler) RequestCredit(c *fiber.Ctx) error {
 	if err := c.BodyParser(&body); err != nil {
 		return response.BadRequest(c, "BAD_REQUEST", "invalid request body")
 	}
-	if body.AccountID == "" || body.GWLAmountGHS == 0 {
-		return response.BadRequest(c, "BAD_REQUEST", "account_id and gwl_amount_ghs are required")
+	if body.GWLAmountGHS == 0 {
+		return response.BadRequest(c, "BAD_REQUEST", "gwl_amount_ghs is required")
 	}
 
-	accountID, err := uuid.Parse(body.AccountID)
-	if err != nil {
-		return response.BadRequest(c, "BAD_REQUEST", "invalid account_id")
-	}
-	districtID, err := uuid.Parse(body.DistrictID)
-	if err != nil {
-		return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+	// Auto-populate account_id and district_id from the anomaly flag if not provided
+	var accountID, districtID uuid.UUID
+	if body.AccountID != "" && body.DistrictID != "" {
+		var err error
+		accountID, err = uuid.Parse(body.AccountID)
+		if err != nil {
+			return response.BadRequest(c, "BAD_REQUEST", "invalid account_id")
+		}
+		districtID, err = uuid.Parse(body.DistrictID)
+		if err != nil {
+			return response.BadRequest(c, "BAD_REQUEST", "invalid district_id")
+		}
+	} else {
+		var acctStr, distStr string
+		if err := h.caseRepo.DB().QueryRow(c.UserContext(),
+			`SELECT account_id, district_id FROM anomaly_flags WHERE id = $1`, flagID).Scan(&acctStr, &distStr); err != nil {
+			return response.BadRequest(c, "NOT_FOUND", "case not found")
+		}
+		var err error
+		accountID, err = uuid.Parse(acctStr)
+		if err != nil {
+			return response.InternalError(c, "invalid account_id in case record")
+		}
+		districtID, err = uuid.Parse(distStr)
+		if err != nil {
+			return response.InternalError(c, "invalid district_id in case record")
+		}
 	}
 
 	periodStart, _ := time.Parse("2006-01-02", body.BillingPeriodStart)

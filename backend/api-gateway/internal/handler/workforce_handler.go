@@ -50,6 +50,10 @@ func (h *WorkforceHandler) RecordLocation(c *fiber.Ctx) error {
 	if !ok || officerID == "" {
 		return response.Unauthorized(c, "Officer ID not found in token")
 	}
+	// Validate that officerID is a valid UUID before attempting DB insert
+	if _, err := uuid.Parse(officerID); err != nil {
+		return response.Unauthorized(c, "Invalid officer ID format in token — please re-authenticate")
+	}
 
 	// BE-M01 fix: capture district_id from RLS locals so it can be stored
 	// in officer_gps_tracks.district_id (required for the RLS policy on that table).
