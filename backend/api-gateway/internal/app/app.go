@@ -103,7 +103,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	flagRepo        := repository.NewAnomalyFlagRepository(db, logger)
-	auditHandler    := handler.NewAuditHandler(auditRepo, fieldJobRepo, userRepo, logger)
+	auditHandler    := handler.NewAuditHandler(auditRepo, fieldJobRepo, flagRepo, userRepo, logger)
 	fieldJobHandler := handler.NewFieldJobHandler(fieldJobRepo, flagRepo, auditRepo, sosNotifier, evidenceStorage, logger)
 	districtHandler := handler.NewDistrictHandler(districtRepo, cacheClient, logger)
 	userHandler     := handler.NewUserHandler(userRepo, logger)
@@ -757,6 +757,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "MINISTER_VIEW", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "GRA_OFFICER"),
 	)
 	anomalyFlags.Get("/", flagHandler.ListAnomalyFlags)
+	anomalyFlags.Get("/:id", flagHandler.GetAnomalyFlag)
+	anomalyFlags.Patch("/:id/confirm",
+		middleware.RequireRoles("SYSTEM_ADMIN", "MOF_AUDITOR", "GRA_OFFICER"),
+		flagHandler.ConfirmAnomaly,
+	)
 
 	// ── Sentinel routes (admin portal compatibility) ───────────────────────────
 	// The admin portal hooks use /sentinel/* paths — proxy to anomaly-flags handler

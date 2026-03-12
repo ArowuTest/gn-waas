@@ -271,27 +271,48 @@ func (h *DataHandler) ListMeterReadings(c *fiber.Ctx) error {
 // CreateMeterReading godoc
 // POST /api/v1/meter-readings
 // Submits a new manual meter reading from a field officer.
-// P3-04 FIX: MeterReadingPage.tsx calls POST /meter-readings but only GET existed.
+// Accepts both web portal field names (reading_m3, latitude, longitude) and
+// mobile app field names (reading_value, gps_latitude, gps_longitude).
 func (h *DataHandler) CreateMeterReading(c *fiber.Ctx) error {
 	ctx := c.UserContext()
 
 	var req struct {
-		AccountID  string  `json:"account_id"`
-		DistrictID string  `json:"district_id"`
-		ReadingM3  float64 `json:"reading_m3"`
-		Notes      string  `json:"notes"`
-		Source     string  `json:"source"`
-		Latitude   float64 `json:"latitude"`
-		Longitude  float64 `json:"longitude"`
+		AccountID     string  `json:"account_id"`
+		DistrictID    string  `json:"district_id"`
+		FieldJobID    string  `json:"field_job_id"`
+		// Web portal field names
+		ReadingM3     float64 `json:"reading_m3"`
+		Latitude      float64 `json:"latitude"`
+		Longitude     float64 `json:"longitude"`
+		// Mobile app field names (aliases)
+		ReadingValue  float64 `json:"reading_value"`
+		GPSLatitude   float64 `json:"gps_latitude"`
+		GPSLongitude  float64 `json:"gps_longitude"`
+		GPSAccuracyM  float64 `json:"gps_accuracy_m"`
+		ReadingDate   string  `json:"reading_date"`
+		ReadingMethod string  `json:"reading_method"`
+		Notes         string  `json:"notes"`
+		Source        string  `json:"source"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+	// Normalise: mobile app uses reading_value, web uses reading_m3
+	if req.ReadingM3 == 0 && req.ReadingValue > 0 {
+		req.ReadingM3 = req.ReadingValue
+	}
+	// Normalise GPS: mobile app uses gps_latitude/gps_longitude
+	if req.Latitude == 0 && req.GPSLatitude != 0 {
+		req.Latitude = req.GPSLatitude
+	}
+	if req.Longitude == 0 && req.GPSLongitude != 0 {
+		req.Longitude = req.GPSLongitude
 	}
 	if req.AccountID == "" {
 		return response.BadRequest(c, "MISSING_ACCOUNT_ID", "account_id is required")
 	}
 	if req.ReadingM3 <= 0 {
-		return response.BadRequest(c, "INVALID_READING", "reading_m3 must be greater than 0")
+		return response.BadRequest(c, "INVALID_READING", "reading_m3 (or reading_value) must be greater than 0")
 	}
 
 	accountID, err := uuid.Parse(req.AccountID)

@@ -214,9 +214,11 @@ func (h *GWLHandler) UpdateCaseStatus(c *fiber.Ctx) error {
 
 	validStatuses := map[string]bool{
 		"PENDING_REVIEW": true, "UNDER_INVESTIGATION": true,
+		"UNDER_REVIEW": true,  // alias for UNDER_INVESTIGATION (frontend compatibility)
 		"FIELD_ASSIGNED": true, "EVIDENCE_SUBMITTED": true,
 		"APPROVED_FOR_CORRECTION": true, "DISPUTED": true,
 		"CORRECTED": true, "CLOSED": true,
+		"OPEN": true, "RESOLVED": true, "ESCALATED": true,
 	}
 	if !validStatuses[body.Status] {
 		return response.BadRequest(c, "BAD_REQUEST", "invalid status value")

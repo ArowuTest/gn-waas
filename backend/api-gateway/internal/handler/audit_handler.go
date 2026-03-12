@@ -22,6 +22,7 @@ import (
 type AuditHandler struct {
 	auditRepo    *repository.AuditEventRepository
 	fieldJobRepo *repository.FieldJobRepository
+	flagRepo     *repository.AnomalyFlagRepository
 	userRepo     *repository.UserRepository
 	logger       *zap.Logger
 }
@@ -29,12 +30,14 @@ type AuditHandler struct {
 func NewAuditHandler(
 	auditRepo *repository.AuditEventRepository,
 	fieldJobRepo *repository.FieldJobRepository,
+	flagRepo     *repository.AnomalyFlagRepository,
 	userRepo *repository.UserRepository,
 	logger *zap.Logger,
 ) *AuditHandler {
 	return &AuditHandler{
 		auditRepo:    auditRepo,
 		fieldJobRepo: fieldJobRepo,
+		flagRepo:     flagRepo,
 		userRepo:     userRepo,
 		logger:       logger,
 	}
@@ -57,13 +60,30 @@ func (h *AuditHandler) CreateAuditEvent(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
 	}
 
+	// If anomaly_flag_id is provided but account_id/district_id are missing,
+	// auto-populate them from the anomaly flag record.
+	if req.AnomalyFlagID != nil && (req.AccountID == "" || req.DistrictID == "") {
+		flagID, ferr := uuid.Parse(*req.AnomalyFlagID)
+		if ferr == nil {
+			flag, ferr2 := h.flagRepo.GetByID(c.UserContext(), flagID)
+			if ferr2 == nil {
+				if req.AccountID == "" && flag.AccountID != nil {
+					req.AccountID = flag.AccountID.String()
+				}
+				if req.DistrictID == "" {
+					req.DistrictID = flag.DistrictID.String()
+				}
+			}
+		}
+	}
+
 	accountID, err := uuid.Parse(req.AccountID)
 	if err != nil {
-		return response.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
+		return response.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID — provide account_id or a valid anomaly_flag_id")
 	}
 	districtID, err := uuid.Parse(req.DistrictID)
 	if err != nil {
-		return response.BadRequest(c, "INVALID_DISTRICT_ID", "Invalid district ID")
+		return response.BadRequest(c, "INVALID_DISTRICT_ID", "Invalid district ID — provide district_id or a valid anomaly_flag_id")
 	}
 
 	event := &domain.AuditEvent{
@@ -376,7 +396,13 @@ func (h *FieldJobHandler) UpdateJobStatus(c *fiber.Ctx) error {
 		return response.InternalError(c, "Failed to update job status")
 	}
 
-	return response.OK(c, fiber.Map{"message": "Job status updated", "status": req.Status})
+	// Return the updated job so callers can read the new status from data.status
+	updatedJob, fetchErr := h.fieldJobRepo.GetByID(c.UserContext(), id)
+	if fetchErr != nil {
+		// Fallback: return minimal response if fetch fails
+		return response.OK(c, fiber.Map{"id": id, "status": req.Status, "message": "Job status updated"})
+	}
+	return response.OK(c, updatedJob)
 }
 
 // TriggerSOS godoc
