@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"net/http"
 	"os"
 	"time"
@@ -885,11 +886,15 @@ func (h *FieldJobHandler) ReportIllegalConnection(c *fiber.Ctx) error {
 		Severity                   string   `json:"severity"`
 		Description                string   `json:"description"`
 		EstimatedDailyLossLitres   float64  `json:"estimated_daily_loss_litres"`
+		EstimatedDailyM3           float64  `json:"estimated_daily_m3"` // mobile alias
 		Address                    string   `json:"address"`
 		AccountNumber              *string  `json:"account_number"`
 		Latitude                   float64  `json:"latitude"`
 		Longitude                  float64  `json:"longitude"`
+		GPSLatitude                float64  `json:"gps_latitude"`  // mobile alias
+		GPSLongitude               float64  `json:"gps_longitude"` // mobile alias
 		GPSAccuracy                float64  `json:"gps_accuracy"`
+		GPSAccuracyM               float64  `json:"gps_accuracy_m"` // mobile alias
 		PhotoCount                 int      `json:"photo_count"`
 		// SHA-256 hashes of each photo, computed on the device at capture time.
 		// Stored for server-side chain-of-custody verification.
@@ -901,13 +906,31 @@ func (h *FieldJobHandler) ReportIllegalConnection(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
 	}
 
-	// Validate required fields
+	// Normalise mobile field aliases
+	if req.Latitude == 0 && req.GPSLatitude != 0 {
+		req.Latitude = req.GPSLatitude
+	}
+	if req.Longitude == 0 && req.GPSLongitude != 0 {
+		req.Longitude = req.GPSLongitude
+	}
+	if req.GPSAccuracy == 0 && req.GPSAccuracyM != 0 {
+		req.GPSAccuracy = req.GPSAccuracyM
+	}
+	if req.EstimatedDailyLossLitres == 0 && req.EstimatedDailyM3 != 0 {
+		req.EstimatedDailyLossLitres = req.EstimatedDailyM3 * 1000 // m³ → litres
+	}
+	// Default connection_type to OTHER if not provided
 	if req.ConnectionType == "" {
-		return response.BadRequest(c, "MISSING_CONNECTION_TYPE", "connection_type is required")
+		req.ConnectionType = "OTHER"
 	}
-	if req.Description == "" || len(req.Description) < 20 {
-		return response.BadRequest(c, "INVALID_DESCRIPTION", "description must be at least 20 characters")
+	// Default description if too short
+	if req.Description == "" {
+		req.Description = "Illegal connection reported via mobile app"
+	} else if len(req.Description) < 20 {
+		req.Description = req.Description + " (reported via mobile app)"
 	}
+
+	// Validate required fields
 	if req.Latitude == 0 && req.Longitude == 0 {
 		return response.BadRequest(c, "MISSING_LOCATION", "GPS coordinates are required")
 	}
@@ -1513,4 +1536,116 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 		"outcome":    req.Outcome,
 		"escalation": escalationResult,
 	})
+}
+
+// UpdateAuditEvent godoc
+// PATCH /api/v1/audits/:id
+// Allows SYSTEM_ADMIN and SUPER_ADMIN to update audit event status and notes.
+func (h *AuditHandler) UpdateAuditEvent(c *fiber.Ctx) error {
+	role, _ := c.Locals("rls_user_role").(string)
+	if role != "SYSTEM_ADMIN" && role != "SUPER_ADMIN" {
+		return response.Forbidden(c, "Only SYSTEM_ADMIN or SUPER_ADMIN can update audit events")
+	}
+
+	auditID := c.Params("id")
+	if auditID == "" {
+		return response.BadRequest(c, "MISSING_ID", "Audit event ID is required")
+	}
+
+	var req struct {
+		Status          *string  `json:"status"`
+		Notes           *string  `json:"notes"`
+		GWLBilledGHS    *float64 `json:"gwl_billed_ghs"`
+		ShadowBillGHS   *float64 `json:"shadow_bill_ghs"`
+		VariancePct     *float64 `json:"variance_pct"`
+		ConfirmedLossGHS *float64 `json:"confirmed_loss_ghs"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+
+	// Validate status if provided
+	if req.Status != nil {
+		validStatuses := map[string]bool{
+			"PENDING": true, "IN_PROGRESS": true, "FIELD_VERIFIED": true,
+			"CONFIRMED": true, "GRA_SUBMITTED": true, "GRA_SIGNED": true,
+			"RECOVERED": true, "CLOSED": true, "DISPUTED": true,
+		}
+		if !validStatuses[*req.Status] {
+			return response.BadRequest(c, "INVALID_STATUS", "Invalid audit event status")
+		}
+	}
+
+	// Build dynamic update
+	setClauses := []string{"updated_at = NOW()"}
+	args := []interface{}{}
+	argIdx := 1
+
+	if req.Status != nil {
+		setClauses = append(setClauses, fmt.Sprintf("status = $%d::audit_status", argIdx))
+		args = append(args, *req.Status)
+		argIdx++
+	}
+	if req.Notes != nil {
+		setClauses = append(setClauses, fmt.Sprintf("notes = $%d", argIdx))
+		args = append(args, *req.Notes)
+		argIdx++
+	}
+	if req.GWLBilledGHS != nil {
+		setClauses = append(setClauses, fmt.Sprintf("gwl_billed_ghs = $%d", argIdx))
+		args = append(args, *req.GWLBilledGHS)
+		argIdx++
+	}
+	if req.ShadowBillGHS != nil {
+		setClauses = append(setClauses, fmt.Sprintf("shadow_bill_ghs = $%d", argIdx))
+		args = append(args, *req.ShadowBillGHS)
+		argIdx++
+	}
+	if req.VariancePct != nil {
+		setClauses = append(setClauses, fmt.Sprintf("variance_pct = $%d", argIdx))
+		args = append(args, *req.VariancePct)
+		argIdx++
+	}
+	if req.ConfirmedLossGHS != nil {
+		setClauses = append(setClauses, fmt.Sprintf("confirmed_loss_ghs = $%d", argIdx))
+		args = append(args, *req.ConfirmedLossGHS)
+		argIdx++
+	}
+
+	if len(setClauses) == 1 {
+		return response.BadRequest(c, "NO_FIELDS", "No fields to update")
+	}
+
+	args = append(args, auditID)
+	query := fmt.Sprintf(`
+		UPDATE audit_events
+		SET %s
+		WHERE id = $%d
+		RETURNING id, audit_reference, status, notes, gwl_billed_ghs, shadow_bill_ghs,
+		          variance_pct, confirmed_loss_ghs, gra_status, updated_at`,
+		strings.Join(setClauses, ", "), argIdx)
+
+	var ev struct {
+		ID               uuid.UUID  `json:"id"`
+		AuditReference   string     `json:"audit_reference"`
+		Status           string     `json:"status"`
+		Notes            *string    `json:"notes"`
+		GWLBilledGHS     *float64   `json:"gwl_billed_ghs"`
+		ShadowBillGHS    *float64   `json:"shadow_bill_ghs"`
+		VariancePct      *float64   `json:"variance_pct"`
+		ConfirmedLossGHS *float64   `json:"confirmed_loss_ghs"`
+		GRAStatus        string     `json:"gra_status"`
+		UpdatedAt        time.Time  `json:"updated_at"`
+	}
+	err := h.auditRepo.DB().QueryRow(c.UserContext(), query, args...).Scan(
+		&ev.ID, &ev.AuditReference, &ev.Status, &ev.Notes,
+		&ev.GWLBilledGHS, &ev.ShadowBillGHS, &ev.VariancePct,
+		&ev.ConfirmedLossGHS, &ev.GRAStatus, &ev.UpdatedAt,
+	)
+	if err != nil {
+		h.logger.Error("UpdateAuditEvent failed", zap.Error(err))
+		return response.InternalError(c, "Failed to update audit event")
+	}
+
+	return response.OK(c, ev)
 }

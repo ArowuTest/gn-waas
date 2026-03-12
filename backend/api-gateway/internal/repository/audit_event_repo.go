@@ -28,6 +28,9 @@ func NewAuditEventRepository(db *pgxpool.Pool, logger *zap.Logger) *AuditEventRe
 // If an RLS-activated transaction is stored in ctx (by rls.Middleware), it is
 // returned so that all queries run within that transaction and RLS is enforced.
 // Otherwise the connection pool is returned (RLS not enforced — ops alert).
+// DB returns the underlying connection pool for direct queries.
+func (r *AuditEventRepository) DB() *pgxpool.Pool { return r.db }
+
 func (r *AuditEventRepository) q(ctx context.Context) Querier {
 	if tx, ok := rls.TxFromContext(ctx); ok {
 		return tx

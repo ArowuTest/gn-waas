@@ -76,6 +76,13 @@ func (h *AdminUserHandler) ListUsers(c *fiber.Ctx) error {
 		argIdx++
 	}
 
+	districtFilter := c.Query("district_id")
+	if districtFilter != "" {
+		conditions = append(conditions, fmt.Sprintf("u.district_id = $%d", argIdx))
+		args = append(args, districtFilter)
+		argIdx++
+	}
+
 	query := fmt.Sprintf(`
 		SELECT
 			u.id, u.email, u.full_name, u.role,
@@ -304,4 +311,40 @@ func (h *AdminUserHandler) ResetPassword(c *fiber.Ctx) error {
 		"message": "Password reset email will be sent via Keycloak",
 		"user_id": userID,
 	})
+}
+
+// GetUser godoc
+// GET /api/v1/admin/users/:id
+func (h *AdminUserHandler) GetUser(c *fiber.Ctx) error {
+	role, _ := c.Locals("rls_user_role").(string)
+	if role != "SYSTEM_ADMIN" && role != "SUPER_ADMIN" {
+		return response.Unauthorized(c, "Only SYSTEM_ADMIN or SUPER_ADMIN can view users")
+	}
+
+	userID := c.Params("id")
+	if userID == "" {
+		return response.BadRequest(c, "MISSING_ID", "User ID is required")
+	}
+
+	var u SystemUser
+	err := h.q(c.UserContext()).QueryRow(c.UserContext(), `
+		SELECT
+			u.id, u.email, u.full_name, u.role,
+			u.district_id, d.district_name,
+			u.employee_id, u.status,
+			u.last_login_at, u.created_at
+		FROM users u
+		LEFT JOIN districts d ON d.id = u.district_id
+		WHERE u.id = $1`, userID).Scan(
+		&u.ID, &u.Email, &u.FullName, &u.Role,
+		&u.DistrictID, &u.DistrictName,
+		&u.EmployeeID, &u.Status,
+		&u.LastLoginAt, &u.CreatedAt,
+	)
+	if err != nil {
+		h.logger.Error("GetUser query failed", zap.Error(err))
+		return response.NotFound(c, "User not found")
+	}
+
+	return response.OK(c, u)
 }

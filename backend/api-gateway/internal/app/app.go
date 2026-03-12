@@ -679,6 +679,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	)
 	audits.Get("/", auditHandler.ListAuditEvents)
 	audits.Get("/:id", auditHandler.GetAuditEvent)
+	audits.Patch("/:id", auditHandler.UpdateAuditEvent)
 	audits.Patch("/:id/assign",
 		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER"),
 		auditHandler.AssignAuditEvent,
@@ -826,6 +827,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN"),
 	)
 	adminUsers.Get("/", adminUserHandler.ListUsers)
+	adminUsers.Get("/:id", adminUserHandler.GetUser)
 	adminUsers.Post("/", adminUserHandler.CreateUser)
 	adminUsers.Patch("/:id", adminUserHandler.UpdateUser)
 	adminUsers.Post("/:id/reset-password", adminUserHandler.ResetPassword)
