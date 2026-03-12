@@ -121,13 +121,27 @@ func (h *AuditHandler) ListAuditEvents(c *fiber.Ctx) error {
 	if limit < 1  { limit = 1  }
 	if offset < 0 { offset = 0 }
 
-	if districtIDStr == "" {
-		return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id query parameter is required")
+	// National-level roles (SUPER_ADMIN, SYSTEM_ADMIN, MOF_AUDITOR, MINISTER_VIEW)
+	// may query without a district_id to see all events across all districts.
+	// District-scoped roles must supply district_id.
+	role, _ := c.Locals("rls_user_role").(string)
+	nationalRoles := map[string]bool{
+		"SUPER_ADMIN":   true,
+		"SYSTEM_ADMIN":  true,
+		"MOF_AUDITOR":   true,
+		"MINISTER_VIEW": true,
 	}
+	isNational := nationalRoles[role]
 
-	districtID, err := uuid.Parse(districtIDStr)
-	if err != nil {
-		return response.BadRequest(c, "INVALID_DISTRICT_ID", "Invalid district ID")
+	var districtID uuid.UUID
+	if districtIDStr != "" {
+		var parseErr error
+		districtID, parseErr = uuid.Parse(districtIDStr)
+		if parseErr != nil {
+			return response.BadRequest(c, "INVALID_DISTRICT_ID", "Invalid district ID")
+		}
+	} else if !isNational {
+		return response.BadRequest(c, "MISSING_DISTRICT_ID", "district_id query parameter is required")
 	}
 
 	// G12: Validate status against known enum values
@@ -144,6 +158,8 @@ func (h *AuditHandler) ListAuditEvents(c *fiber.Ctx) error {
 	// The middleware begins a transaction with SET LOCAL rls.* and stores it in
 	// c.UserContext(). The repository's q(ctx) helper retrieves it automatically.
 	// No manual BeginReadOnlyTx needed here.
+	// GetByDistrict with uuid.Nil returns all events (WHERE 1=1) — used for national roles.
+	// For district-scoped roles, districtID is the parsed UUID from the query param.
 	events, total, err := h.auditRepo.GetByDistrict(c.UserContext(), districtID, status, graStatus, limit, offset)
 	if err != nil {
 		return response.InternalError(c, "Failed to fetch audit events")
@@ -292,6 +308,8 @@ func NewFieldJobHandler(
 
 // GetMyJobs godoc
 // GET /api/v1/field-jobs/my-jobs
+// For FIELD_OFFICER / GRA_OFFICER: returns jobs assigned to the authenticated user.
+// For FIELD_SUPERVISOR: returns all jobs in the supervisor's district (district overview).
 func (h *FieldJobHandler) GetMyJobs(c *fiber.Ctx) error {
 	officerIDStr, ok := c.Locals("user_id").(string)
 	if !ok {
@@ -303,6 +321,20 @@ func (h *FieldJobHandler) GetMyJobs(c *fiber.Ctx) error {
 		return response.Unauthorized(c, "Invalid user ID")
 	}
 
+	role, _ := c.Locals("rls_user_role").(string)
+
+	// FIELD_SUPERVISOR sees all jobs in their district (not just their own assignments).
+	// RLS enforces district scoping via the transaction set by rls.Middleware.
+	if role == "FIELD_SUPERVISOR" {
+		districtIDStr, _ := c.Locals("rls_district_id").(string)
+		jobs, listErr := h.fieldJobRepo.ListAll(c.UserContext(), "", "", districtIDStr)
+		if listErr != nil {
+			return response.InternalError(c, "Failed to fetch jobs")
+		}
+		return response.OK(c, jobs)
+	}
+
+	// FIELD_OFFICER / GRA_OFFICER: return only jobs assigned to this user.
 	// RLS is enforced by the rls.Middleware applied to the /api/v1 group.
 	jobs, err := h.fieldJobRepo.GetByOfficerEnriched(c.UserContext(), officerID)
 	if err != nil {

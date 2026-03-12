@@ -174,10 +174,18 @@ func (h *NRWHandler) GetMyDistrictSummary(c *fiber.Ctx) error {
 
 	districtID, err := h.nrwRepo.GetUserDistrictID(c.UserContext(), userUUID)
 	if err != nil {
-		// SUPER_ADMIN / SYSTEM_ADMIN may have no district assigned.
-		// Fall back to the first available district so the portal is usable.
+		// National-level roles (SUPER_ADMIN, SYSTEM_ADMIN, MOF_AUDITOR, MINISTER_VIEW,
+		// GRA_OFFICER) have no district assignment. Fall back to the first available
+		// district so the Authority/Admin portal renders useful data instead of an error.
 		role, _ := c.Locals("rls_user_role").(string)
-		if role == "SUPER_ADMIN" || role == "SYSTEM_ADMIN" {
+		nationalRoles := map[string]bool{
+			"SUPER_ADMIN":   true,
+			"SYSTEM_ADMIN":  true,
+			"MOF_AUDITOR":   true,
+			"MINISTER_VIEW": true,
+			"GRA_OFFICER":   true,
+		}
+		if nationalRoles[role] {
 			districtID, err = h.nrwRepo.GetFirstDistrictID(c.UserContext())
 			if err != nil {
 				return response.BadRequest(c, "NO_DISTRICT", "No districts configured in the system")

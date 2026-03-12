@@ -699,7 +699,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	)
 	// /my-jobs MUST be before /:id to prevent Fiber matching "my-jobs" as an ID param
 	fieldJobs.Get("/my-jobs",
-		middleware.RequireRoles("FIELD_OFFICER", "GRA_OFFICER"),
+		middleware.RequireRoles("FIELD_OFFICER", "FIELD_SUPERVISOR", "GRA_OFFICER"),
 		fieldJobHandler.GetMyJobs,
 	)
 	fieldJobs.Get("/:id",
@@ -754,7 +754,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── NRW Reports ───────────────────────────────────────────────────────────
 	// Anomaly flags
 	anomalyFlags := api.Group("/anomaly-flags",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "GRA_OFFICER"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "MINISTER_VIEW", "FIELD_SUPERVISOR", "GWL_MANAGER", "GWL_EXECUTIVE", "GRA_OFFICER"),
 	)
 	anomalyFlags.Get("/", flagHandler.ListAnomalyFlags)
 
