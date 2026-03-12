@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   packages: write   # Required for GHCR push in docker-build job
+  actions: read     # Required for runner to download third-party actions (setup-buildx etc.)
 
 env:
   REGISTRY: ghcr.io
@@ -220,6 +221,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: read     # Required for runner to download third-party actions
     strategy:
       fail-fast: false
       matrix:
