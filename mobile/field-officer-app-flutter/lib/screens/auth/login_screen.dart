@@ -244,6 +244,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ],
 
                 const SizedBox(height: 32),
+
+                // ── Dev Quick Login (staging only) ────────────────────────
+                // SECURITY NOTE: These buttons are for demo/staging environments only.
+                // They pre-fill credentials for testing. Remove before production.
+                if (const bool.fromEnvironment('SHOW_DEV_LOGIN', defaultValue: true)) ...[
+                  const Divider(color: Color(0xFF1e293b), height: 32),
+                  const Text(
+                    'Dev Quick Login',
+                    style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      _devLoginBtn('Field Officer', 'officer.kwame@gnwaas.gov.gh', 'Field@Officer2026!'),
+                      _devLoginBtn('GRA Officer', 'graofficer1@gra.gov.gh', 'GRA@Officer2026!'),
+                      _devLoginBtn('Field Supervisor', 'supervisor.accra@gnwaas.gov.gh', 'Field@Super2026!'),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 const Center(
                   child: Text(
                     'Ghana National Water Audit & Assurance System\n© 2026 Ghana Water Limited',
@@ -258,6 +282,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+
+  Widget _devLoginBtn(String label, String email, String password) => OutlinedButton(
+    onPressed: () {
+      _emailCtrl.text = email;
+      _passwordCtrl.text = password;
+      _handleLogin();
+    },
+    style: OutlinedButton.styleFrom(
+      side: const BorderSide(color: Color(0xFF334155)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+    child: Text(label, style: const TextStyle(color: Color(0xFF94a3b8), fontSize: 11)),
+  );
 
   InputDecoration _inputDecoration(String label, IconData icon, {Widget? suffix}) =>
       InputDecoration(
