@@ -284,7 +284,7 @@ export default function MisclassificationPage() {
                     r.status === 'REJECTED' ? 'bg-red-100 text-red-800 border-red-200' :
                     'bg-gray-100 text-gray-700 border-gray-200'
                   }>
-                    {r.status.replace(/_/g, ' ')}
+                    {(r.status ?? '').replace(/_/g, ' ')}
                   </Badge>
                 ),
               },

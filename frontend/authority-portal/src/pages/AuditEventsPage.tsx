@@ -61,7 +61,7 @@ function AuditRow({ event }: { event: AuditEvent }) {
       <td className="px-4 py-3 text-sm">
         {variancePct != null ? (
           <span className={`font-semibold ${isHighVariance ? 'text-red-600' : 'text-gray-600'}`}>
-            {variancePct.toFixed(1)}%
+            {(variancePct ?? 0).toFixed(1)}%
           </span>
         ) : '—'}
       </td>

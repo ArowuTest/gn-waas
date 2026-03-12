@@ -240,7 +240,7 @@ export default function CaseDetailPage() {
               <h2 className="text-sm font-semibold text-gray-900 mb-3">Field Assignment</h2>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-700 font-bold text-sm">
-                  {gwlCase.assigned_officer_name.charAt(0)}
+                  {(gwlCase.assigned_officer_name ?? '?').charAt(0)}
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900">{gwlCase.assigned_officer_name}</p>
@@ -276,7 +276,7 @@ export default function CaseDetailPage() {
                         {' '}
                         <span className="text-gray-500">({action.performed_by_role})</span>
                         {' — '}
-                        <span className="text-blue-700">{action.action_type.replace(/_/g, ' ')}</span>
+                        <span className="text-blue-700">{(action.action_type ?? '').replace(/_/g, ' ')}</span>
                       </p>
                       {action.action_notes && (
                         <p className="text-xs text-gray-500 mt-0.5">{action.action_notes}</p>
@@ -536,7 +536,7 @@ export default function CaseDetailPage() {
             step="0.01"
             value={creditForm.creditAmount}
             onChange={(e) => setCreditForm({ ...creditForm, creditAmount: e.target.value })}
-            placeholder={gwlCase.estimated_loss_ghs.toFixed(2)}
+            placeholder={(gwlCase.estimated_loss_ghs ?? 0).toFixed(2)}
           />
           <div>
             <label className="text-sm font-medium text-gray-700">Reason for Credit</label>

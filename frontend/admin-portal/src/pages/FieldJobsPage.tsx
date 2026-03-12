@@ -165,13 +165,13 @@ function JobRow({
         </div>
       </td>
       <td className="px-4 py-3">
-        <span className={`text-xs font-medium ${ALERT_STYLES[job.alert_level]}`}>
+        <span className={`text-xs font-medium ${ALERT_STYLES[job.alert_level ?? 'INFO'] ?? ''}`}>
           {job.alert_level}
         </span>
-        <p className="text-xs text-gray-400 mt-0.5">{job.anomaly_type.replace(/_/g, ' ')}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{(job.anomaly_type ?? '').replace(/_/g, ' ')}</p>
       </td>
       <td className="px-4 py-3">
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[job.status]}`}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[job.status] ?? 'bg-gray-100 text-gray-700'}`}>
           {job.status === 'SOS' && '🚨 '}
           {job.status.replace(/_/g, ' ')}
         </span>

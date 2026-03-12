@@ -42,7 +42,7 @@ function AccountCard({ account }: { account: WaterAccount }) {
                 <span className="text-orange-600 font-medium">No meter registered</span>
               )}
               {account.monthly_avg_consumption > 0 && (
-                <span>Avg: {account.monthly_avg_consumption.toFixed(1)} m³/mo</span>
+                <span>Avg: {(account.monthly_avg_consumption ?? 0).toFixed(1)} m³/mo</span>
               )}
               {account.account_holder_tin && (
                 <span>TIN: {account.account_holder_tin}</span>

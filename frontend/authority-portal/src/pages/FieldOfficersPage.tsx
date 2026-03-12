@@ -76,7 +76,7 @@ function OfficerCard({ officer }: { officer: User }) {
           <div className="flex items-center gap-2 text-gray-500 text-xs">
             <MapPin className="w-3 h-3 text-gray-400" />
             <span>
-              {Number(officer.last_location_lat).toFixed(4)}, {Number(officer.last_location_lng).toFixed(4)}
+              {(Number(officer.last_location_lat) || 0).toFixed(4)}, {(Number(officer.last_location_lng) || 0).toFixed(4)}
             </span>
           </div>
         )}

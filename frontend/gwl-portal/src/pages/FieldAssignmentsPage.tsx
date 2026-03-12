@@ -140,7 +140,7 @@ export default function FieldAssignmentsPage() {
             <div key={name} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-700 font-bold text-xs">
-                  {name.charAt(0)}
+                  {(name ?? '?').charAt(0)}
                 </div>
                 <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
               </div>
@@ -195,7 +195,7 @@ export default function FieldAssignmentsPage() {
                 accessor: (r) => r.assigned_officer_name ? (
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-purple-700 text-xs font-bold">
-                      {r.assigned_officer_name.charAt(0)}
+                      {(r.assigned_officer_name ?? '?').charAt(0)}
                     </div>
                     <span className="text-sm">{r.assigned_officer_name}</span>
                   </div>

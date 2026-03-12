@@ -91,7 +91,7 @@ export default function MyDistrictPage() {
               Current NRW Rate — {district.district_name}
             </div>
             <div className="text-5xl font-black">
-              {nrwPct > 0 ? `${nrwPct.toFixed(1)}%` : 'No data'}
+              {nrwPct > 0 ? `${(nrwPct ?? 0).toFixed(1)}%` : 'No data'}
             </div>
             <div className="text-sm opacity-80 mt-1">
               IWA Target: 20% · Ghana Average: 51.6% · Data Grade:{' '}
@@ -129,8 +129,8 @@ export default function MyDistrictPage() {
           },
           {
             label: 'Est. Loss (GHS)',
-            value: `₵${(estimatedLoss / 1000).toFixed(0)}K`,
-            sub: `₵${(confirmedLoss / 1000).toFixed(0)}K confirmed`,
+            value: `₵${((estimatedLoss ?? 0) / 1000).toFixed(0)}K`,
+            sub: `₵${((confirmedLoss ?? 0) / 1000).toFixed(0)}K confirmed`,
             icon: CheckCircle,
             color: 'green',
           },
@@ -192,7 +192,7 @@ export default function MyDistrictPage() {
             <div className="flex items-center gap-3">
               <div className="text-right">
                 <p className="text-xs text-gray-500">ILI Score</p>
-                <p className="text-xl font-black text-gray-900">{latestWB.ili.toFixed(2)}</p>
+                <p className="text-xl font-black text-gray-900">{(latestWB.ili ?? 0).toFixed(2)}</p>
               </div>
               <div className={`px-3 py-1.5 rounded-full text-sm font-bold text-white ${
                 latestWB.iwa_grade === 'A' ? 'bg-emerald-500' :
