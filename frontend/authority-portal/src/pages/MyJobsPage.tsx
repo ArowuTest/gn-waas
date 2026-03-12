@@ -249,6 +249,10 @@ export default function MyJobsPage() {
         <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
           <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
           <p className="text-red-700 font-semibold">Failed to load jobs</p>
+          <p className="text-red-500 text-sm mt-1">
+            If you are a Field Supervisor, your district jobs will appear here once the latest
+            deployment is active. Field Officers will see their personally assigned jobs.
+          </p>
           <button onClick={() => refetch()} className="mt-3 text-sm text-red-600 underline">
             Try again
           </button>

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -326,6 +327,14 @@ func (r *AuditEventRepository) CreateIllegalConnection(ctx context.Context, rep 
 	var reportID uuid.UUID
 	// SEC-H01 fix: include district_id so RLS policy can enforce district isolation.
 	// district_id is populated from the reporting officer's JWT district claim.
+	// Default photo_hashes to empty JSON array if nil to satisfy NOT NULL constraint
+	photoHashes := rep.PhotoHashes
+	if photoHashes == nil {
+		photoHashes = []string{}
+	}
+	// Marshal photo_hashes to JSON for storage
+	photoHashesJSON, _ := json.Marshal(photoHashes)
+
 	err := r.q(ctx).QueryRow(ctx, `
 		INSERT INTO illegal_connections (
 			officer_id, district_id, job_id, connection_type, severity, description,
@@ -334,11 +343,11 @@ func (r *AuditEventRepository) CreateIllegalConnection(ctx context.Context, rep 
 		) VALUES (
 			$1::uuid, NULLIF($2, '')::uuid, NULLIF($3, '')::uuid, $4, $5, $6,
 			$7, $8, $9,
-			$10, $11, $12, $13, $14, NOW()
+			$10, $11, $12, $13, $14::jsonb, NOW()
 		) RETURNING id`,
 		rep.OfficerID, rep.DistrictID, rep.JobID, rep.ConnectionType, rep.Severity, rep.Description,
 		rep.EstimatedDailyLossLitres, rep.Address, rep.AccountNumber,
-		rep.Latitude, rep.Longitude, rep.GPSAccuracy, rep.PhotoCount, rep.PhotoHashes,
+		rep.Latitude, rep.Longitude, rep.GPSAccuracy, rep.PhotoCount, string(photoHashesJSON),
 	).Scan(&reportID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("AuditEventRepository.CreateIllegalConnection: %w", err)
