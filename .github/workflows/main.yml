@@ -348,3 +348,43 @@ jobs:
         with:
           name: vuln-report-${{ matrix.service }}
           path: /tmp/vuln-${{ matrix.service }}.txt
+
+  # ============================================================
+  # Render Deploy (main branch only)
+  # Triggers Render to redeploy the API Gateway (and other services)
+  # after all tests pass. Uses Render Deploy Hooks stored as GitHub secrets.
+  # To configure: Render Dashboard → Service → Settings → Deploy Hooks → Copy URL
+  # Then add as GitHub secret: RENDER_DEPLOY_HOOK_API_GATEWAY
+  # ============================================================
+  render-deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    needs: [go-services, frontend-portals, flutter-mobile, db-migrations]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Trigger Render deploys
+        env:
+          HOOK_API_GATEWAY: ${{ secrets.RENDER_DEPLOY_HOOK_API_GATEWAY }}
+          HOOK_SENTINEL: ${{ secrets.RENDER_DEPLOY_HOOK_SENTINEL }}
+          HOOK_TARIFF_ENGINE: ${{ secrets.RENDER_DEPLOY_HOOK_TARIFF_ENGINE }}
+        run: |
+          trigger() {
+            local name=$1 url=$2
+            if [ -n "$url" ]; then
+              code=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+              echo "  $name → HTTP $code"
+            else
+              echo "  $name → skipped (no deploy hook secret configured)"
+            fi
+          }
+          trigger "api-gateway"    "$HOOK_API_GATEWAY"
+          trigger "sentinel"       "$HOOK_SENTINEL"
+          trigger "tariff-engine"  "$HOOK_TARIFF_ENGINE"
+        continue-on-error: true
+
+      - name: Deploy status summary
+        run: |
+          echo "✅ Render deploy hooks triggered for main branch push"
+          echo "   Services: api-gateway, sentinel, tariff-engine"
+          echo "   Note: Render also auto-deploys from GitHub push (render.yaml)"
+          echo "   Monitor at: https://dashboard.render.com"

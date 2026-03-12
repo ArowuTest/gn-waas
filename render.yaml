@@ -78,7 +78,7 @@ services:
     region: oregon
     plan: free
     rootDir: backend/sentinel
-    buildCommand: go build -o sentinel ./cmd/main.go
+    buildCommand: GOWORK=off go build -o sentinel ./cmd/main.go
     startCommand: ./sentinel
     healthCheckPath: /health
     envVars:
@@ -98,7 +98,7 @@ services:
     region: oregon
     plan: free
     rootDir: backend/tariff-engine
-    buildCommand: go build -o tariff-engine ./cmd/main.go
+    buildCommand: GOWORK=off go build -o tariff-engine ./cmd/main.go
     startCommand: ./tariff-engine
     healthCheckPath: /health
     envVars:
@@ -120,7 +120,7 @@ services:
     region: oregon
     plan: free
     rootDir: backend/gra-bridge
-    buildCommand: go build -o gra-bridge ./cmd/main.go
+    buildCommand: GOWORK=off go build -o gra-bridge ./cmd/main.go
     startCommand: ./gra-bridge
     healthCheckPath: /health
     envVars:
