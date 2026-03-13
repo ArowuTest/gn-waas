@@ -76,6 +76,21 @@ services:
         value: gnwaas
       - key: KEYCLOAK_CLIENT_ID
         value: gnwaas-api
+      - key: OCR_SERVICE_URL
+        value: https://gnwaas-ocr-service.onrender.com
+      # Evidence photo storage — set these to enable cloud photo storage
+      # Supports: MinIO (self-hosted), AWS S3, Cloudflare R2, Backblaze B2
+      # Leave blank to run in offline mode (photos stored on device only)
+      - key: S3_ENDPOINT
+        value: ""
+      - key: S3_ACCESS_KEY
+        value: ""
+      - key: S3_SECRET_KEY
+        value: ""
+      - key: S3_BUCKET
+        value: gnwaas-evidence
+      - key: S3_USE_SSL
+        value: "true"
 
   # ── Sentinel Engine ──────────────────────────────────────────────────────────
   - type: web
@@ -139,3 +154,23 @@ services:
         value: 10000
       - key: GRA_SANDBOX_MODE
         value: "true"
+
+  # ── OCR Service ──────────────────────────────────────────────────────────────
+  - type: web
+    name: gnwaas-ocr-service
+    runtime: docker
+    dockerfilePath: ./backend/ocr-service/Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: free
+    autoDeploy: yes
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: TESSERACT_PATH
+        value: tesseract
+      - key: TEMP_DIR
+        value: /tmp
+      - key: APP_PORT
+        value: "3005"

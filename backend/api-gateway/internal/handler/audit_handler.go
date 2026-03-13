@@ -4,16 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/notification"
-	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/storage"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/storage"
+	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -31,7 +31,7 @@ type AuditHandler struct {
 func NewAuditHandler(
 	auditRepo *repository.AuditEventRepository,
 	fieldJobRepo *repository.FieldJobRepository,
-	flagRepo     *repository.AnomalyFlagRepository,
+	flagRepo *repository.AnomalyFlagRepository,
 	userRepo *repository.UserRepository,
 	logger *zap.Logger,
 ) *AuditHandler {
@@ -134,13 +134,19 @@ func (h *AuditHandler) GetAuditEvent(c *fiber.Ctx) error {
 // GET /api/v1/audits
 func (h *AuditHandler) ListAuditEvents(c *fiber.Ctx) error {
 	districtIDStr := c.Query("district_id")
-	status    := c.Query("status")
+	status := c.Query("status")
 	graStatus := c.Query("gra_status")
 	limit := c.QueryInt("limit", 20)
 	offset := c.QueryInt("offset", 0)
-	if limit > 100 { limit = 100 }
-	if limit < 1  { limit = 1  }
-	if offset < 0 { offset = 0 }
+	if limit > 100 {
+		limit = 100
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	// National-level roles (SUPER_ADMIN, SYSTEM_ADMIN, MOF_AUDITOR, MINISTER_VIEW)
 	// may query without a district_id to see all events across all districts.
@@ -243,21 +249,25 @@ func (h *AuditHandler) AssignAuditEvent(c *fiber.Ctx) error {
 			`SELECT gps_latitude, gps_longitude FROM water_accounts WHERE id = $1`,
 			event.AccountID,
 		).Scan(&lat, &lng)
-		if lat != nil { targetLat = *lat }
-		if lng != nil { targetLng = *lng }
+		if lat != nil {
+			targetLat = *lat
+		}
+		if lng != nil {
+			targetLng = *lng
+		}
 	}
 
 	job := &domain.FieldJob{
-		AuditEventID:    &id,
-		AccountID:       event.AccountID,
-		DistrictID:      event.DistrictID,
+		AuditEventID:      &id,
+		AccountID:         event.AccountID,
+		DistrictID:        event.DistrictID,
 		AssignedOfficerID: &officerID,
-		Status:          "QUEUED",
-		IsBlindAudit:    true, // Always blind audit - officer doesn't see expected reading
-		TargetGPSLat:    targetLat,
-		TargetGPSLng:    targetLng,
-		GPSFenceRadiusM: 50.0, // 50m GPS fence
-		Priority:        1,
+		Status:            "QUEUED",
+		IsBlindAudit:      true, // Always blind audit - officer doesn't see expected reading
+		TargetGPSLat:      targetLat,
+		TargetGPSLng:      targetLng,
+		GPSFenceRadiusM:   50.0, // 50m GPS fence
+		Priority:          1,
 	}
 
 	_ = dueDate // Will be set on audit event
@@ -310,12 +320,12 @@ type FieldJobHandler struct {
 }
 
 func NewFieldJobHandler(
-	fieldJobRepo    *repository.FieldJobRepository,
-	flagRepo        *repository.AnomalyFlagRepository,
-	auditRepo       *repository.AuditEventRepository,
-	sosNotifier     *notification.SOSNotifier,
+	fieldJobRepo *repository.FieldJobRepository,
+	flagRepo *repository.AnomalyFlagRepository,
+	auditRepo *repository.AuditEventRepository,
+	sosNotifier *notification.SOSNotifier,
 	evidenceStorage *storage.EvidenceStorageService,
-	logger          *zap.Logger,
+	logger *zap.Logger,
 ) *FieldJobHandler {
 	return &FieldJobHandler{
 		fieldJobRepo:    fieldJobRepo,
@@ -480,14 +490,20 @@ func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
 		districtID = &id
 	}
 
-	severity    := c.Query("severity")
-	status      := c.Query("status")
+	severity := c.Query("severity")
+	status := c.Query("status")
 	anomalyType := c.Query("anomaly_type") // FIX: support anomaly_type filter from frontend
 	limit := c.QueryInt("limit", 50)
 	offset := c.QueryInt("offset", 0)
-	if limit > 100 { limit = 100 }
-	if limit < 1  { limit = 1  }
-	if offset < 0 { offset = 0 }
+	if limit > 100 {
+		limit = 100
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	// G12: Validate severity and status against known enum values
 	validSeverities := map[string]bool{
@@ -513,9 +529,9 @@ func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"data": flags,
 		"meta": fiber.Map{
-			"total":     total,
-			"limit":     limit,
-			"offset":    offset,
+			"total":  total,
+			"limit":  limit,
+			"offset": offset,
 		},
 	})
 }
@@ -666,15 +682,15 @@ func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
 
 	// 3. Write evidence to the linked audit_event (if one exists)
 	if err := h.fieldJobRepo.WriteEvidence(c.UserContext(), jobID, &domain.FieldJobEvidence{
-		OCRReadingValue:  req.OCRReadingM3,
-		OCRConfidence:    req.OCRConfidence,
-		OCRStatus:        req.OCRStatus,
-		Notes:            req.OfficerNotes,
-		GPSLat:           req.GPSLat,
-		GPSLng:           req.GPSLng,
-		GPSAccuracyM:     req.GPSAccuracyM,
-		PhotoURLs:        req.PhotoURLs,
-		PhotoHashes:      verifiedHashes,
+		OCRReadingValue: req.OCRReadingM3,
+		OCRConfidence:   req.OCRConfidence,
+		OCRStatus:       req.OCRStatus,
+		Notes:           req.OfficerNotes,
+		GPSLat:          req.GPSLat,
+		GPSLng:          req.GPSLng,
+		GPSAccuracyM:    req.GPSAccuracyM,
+		PhotoURLs:       req.PhotoURLs,
+		PhotoHashes:     verifiedHashes,
 	}); err != nil {
 		// Non-fatal: job is marked complete, evidence write failed
 		h.logger.Warn("Failed to write job evidence to audit_event", zap.Error(err))
@@ -691,14 +707,20 @@ func (h *FieldJobHandler) SubmitJobEvidence(c *fiber.Ctx) error {
 // GET /api/v1/field-jobs — admin/supervisor view with optional filters
 
 func (h *FieldJobHandler) ListAllJobs(c *fiber.Ctx) error {
-	status     := c.Query("status")
+	status := c.Query("status")
 	alertLevel := c.Query("alert_level")
 	districtID := c.Query("district_id")
-	limit       := c.QueryInt("limit", 50)
-	offset      := c.QueryInt("offset", 0)
-	if limit > 100 { limit = 100 }
-	if limit < 1  { limit = 1  }
-	if offset < 0 { offset = 0 }
+	limit := c.QueryInt("limit", 50)
+	offset := c.QueryInt("offset", 0)
+	if limit > 100 {
+		limit = 100
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	// G12: Validate status against known field_job_status enum values
 	// FIX: validJobStatuses must match field_job_status PostgreSQL enum exactly.
@@ -723,9 +745,13 @@ func (h *FieldJobHandler) ListAllJobs(c *fiber.Ctx) error {
 	// Apply in-memory pagination (ListAll returns all matching)
 	total := len(jobs)
 	start := offset
-	if start > total { start = total }
+	if start > total {
+		start = total
+	}
 	end := start + limit
-	if end > total { end = total }
+	if end > total {
+		end = total
+	}
 	return response.OKWithMeta(c, jobs[start:end], &response.Meta{
 		Total:    intPtr(total),
 		Page:     intPtr(offset/limit + 1),
@@ -752,13 +778,13 @@ func (h *FieldJobHandler) GetFieldJob(c *fiber.Ctx) error {
 
 func (h *FieldJobHandler) CreateFieldJob(c *fiber.Ctx) error {
 	var req struct {
-		AccountID          string  `json:"account_id"`
-		DistrictID         string  `json:"district_id"`
-		AnomalyFlagID      *string `json:"anomaly_flag_id"`
-		AssignedOfficerID  *string `json:"assigned_officer_id"`
-		IsBlindAudit       bool    `json:"is_blind_audit"`
-		Priority           int     `json:"priority"`
-		Notes              *string `json:"notes"`
+		AccountID         string  `json:"account_id"`
+		DistrictID        string  `json:"district_id"`
+		AnomalyFlagID     *string `json:"anomaly_flag_id"`
+		AssignedOfficerID *string `json:"assigned_officer_id"`
+		IsBlindAudit      bool    `json:"is_blind_audit"`
+		Priority          int     `json:"priority"`
+		Notes             *string `json:"notes"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
@@ -846,13 +872,13 @@ func (h *FieldJobHandler) ProxyOCRProcess(c *fiber.Ctx) error {
 	resp, err := http.Post(ocrURL+"/api/v1/ocr/process", "application/json", bytes.NewReader(jsonBytes))
 	if err != nil {
 		h.logger.Warn("OCR service unavailable", zap.Error(err))
-		// Return a graceful degraded response so the Flutter app can continue
-		return c.JSON(fiber.Map{
-			"reading_value": nil,
-			"confidence":    0.0,
-			"status":        "OCR_UNAVAILABLE",
-			"raw_text":      "",
-			"error":         "OCR service temporarily unavailable",
+		return c.Status(503).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"code":       "OCR_UNAVAILABLE",
+				"message":    "OCR service (Tesseract) is not reachable. This is expected during cold starts on free tier — retry in 30 seconds.",
+				"ocr_status": "UNAVAILABLE",
+			},
 		})
 	}
 	defer resp.Body.Close()
@@ -882,25 +908,25 @@ func (h *FieldJobHandler) ReportIllegalConnection(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		ConnectionType             string   `json:"connection_type"`
-		Severity                   string   `json:"severity"`
-		Description                string   `json:"description"`
-		EstimatedDailyLossLitres   float64  `json:"estimated_daily_loss_litres"`
-		EstimatedDailyM3           float64  `json:"estimated_daily_m3"` // mobile alias
-		Address                    string   `json:"address"`
-		AccountNumber              *string  `json:"account_number"`
-		Latitude                   float64  `json:"latitude"`
-		Longitude                  float64  `json:"longitude"`
-		GPSLatitude                float64  `json:"gps_latitude"`  // mobile alias
-		GPSLongitude               float64  `json:"gps_longitude"` // mobile alias
-		GPSAccuracy                float64  `json:"gps_accuracy"`
-		GPSAccuracyM               float64  `json:"gps_accuracy_m"` // mobile alias
-		PhotoCount                 int      `json:"photo_count"`
+		ConnectionType           string  `json:"connection_type"`
+		Severity                 string  `json:"severity"`
+		Description              string  `json:"description"`
+		EstimatedDailyLossLitres float64 `json:"estimated_daily_loss_litres"`
+		EstimatedDailyM3         float64 `json:"estimated_daily_m3"` // mobile alias
+		Address                  string  `json:"address"`
+		AccountNumber            *string `json:"account_number"`
+		Latitude                 float64 `json:"latitude"`
+		Longitude                float64 `json:"longitude"`
+		GPSLatitude              float64 `json:"gps_latitude"`  // mobile alias
+		GPSLongitude             float64 `json:"gps_longitude"` // mobile alias
+		GPSAccuracy              float64 `json:"gps_accuracy"`
+		GPSAccuracyM             float64 `json:"gps_accuracy_m"` // mobile alias
+		PhotoCount               int     `json:"photo_count"`
 		// SHA-256 hashes of each photo, computed on the device at capture time.
 		// Stored for server-side chain-of-custody verification.
-		PhotoHashes                []string `json:"photo_hashes"`
-		JobID                      *string  `json:"job_id"`
-		ReportedAt                 string   `json:"reported_at"`
+		PhotoHashes []string `json:"photo_hashes"`
+		JobID       *string  `json:"job_id"`
+		ReportedAt  string   `json:"reported_at"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
@@ -1019,15 +1045,15 @@ func derefString(s *string) string {
 // Allows authority portal users and field officers to manually report anomalies.
 func (h *AnomalyFlagHandler) CreateAnomalyFlag(c *fiber.Ctx) error {
 	var req struct {
-		DistrictID       string   `json:"district_id"`
-		AccountID        string   `json:"account_id"`
-		AccountNumber    *string  `json:"account_number"`
-		AnomalyType      string   `json:"anomaly_type"`
-		AlertLevel       string   `json:"alert_level"`
-		Title            string   `json:"title"`
-		Description      string   `json:"description"`
-		EstimatedLossGHS float64  `json:"estimated_loss_ghs"`
-		Source           string   `json:"source"`
+		DistrictID       string  `json:"district_id"`
+		AccountID        string  `json:"account_id"`
+		AccountNumber    *string `json:"account_number"`
+		AnomalyType      string  `json:"anomaly_type"`
+		AlertLevel       string  `json:"alert_level"`
+		Title            string  `json:"title"`
+		Description      string  `json:"description"`
+		EstimatedLossGHS float64 `json:"estimated_loss_ghs"`
+		Source           string  `json:"source"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
@@ -1116,10 +1142,11 @@ func (h *AnomalyFlagHandler) CreateAnomalyFlag(c *fiber.Ctx) error {
 // management and GRA but does NOT create a recovery event.
 //
 // Request body:
-//   confirmed_fraud       bool    (required) — true = confirmed, false = false positive
-//   confirmed_leakage_ghs float64 (optional) — actual GHS leakage if different from estimate
-//   resolution_notes      string  (optional)
-//   leakage_category      string  (optional) — override if auto-classification is wrong
+//
+//	confirmed_fraud       bool    (required) — true = confirmed, false = false positive
+//	confirmed_leakage_ghs float64 (optional) — actual GHS leakage if different from estimate
+//	resolution_notes      string  (optional)
+//	leakage_category      string  (optional) — override if auto-classification is wrong
 func (h *AnomalyFlagHandler) ConfirmAnomaly(c *fiber.Ctx) error {
 	ctx := c.UserContext()
 
@@ -1286,12 +1313,13 @@ func anomalyTypeToRecoveryType(anomalyType string) string {
 //   - Dismissal (GPS data was wrong → dismiss ADDRESS_UNVERIFIED flag)
 //
 // Request body:
-//   outcome              string  (required) — FieldJobOutcome enum value
-//   outcome_notes        string  (optional)
-//   meter_found          bool    (optional)
-//   address_confirmed    bool    (optional)
-//   recommended_action   string  (optional)
-//   estimated_monthly_m3 float64 (optional) — for UNMETERED_CONSUMPTION back-billing
+//
+//	outcome              string  (required) — FieldJobOutcome enum value
+//	outcome_notes        string  (optional)
+//	meter_found          bool    (optional)
+//	address_confirmed    bool    (optional)
+//	recommended_action   string  (optional)
+//	estimated_monthly_m3 float64 (optional) — for UNMETERED_CONSUMPTION back-billing
 func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 	ctx := c.UserContext()
 
@@ -1366,7 +1394,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 		// Load residential blended rate from DB (no hardcoding)
 		// Falls back to PURC 2026 tier-2 (10.8320) + 20% VAT if DB unavailable
 		residentialRateGHS := 10.8320
-		vatMult            := 1.20
+		vatMult := 1.20
 		var dbRate, dbVAT float64
 		if err := h.flagRepo.DB().QueryRow(ctx, `
 			SELECT
@@ -1375,7 +1403,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 			FROM tariff_rates tr
 			WHERE tr.category = 'RESIDENTIAL' AND tr.is_active = TRUE`).Scan(&dbRate, &dbVAT); err == nil {
 			residentialRateGHS = dbRate
-			vatMult            = dbVAT
+			vatMult = dbVAT
 		}
 		monthlyLeakageGHS := estimatedM3 * residentialRateGHS * vatMult
 
@@ -1495,13 +1523,13 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 	// When a field officer records an outcome that confirms leakage, advance
 	// the recovery event from PENDING → FIELD_VERIFIED and record who verified it.
 	leakageConfirmingOutcomes := map[string]bool{
-		"METER_NOT_FOUND_INSTALL":    true,
-		"ADDRESS_VALID_UNREGISTERED": true,
+		"METER_NOT_FOUND_INSTALL":     true,
+		"ADDRESS_VALID_UNREGISTERED":  true,
 		"CATEGORY_MISMATCH_CONFIRMED": true,
-		"ILLEGAL_CONNECTION_FOUND":   true,
-		"METER_FOUND_TAMPERED":       true,
-		"METER_FOUND_FAULTY":         true,
-		"DUPLICATE_METER":            true,
+		"ILLEGAL_CONNECTION_FOUND":    true,
+		"METER_FOUND_TAMPERED":        true,
+		"METER_FOUND_FAULTY":          true,
+		"DUPLICATE_METER":             true,
 	}
 	if leakageConfirmingOutcomes[req.Outcome] && anomalyFlagID != nil {
 		// Update the anomaly flag status to ACKNOWLEDGED (field visit done)
@@ -1553,11 +1581,11 @@ func (h *AuditHandler) UpdateAuditEvent(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Status          *string  `json:"status"`
-		Notes           *string  `json:"notes"`
-		GWLBilledGHS    *float64 `json:"gwl_billed_ghs"`
-		ShadowBillGHS   *float64 `json:"shadow_bill_ghs"`
-		VariancePct     *float64 `json:"variance_pct"`
+		Status           *string  `json:"status"`
+		Notes            *string  `json:"notes"`
+		GWLBilledGHS     *float64 `json:"gwl_billed_ghs"`
+		ShadowBillGHS    *float64 `json:"shadow_bill_ghs"`
+		VariancePct      *float64 `json:"variance_pct"`
 		ConfirmedLossGHS *float64 `json:"confirmed_loss_ghs"`
 	}
 	if err := c.BodyParser(&req); err != nil {
@@ -1626,16 +1654,16 @@ func (h *AuditHandler) UpdateAuditEvent(c *fiber.Ctx) error {
 		strings.Join(setClauses, ", "), argIdx)
 
 	var ev struct {
-		ID               uuid.UUID  `json:"id"`
-		AuditReference   string     `json:"audit_reference"`
-		Status           string     `json:"status"`
-		Notes            *string    `json:"notes"`
-		GWLBilledGHS     *float64   `json:"gwl_billed_ghs"`
-		ShadowBillGHS    *float64   `json:"shadow_bill_ghs"`
-		VariancePct      *float64   `json:"variance_pct"`
-		ConfirmedLossGHS *float64   `json:"confirmed_loss_ghs"`
-		GRAStatus        string     `json:"gra_status"`
-		UpdatedAt        time.Time  `json:"updated_at"`
+		ID               uuid.UUID `json:"id"`
+		AuditReference   string    `json:"audit_reference"`
+		Status           string    `json:"status"`
+		Notes            *string   `json:"notes"`
+		GWLBilledGHS     *float64  `json:"gwl_billed_ghs"`
+		ShadowBillGHS    *float64  `json:"shadow_bill_ghs"`
+		VariancePct      *float64  `json:"variance_pct"`
+		ConfirmedLossGHS *float64  `json:"confirmed_loss_ghs"`
+		GRAStatus        string    `json:"gra_status"`
+		UpdatedAt        time.Time `json:"updated_at"`
 	}
 	err := h.auditRepo.DB().QueryRow(c.UserContext(), query, args...).Scan(
 		&ev.ID, &ev.AuditReference, &ev.Status, &ev.Notes,

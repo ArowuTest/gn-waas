@@ -68,10 +68,10 @@ type KeycloakConfig struct {
 }
 
 type ServicesConfig struct {
-	SentinelURL   string `mapstructure:"sentinel_url"`
-	TariffURL     string `mapstructure:"tariff_url"`
-	GRABridgeURL  string `mapstructure:"gra_bridge_url"`
-	OCRServiceURL string `mapstructure:"ocr_service_url"`
+	SentinelURL    string `mapstructure:"sentinel_url"`
+	TariffURL      string `mapstructure:"tariff_url"`
+	GRABridgeURL   string `mapstructure:"gra_bridge_url"`
+	OCRServiceURL  string `mapstructure:"ocr_service_url"`
 	CDCIngestorURL string `mapstructure:"cdc_ingestor_url"`
 }
 
@@ -105,27 +105,46 @@ func Load() (*Config, error) {
 	v.AutomaticEnv()
 
 	envBindings := map[string]string{
-		"app.env":                "APP_ENV",
-		"server.port":            "APP_PORT",
-		"database.host":          "DB_HOST",
-		"database.port":          "DB_PORT",
-		"database.name":          "DB_NAME",
-		"database.user":          "DB_USER",
-		"database.password":      "DB_PASSWORD",
-		"redis.host":             "REDIS_HOST",
-		"redis.port":             "REDIS_PORT",
-		"redis.password":         "REDIS_PASSWORD",
-		"keycloak.url":           "KEYCLOAK_URL",
-		"keycloak.realm":         "KEYCLOAK_REALM",
-		"keycloak.client_id":     "KEYCLOAK_CLIENT_ID",
-		"server.dev_mode":         "DEV_MODE",
-		"services.sentinel_url":  "SENTINEL_SERVICE_URL",
-		"services.tariff_url":    "TARIFF_SERVICE_URL",
-		"services.gra_bridge_url": "GRA_SERVICE_URL",
+		"app.env":                  "APP_ENV",
+		"server.port":              "APP_PORT",
+		"database.host":            "DB_HOST",
+		"database.port":            "DB_PORT",
+		"database.name":            "DB_NAME",
+		"database.user":            "DB_USER",
+		"database.password":        "DB_PASSWORD",
+		"redis.host":               "REDIS_HOST",
+		"redis.port":               "REDIS_PORT",
+		"redis.password":           "REDIS_PASSWORD",
+		"keycloak.url":             "KEYCLOAK_URL",
+		"keycloak.realm":           "KEYCLOAK_REALM",
+		"keycloak.client_id":       "KEYCLOAK_CLIENT_ID",
+		"server.dev_mode":          "DEV_MODE",
+		"services.sentinel_url":    "SENTINEL_SERVICE_URL",
+		"services.tariff_url":      "TARIFF_SERVICE_URL",
+		"services.gra_bridge_url":  "GRA_SERVICE_URL",
 		"services.ocr_service_url": "OCR_SERVICE_URL",
-		"minio.endpoint":         "MINIO_ENDPOINT",
-		"minio.access_key":       "MINIO_ACCESS_KEY",
-		"minio.secret_key":       "MINIO_SECRET_KEY",
+		"minio.endpoint":           "MINIO_ENDPOINT",
+		"minio.access_key":         "MINIO_ACCESS_KEY",
+		"minio.secret_key":         "MINIO_SECRET_KEY",
+	}
+
+	// S3-compatible alias: operators can use S3_ENDPOINT / S3_ACCESS_KEY / S3_SECRET_KEY
+	// instead of MINIO_* — works with AWS S3, Cloudflare R2, Backblaze B2, etc.
+	// S3_* takes precedence only if MINIO_* is not set.
+	if os.Getenv("MINIO_ENDPOINT") == "" && os.Getenv("S3_ENDPOINT") != "" {
+		v.Set("minio.endpoint", os.Getenv("S3_ENDPOINT"))
+	}
+	if os.Getenv("MINIO_ACCESS_KEY") == "" && os.Getenv("S3_ACCESS_KEY") != "" {
+		v.Set("minio.access_key", os.Getenv("S3_ACCESS_KEY"))
+	}
+	if os.Getenv("MINIO_SECRET_KEY") == "" && os.Getenv("S3_SECRET_KEY") != "" {
+		v.Set("minio.secret_key", os.Getenv("S3_SECRET_KEY"))
+	}
+	if os.Getenv("S3_BUCKET") != "" {
+		v.Set("minio.bucket", os.Getenv("S3_BUCKET"))
+	}
+	if os.Getenv("S3_USE_SSL") == "true" || os.Getenv("MINIO_USE_SSL") == "true" {
+		v.Set("minio.use_ssl", true)
 	}
 
 	for key, env := range envBindings {

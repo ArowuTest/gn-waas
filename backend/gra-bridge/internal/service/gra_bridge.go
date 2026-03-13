@@ -29,9 +29,10 @@ import (
 //  4. Audit event is locked (is_locked = true) — immutable from this point
 //
 // Fallback states (Q1):
-//   PROVISIONAL  — GRA API is down; internal QR generated, retry queued automatically
-//   RETRY_QUEUED — Previous attempt failed; background worker will retry with backoff
-//   EXEMPT_MANUAL — System Admin override with documented reason (e.g. GRA system outage > 72h)
+//
+//	PROVISIONAL  — GRA API is down; internal QR generated, retry queued automatically
+//	RETRY_QUEUED — Previous attempt failed; background worker will retry with backoff
+//	EXEMPT_MANUAL — System Admin override with documented reason (e.g. GRA system outage > 72h)
 //
 // Sandbox mode (GRA_SANDBOX_MODE=true):
 //   - Returns realistic mock responses with locally-generated QR codes
@@ -42,21 +43,22 @@ import (
 //     GRA_SANDBOX_MODE=false with staging credentials.
 //
 // ENV VARS (Q2 fix — consistent naming):
-//   GRA_VSDC_BASE_URL   — GRA API base URL (default: https://vsdc.gra.gov.gh/api/v8.1)
-//   GRA_API_KEY         — Bearer token from GRA
-//   GRA_BUSINESS_TIN    — GN-WAAS operator TIN (or GWL TIN if invoicing as GWL)
-//   GRA_SANDBOX_MODE    — "true" to use mock responses (default: false in production)
-//   GRA_MAX_RETRIES     — Max retry attempts before FAILED (default: 3)
-//   GRA_RETRY_BASE_SECS — Base seconds for exponential backoff (default: 60)
+//
+//	GRA_VSDC_BASE_URL   — GRA API base URL (default: https://vsdc.gra.gov.gh/api/v8.1)
+//	GRA_API_KEY         — Bearer token from GRA
+//	GRA_BUSINESS_TIN    — GN-WAAS operator TIN (or GWL TIN if invoicing as GWL)
+//	GRA_SANDBOX_MODE    — "true" to use mock responses (default: false in production)
+//	GRA_MAX_RETRIES     — Max retry attempts before FAILED (default: 3)
+//	GRA_RETRY_BASE_SECS — Base seconds for exponential backoff (default: 60)
 type GRABridgeService struct {
-	client          *http.Client
-	baseURL         string
-	apiKey          string
-	businessTIN     string
-	sandboxMode     bool
-	maxRetries      int
-	retryBaseSecs   int
-	logger          *zap.Logger
+	client        *http.Client
+	baseURL       string
+	apiKey        string
+	businessTIN   string
+	sandboxMode   bool
+	maxRetries    int
+	retryBaseSecs int
+	logger        *zap.Logger
 }
 
 // ── GRA VSDC v8.1 Request/Response types (Q3) ────────────────────────────────
@@ -85,20 +87,20 @@ type GRABridgeService struct {
 // InvoiceRequest is the payload sent to GRA VSDC API v8.1
 type InvoiceRequest struct {
 	// Mandatory fields
-	BusinessTIN   string        `json:"businessTin"`
-	InvoiceNumber string        `json:"invoiceNumber"`
-	InvoiceDate   string        `json:"invoiceDate"`   // ISO 8601: "2026-03-07"
-	InvoiceType   string        `json:"invoiceType"`   // "STANDARD" | "SIMPLIFIED" | "CREDIT_NOTE"
-	BusinessType  string        `json:"businessType"`  // "WATER_UTILITY"
-	SDCDeviceID   string        `json:"sdcDeviceId"`   // Registered with GRA, e.g. "GNWAAS-GW-001"
-	Currency      string        `json:"currency"`      // "GHS"
+	BusinessTIN   string `json:"businessTin"`
+	InvoiceNumber string `json:"invoiceNumber"`
+	InvoiceDate   string `json:"invoiceDate"`  // ISO 8601: "2026-03-07"
+	InvoiceType   string `json:"invoiceType"`  // "STANDARD" | "SIMPLIFIED" | "CREDIT_NOTE"
+	BusinessType  string `json:"businessType"` // "WATER_UTILITY"
+	SDCDeviceID   string `json:"sdcDeviceId"`  // Registered with GRA, e.g. "GNWAAS-GW-001"
+	Currency      string `json:"currency"`     // "GHS"
 
 	// Customer fields
-	CustomerTIN   string        `json:"customerTin,omitempty"`  // Mandatory for commercial
-	CustomerName  string        `json:"customerName"`
+	CustomerTIN  string `json:"customerTin,omitempty"` // Mandatory for commercial
+	CustomerName string `json:"customerName"`
 
 	// Line items
-	LineItems     []InvoiceItem `json:"lineItems"`
+	LineItems []InvoiceItem `json:"lineItems"`
 
 	// Totals
 	SubtotalAmount float64      `json:"subtotalAmount"`
@@ -107,7 +109,7 @@ type InvoiceRequest struct {
 	VATAmount      float64      `json:"vatAmount"`
 
 	// Audit-specific metadata (GRA accepts custom fields in auditMetadata)
-	AuditMetadata  *AuditMetadata `json:"auditMetadata,omitempty"`
+	AuditMetadata *AuditMetadata `json:"auditMetadata,omitempty"`
 }
 
 // VATBreakdown represents the explicit levy breakdown required by GRA v8.1
@@ -121,13 +123,13 @@ type VATBreakdown struct {
 
 // InvoiceItem represents a line item in the GRA invoice
 type InvoiceItem struct {
-	Description  string  `json:"description"`
-	Quantity     float64 `json:"quantity"`
-	UnitPrice    float64 `json:"unitPrice"`
-	TotalPrice   float64 `json:"totalPrice"`
-	TaxCategory  string  `json:"taxCategory"` // "VAT_STANDARD" | "VAT_EXEMPT" | "ZERO_RATED"
-	VATRate      float64 `json:"vatRate"`
-	VATAmount    float64 `json:"vatAmount"`
+	Description string  `json:"description"`
+	Quantity    float64 `json:"quantity"`
+	UnitPrice   float64 `json:"unitPrice"`
+	TotalPrice  float64 `json:"totalPrice"`
+	TaxCategory string  `json:"taxCategory"` // "VAT_STANDARD" | "VAT_EXEMPT" | "ZERO_RATED"
+	VATRate     float64 `json:"vatRate"`
+	VATAmount   float64 `json:"vatAmount"`
 }
 
 // AuditMetadata carries GN-WAAS specific audit context (stored by GRA for traceability)
@@ -144,16 +146,16 @@ type AuditMetadata struct {
 
 // InvoiceResponse is the response from GRA VSDC API v8.1
 type InvoiceResponse struct {
-	Success        bool         `json:"success"`
-	SDCID          string       `json:"sdcId"`
-	QRCodeURL      string       `json:"qrCodeUrl"`
-	QRCodeString   string       `json:"qrCodeString"`
-	QRCodeBase64   string       `json:"qrCodeBase64,omitempty"` // PNG image as base64
-	InvoiceNumber  string       `json:"invoiceNumber"`
-	SignedAt       string       `json:"signedAt"`
-	IsProvisional  bool         `json:"isProvisional,omitempty"` // true = internal QR, GRA pending
-	ErrorCode      string       `json:"errorCode,omitempty"`
-	ErrorMessage   string       `json:"errorMessage,omitempty"`
+	Success       bool   `json:"success"`
+	SDCID         string `json:"sdcId"`
+	QRCodeURL     string `json:"qrCodeUrl"`
+	QRCodeString  string `json:"qrCodeString"`
+	QRCodeBase64  string `json:"qrCodeBase64,omitempty"` // PNG image as base64
+	InvoiceNumber string `json:"invoiceNumber"`
+	SignedAt      string `json:"signedAt"`
+	IsProvisional bool   `json:"isProvisional,omitempty"` // true = internal QR, GRA pending
+	ErrorCode     string `json:"errorCode,omitempty"`
+	ErrorMessage  string `json:"errorMessage,omitempty"`
 }
 
 // AuditInvoiceRequest is the GN-WAAS internal request to sign an audit event
@@ -244,7 +246,7 @@ func (g *GRABridgeService) SignAuditInvoice(
 	resp, err := g.SignInvoice(ctx, invoiceReq)
 	if err != nil {
 		// Determine if this is a retryable error
-		retryInfo := g.classifyError(err, req.AuditEventID)
+		retryInfo := g.ClassifyError(err, req.AuditEventID)
 		if retryInfo.ShouldRetry {
 			// Generate provisional QR so the audit is not completely blocked
 			provisional := g.generateProvisionalResponse(req)
@@ -319,17 +321,18 @@ func (g *GRABridgeService) buildInvoiceRequest(req *AuditInvoiceRequest) *Invoic
 
 // calculateVATBreakdown computes the explicit levy breakdown for GRA v8.1.
 // Ghana water utility levies applied to subtotal:
-//   VAT:      12.5%
-//   NHIL:      2.5%
-//   GETFund:   2.5%
-//   COVID-19:  1.0%  (COVID-19 Health Recovery Levy, Act 1068)
-//   Effective: 18.5% statutory + rounding = ~20% as applied by GWL
+//
+//	VAT:      12.5%
+//	NHIL:      2.5%
+//	GETFund:   2.5%
+//	COVID-19:  1.0%  (COVID-19 Health Recovery Levy, Act 1068)
+//	Effective: 18.5% statutory + rounding = ~20% as applied by GWL
 func calculateVATBreakdown(subtotal float64) VATBreakdown {
-	vat     := roundGHS(subtotal * 0.125)
-	nhil    := roundGHS(subtotal * 0.025)
+	vat := roundGHS(subtotal * 0.125)
+	nhil := roundGHS(subtotal * 0.025)
 	getFund := roundGHS(subtotal * 0.025)
 	covid19 := roundGHS(subtotal * 0.010)
-	total   := roundGHS(vat + nhil + getFund + covid19)
+	total := roundGHS(vat + nhil + getFund + covid19)
 	return VATBreakdown{
 		VATAmount:      vat,
 		NHILAmount:     nhil,
@@ -433,10 +436,12 @@ func (g *GRABridgeService) SignInvoice(ctx context.Context, req *InvoiceRequest)
 // GRA_CLIENT_ERROR (4xx) → not retryable (bad data, fix and resubmit manually)
 // GRA_REJECTED → not retryable (GRA business rule violation)
 // Network errors / GRA_SERVER_ERROR (5xx) → retryable with exponential backoff
-func (g *GRABridgeService) classifyError(err error, auditEventID string) *RetryInfo {
+// ClassifyError determines if an error is retryable and computes backoff.
+// Exported for testing.
+func (g *GRABridgeService) ClassifyError(err error, auditEventID string) *RetryInfo {
 	msg := err.Error()
 	isClientError := len(msg) > 16 && msg[:16] == "GRA_CLIENT_ERROR"
-	isRejected     := len(msg) > 12 && msg[:12] == "GRA_REJECTED"
+	isRejected := len(msg) > 12 && msg[:12] == "GRA_REJECTED"
 
 	if isClientError || isRejected {
 		return &RetryInfo{

@@ -20,13 +20,15 @@ RUN GOWORK=off CGO_ENABLED=0 GOOS=linux go build \
     -o /app/ocr-service \
     ./cmd/main.go
 
-# Runtime stage
-FROM scratch
+# Runtime stage — alpine so Tesseract can be installed via apk
+FROM alpine:3.19
 
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-eng ca-certificates tzdata
+
 COPY --from=builder /app/ocr-service /ocr-service
 
+ENV TESSERACT_PATH=tesseract
+ENV TEMP_DIR=/tmp
 ENV TZ=Africa/Accra
 
 EXPOSE 3005

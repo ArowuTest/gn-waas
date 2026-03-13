@@ -89,11 +89,11 @@ func (h *EvidenceHandler) GetUploadURL(c *fiber.Ctx) error {
 		h.logger.Warn("Evidence upload requested but MinIO not configured",
 			zap.String("job_id", req.JobID))
 		return response.OK(c, fiber.Map{
-			"object_key":  fmt.Sprintf("evidence/%s/offline_%d.jpg", req.JobID, time.Now().Unix()),
-			"upload_url":  "",
-			"expires_in":  0,
+			"object_key":   fmt.Sprintf("evidence/%s/offline_%d.jpg", req.JobID, time.Now().Unix()),
+			"upload_url":   "",
+			"expires_in":   0,
 			"storage_mode": "offline",
-			"warning":     "MinIO not configured — photo will be stored locally only",
+			"warning":      "MinIO not configured — photo will be stored locally only",
 		})
 	}
 
@@ -132,7 +132,13 @@ func (h *EvidenceHandler) GetDownloadURL(c *fiber.Ctx) error {
 	}
 
 	if h.storage == nil {
-		return response.ServiceUnavailable(c, "Evidence storage")
+		return c.Status(503).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"code":    "STORAGE_UNAVAILABLE",
+				"message": "Evidence photo storage (MinIO/S3) is not configured on this deployment. Photos are stored locally on the field device only. Configure MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY to enable cloud storage.",
+			},
+		})
 	}
 
 	downloadURL, err := h.storage.PresignedDownloadURL(c.UserContext(), objectKey)
@@ -166,7 +172,13 @@ func (h *EvidenceHandler) VerifyPhotoHash(c *fiber.Ctx) error {
 	}
 
 	if h.storage == nil {
-		return response.ServiceUnavailable(c, "Evidence storage")
+		return c.Status(503).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"code":    "STORAGE_UNAVAILABLE",
+				"message": "Evidence photo storage (MinIO/S3) is not configured on this deployment. Photos are stored locally on the field device only. Configure MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY to enable cloud storage.",
+			},
+		})
 	}
 
 	match, err := h.storage.VerifyPhotoHash(c.UserContext(), req.ObjectKey, req.ExpectedHash)
