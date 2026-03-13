@@ -78,13 +78,22 @@ function ConfigRow({
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(cfg.config_value)
+  const [rowSaving, setRowSaving] = useState(false)
   const meta = CONFIG_META[cfg.config_key]
 
-  const isBool = cfg.config_type === 'boolean' || cfg.config_value === 'true' || cfg.config_value === 'false'
+  const isBool = cfg.config_value === 'true' || cfg.config_value === 'false' || cfg.config_type === 'boolean'
 
   const handleSave = () => {
-    onSave(cfg.config_key, draft)
-    setEditing(false)
+    setRowSaving(true)
+    // onSave is sync from this component's perspective; parent mutation handles
+    // its own async lifecycle. Reset rowSaving after a short tick so the button
+    // re-enables once the row closes.
+    try {
+      onSave(cfg.config_key, draft)
+    } finally {
+      setEditing(false)
+      setRowSaving(false)
+    }
   }
 
   const handleCancel = () => {
@@ -142,8 +151,8 @@ function ConfigRow({
       <td>
         {editing ? (
           <div className="action-buttons">
-            <button className="btn-save" onClick={handleSave} disabled={saveStatus === 'saving'}>
-              {saveStatus === 'saving' ? '⏳ Saving…' : '✓ Save'}
+            <button className="btn-save" onClick={handleSave} disabled={rowSaving}>
+              {rowSaving ? '⏳ Saving…' : '✓ Save'}
             </button>
             <button className="btn-cancel" onClick={handleCancel}>✕</button>
           </div>

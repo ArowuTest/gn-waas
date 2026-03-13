@@ -103,7 +103,7 @@ export default function CaseQueuePage() {
       if (dateFrom)   params.date_from   = dateFrom;
       if (dateTo)     params.date_to     = dateTo;
       const res = await api.get('/gwl/cases', { params });
-      const allCases = res.data?.data?.cases ?? res.data?.cases ?? [];
+      const allCases = (res.data?.data?.cases ?? res.data?.cases ?? []) as GWLCase[];
       exportToCSV(allCases, [
       { header: 'Account No', accessor: (r) => r.account_number || '' },
       { header: 'Account Holder', accessor: (r) => r.account_holder || '' },
