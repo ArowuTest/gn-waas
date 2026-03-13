@@ -22,12 +22,16 @@ package handler
 //   Real Losses = Infrastructure Leakage Index (ILI) based
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
+
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 )
 
 // DonorReportHandler generates donor-facing KPI reports
@@ -39,6 +43,15 @@ type DonorReportHandler struct {
 func NewDonorReportHandler(db *pgxpool.Pool, logger *zap.Logger) *DonorReportHandler {
 	return &DonorReportHandler{db: db, logger: logger}
 }
+// q returns the RLS-activated querier for this request context.
+// Donor report queries run with SUPER_ADMIN role, so all districts are visible.
+func (h *DonorReportHandler) q(ctx context.Context) repository.Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return h.db
+}
+
 
 // ── GET /api/v1/reports/donor/kpis ───────────────────────────────────────────
 // Returns current donor KPI snapshot
@@ -83,7 +96,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		ILI                     float64 `json:"infrastructure_leakage_index"`
 	}
 
-	h.db.QueryRow(c.Context(), fmt.Sprintf(`
+	h.q(c.UserContext()).QueryRow(c.UserContext(), fmt.Sprintf(`
 		SELECT
 			COALESCE(SUM(dpr.total_production_m3), 0) AS system_input,
 			COALESCE(SUM(dpr.billed_consumption_m3), 0) AS billed_auth,
@@ -108,11 +121,15 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 	}
 	waterBalance.NRWTargetPercent = 20.0
 
-	// ILI = Real Losses / Unavoidable Annual Real Losses
-	// Simplified: ILI = (Real Losses / System Input) / 0.05 (5% benchmark)
-	if waterBalance.SystemInputVolumeM3 > 0 {
-		realLossFraction := waterBalance.RealLossesM3 / waterBalance.SystemInputVolumeM3
-		waterBalance.ILI = realLossFraction / 0.05
+	// ILI (Infrastructure Leakage Index) per IWA M36.
+	// Without pipe network data (length, connections, pressure), we use the
+	// WHO/IWA simplified proxy: UARL ≈ 4% of system input volume — the
+	// technically achievable minimum for Ghana's pipe infrastructure.
+	// ILI = 1.0 means best achievable; > 1.0 means improvement is possible.
+	// Previous formula (/0.05) used a 20% UARL assumption — incorrect per M36.
+	if waterBalance.SystemInputVolumeM3 > 0 && waterBalance.RealLossesM3 > 0 {
+		uarlProxy := 0.04 * waterBalance.SystemInputVolumeM3
+		waterBalance.ILI = waterBalance.RealLossesM3 / uarlProxy
 	}
 
 	// ── Revenue KPIs ──────────────────────────────────────────────────────────
@@ -128,7 +145,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		RecoveredUSD            float64 `json:"recovered_usd"`
 	}
 
-	h.db.QueryRow(c.Context(), fmt.Sprintf(`
+	h.q(c.UserContext()).QueryRow(c.UserContext(), fmt.Sprintf(`
 		SELECT
 			COALESCE(SUM(dpr.total_billed_ghs), 0),
 			COALESCE(SUM(dpr.total_collected_ghs), 0),
@@ -147,7 +164,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 	}
 
 	// Recovery from revenue_recovery_events
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT COALESCE(SUM(recovered_ghs), 0)
 		FROM revenue_recovery_events
 		WHERE COALESCE(confirmed_at, created_at) BETWEEN $1 AND $2
@@ -160,7 +177,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 	revenueKPIs.SuccessFeesGHS = revenueKPIs.RecoveredGHS * 0.03
 
 	// Current GHS/USD rate
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT ghs_per_usd FROM exchange_rates
 		WHERE currency_pair = 'GHS/USD'
 		ORDER BY effective_date DESC LIMIT 1
@@ -181,7 +198,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		ConfirmationRatePct  float64 `json:"confirmation_rate_pct"`
 	}
 
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE status = 'COMPLETED'),
@@ -200,7 +217,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		auditKPIs.GRAComplianceRatePct = float64(auditKPIs.GRASignedAudits) / float64(auditKPIs.CompletedAudits) * 100
 	}
 
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE status = 'CONFIRMED')
@@ -226,7 +243,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		GPSConfirmedAccounts int     `json:"gps_confirmed_accounts"`
 	}
 
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE status = 'COMPLETED'),
@@ -246,7 +263,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		fieldKPIs.JobsPerOfficer = float64(fieldKPIs.CompletedJobs) / float64(fieldKPIs.ActiveOfficers)
 	}
 
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT COUNT(*) FROM water_accounts
 		WHERE gps_source = 'FIELD_CONFIRMED'
 	`).Scan(&fieldKPIs.GPSConfirmedAccounts)
@@ -272,7 +289,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		RewardsIssuedGHS   float64 `json:"rewards_issued_ghs"`
 	}
 
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE status IN ('INVESTIGATING','CONFIRMED','REWARDED')),
@@ -288,7 +305,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 	)
 
 	// ── Snapshot to DB ────────────────────────────────────────────────────────
-	h.saveKPISnapshot(c, periodStart, waterBalance.NRWPercent,
+	h.saveKPISnapshot(c.UserContext(), periodStart, waterBalance.NRWPercent,
 		revenueKPIs.RecoveredGHS, auditKPIs.GRAComplianceRatePct,
 		fieldKPIs.CompletionRatePct, auditKPIs.TotalAudits)
 
@@ -302,6 +319,7 @@ func (h *DonorReportHandler) GetKPIs(c *fiber.Ctx) error {
 		"momo":            momoKPIs,
 		"whistleblower":   whistleblowerKPIs,
 		"standard":        "IWA/AWWA M36 Water Balance Framework",
+		"ili_method":      "IWA M36 simplified proxy (UARL = 4% SIV; pipe-length data not available)",
 		"reporting_entity": "Ghana National Water Audit & Assurance System (GN-WAAS)",
 	})
 }
@@ -336,7 +354,7 @@ func (h *DonorReportHandler) GetTrend(c *fiber.Ctx) error {
 
 		// NRW
 		var input, losses float64
-		h.db.QueryRow(c.Context(), `
+		h.q(c.UserContext()).QueryRow(c.UserContext(), `
 			SELECT
 				COALESCE(SUM(total_production_m3), 0),
 				COALESCE(SUM(apparent_losses_m3 + real_losses_m3), 0)
@@ -348,7 +366,7 @@ func (h *DonorReportHandler) GetTrend(c *fiber.Ctx) error {
 		}
 
 		// Recovery
-		h.db.QueryRow(c.Context(), `
+		h.q(c.UserContext()).QueryRow(c.UserContext(), `
 			SELECT COALESCE(SUM(recovered_ghs), 0)
 			FROM revenue_recovery_events
 			WHERE COALESCE(confirmed_at, created_at) BETWEEN $1 AND $2 AND status = 'CONFIRMED'
@@ -356,7 +374,7 @@ func (h *DonorReportHandler) GetTrend(c *fiber.Ctx) error {
 
 		// Audits
 		var total, signed int
-		h.db.QueryRow(c.Context(), `
+		h.q(c.UserContext()).QueryRow(c.UserContext(), `
 			SELECT
 				COUNT(*) FILTER (WHERE status = 'COMPLETED'),
 				COUNT(*) FILTER (WHERE gra_status = 'SIGNED')
@@ -380,12 +398,12 @@ func (h *DonorReportHandler) GetTrend(c *fiber.Ctx) error {
 
 // saveKPISnapshot persists a KPI snapshot for historical tracking
 func (h *DonorReportHandler) saveKPISnapshot(
-	c *fiber.Ctx,
+	ctx context.Context,
 	period time.Time,
 	nrwPct, recoveredGHS, graCompliancePct, fieldCompletionPct float64,
 	totalAudits int,
 ) {
-	h.db.Exec(c.Context(), `
+	h.q(ctx).Exec(ctx, `
 		INSERT INTO donor_kpi_snapshots (
 			snapshot_date, period_start, period_end,
 			nrw_percent, revenue_recovered_ghs,

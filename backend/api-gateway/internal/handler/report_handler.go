@@ -380,12 +380,18 @@ func (h *ReportHandler) GetGRAComplianceCSV(c *fiber.Ctx) error {
 		}
 	}
 
-	// Fetch all audit events for the period (no pagination — full export)
-	events, _, err := h.auditRepo.GetByDistrict(c.UserContext(), districtID, "", "", 1000, 0)
+	// Parse period into date range for unbounded export
+	periodParsed, _ := time.Parse("2006-01", periodStr)
+	periodStart := time.Date(periodParsed.Year(), periodParsed.Month(), 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := periodStart.AddDate(0, 1, 0) // exclusive (start of next month)
+
+	// GetAllForExport fetches ALL records without a row cap — correct for regulatory docs
+	events, err := h.auditRepo.GetAllForExport(c.UserContext(), districtID, periodStart, periodEnd)
 	if err != nil {
-		h.logger.Error("GetGRAComplianceCSV: GetByDistrict failed", zap.Error(err))
+		h.logger.Error("GetGRAComplianceCSV: GetAllForExport failed", zap.Error(err))
 		return response.InternalError(c, "failed to fetch audit events")
 	}
+	c.Set("X-Record-Count", fmt.Sprintf("%d", len(events)))
 
 	var buf bytes.Buffer
 	buf.WriteString("\xEF\xBB\xBF") // BOM for Excel
@@ -452,11 +458,17 @@ func (h *ReportHandler) GetAuditTrailCSV(c *fiber.Ctx) error {
 		}
 	}
 
-	events, _, err := h.auditRepo.GetByDistrict(c.UserContext(), districtID, "", "", 1000, 0)
+	// Parse period into date range for unbounded export
+	periodParsed2, _ := time.Parse("2006-01", periodStr)
+	periodStart2 := time.Date(periodParsed2.Year(), periodParsed2.Month(), 1, 0, 0, 0, 0, time.UTC)
+	periodEnd2 := periodStart2.AddDate(0, 1, 0)
+
+	events, err := h.auditRepo.GetAllForExport(c.UserContext(), districtID, periodStart2, periodEnd2)
 	if err != nil {
-		h.logger.Error("GetAuditTrailCSV: GetByDistrict failed", zap.Error(err))
+		h.logger.Error("GetAuditTrailCSV: GetAllForExport failed", zap.Error(err))
 		return response.InternalError(c, "failed to fetch audit trail")
 	}
+	c.Set("X-Record-Count", fmt.Sprintf("%d", len(events)))
 
 	var buf bytes.Buffer
 	buf.WriteString("\xEF\xBB\xBF")

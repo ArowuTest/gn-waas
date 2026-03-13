@@ -223,6 +223,19 @@ func (h *WhistleblowerHandler) ListTips(c *fiber.Ctx) error {
 		argIdx++
 	}
 
+	// COUNT query — same WHERE conditions, no LIMIT/OFFSET
+	countQuery := `SELECT COUNT(*) FROM whistleblower_tips wt LEFT JOIN districts d ON d.id = wt.district_id WHERE 1=1`
+	if statusFilter != "" {
+		countQuery += fmt.Sprintf(" AND wt.status = $%d::tip_status", 1)
+	}
+	if categoryFilter != "" {
+		countArgIdx := 1
+		if statusFilter != "" { countArgIdx = 2 }
+		countQuery += fmt.Sprintf(" AND wt.category = $%d::tip_category", countArgIdx)
+	}
+	var total int
+	_ = h.db.QueryRow(c.Context(), countQuery, args[:argIdx-1]...).Scan(&total)
+
 	query += fmt.Sprintf(" ORDER BY wt.created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, limit, offset)
 
@@ -280,7 +293,17 @@ func (h *WhistleblowerHandler) ListTips(c *fiber.Ctx) error {
 		tips = append(tips, t)
 	}
 
-	return c.JSON(fiber.Map{"tips": tips, "total": len(tips), "page": page})
+	pages := (total + limit - 1) / limit
+	if pages < 1 {
+		pages = 1
+	}
+	return c.JSON(fiber.Map{
+		"tips":  tips,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+		"pages": pages,
+	})
 }
 
 // ── PATCH /api/v1/admin/tips/:id (ADMIN) ─────────────────────────────────────

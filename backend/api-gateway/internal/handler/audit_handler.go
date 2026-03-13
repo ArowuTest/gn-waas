@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/domain"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/notification"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/storage"
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/gofiber/fiber/v2"
@@ -43,6 +45,14 @@ func NewAuditHandler(
 		logger:       logger,
 	}
 }
+// q returns the RLS-activated querier for this request context.
+func (h *AuditHandler) q(ctx context.Context) repository.Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return h.flagRepo.DB()
+}
+
 
 // CreateAuditEvent godoc
 // POST /api/v1/audits
@@ -245,7 +255,7 @@ func (h *AuditHandler) AssignAuditEvent(c *fiber.Ctx) error {
 	var targetLat, targetLng float64
 	{
 		var lat, lng *float64
-		_ = h.fieldJobRepo.DB().QueryRow(c.UserContext(),
+		_ = h.q(c.UserContext()).QueryRow(c.UserContext(),
 			`SELECT gps_latitude, gps_longitude FROM water_accounts WHERE id = $1`,
 			event.AccountID,
 		).Scan(&lat, &lng)
@@ -336,6 +346,14 @@ func NewFieldJobHandler(
 		logger:          logger,
 	}
 }
+// q returns the RLS-activated querier for this request context.
+func (h *FieldJobHandler) q(ctx context.Context) repository.Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return h.fieldJobRepo.DB()
+}
+
 
 // GetMyJobs godoc
 // GET /api/v1/field-jobs/my-jobs
@@ -476,6 +494,15 @@ type AnomalyFlagHandler struct {
 func NewAnomalyFlagHandler(flagRepo *repository.AnomalyFlagRepository, logger *zap.Logger) *AnomalyFlagHandler {
 	return &AnomalyFlagHandler{flagRepo: flagRepo, logger: logger}
 }
+// q returns the RLS-activated querier for this request context.
+// Uses the transaction from rls.Middleware if available, else falls back to the raw pool.
+func (h *AnomalyFlagHandler) q(ctx context.Context) repository.Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return h.flagRepo.DB()
+}
+
 
 // ListAnomalyFlags GET /api/v1/anomaly-flags
 func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
@@ -1099,14 +1126,14 @@ func (h *AnomalyFlagHandler) CreateAnomalyFlag(c *fiber.Ctx) error {
 		var fallbackID uuid.UUID
 		// Try to resolve by account_number first
 		if req.AccountNumber != nil && *req.AccountNumber != "" {
-			_ = h.flagRepo.DB().QueryRow(c.UserContext(),
+			_ = h.q(c.UserContext()).QueryRow(c.UserContext(),
 				`SELECT id FROM water_accounts WHERE account_number = $1 AND district_id = $2 LIMIT 1`,
 				*req.AccountNumber, districtID,
 			).Scan(&fallbackID)
 		}
 		// If still nil, pick any account from the district bypassing RLS
 		if fallbackID == (uuid.UUID{}) {
-			_ = h.flagRepo.DB().QueryRow(c.UserContext(),
+			_ = h.q(c.UserContext()).QueryRow(c.UserContext(),
 				`SELECT id FROM water_accounts WHERE district_id = $1 ORDER BY created_at LIMIT 1`,
 				districtID,
 			).Scan(&fallbackID)
@@ -1202,7 +1229,7 @@ func (h *AnomalyFlagHandler) ConfirmAnomaly(c *fiber.Ctx) error {
 		newStatus = "FALSE_POSITIVE"
 	}
 
-	_, err = h.flagRepo.DB().Exec(ctx, `
+	_, err = h.q(ctx).Exec(ctx, `
 		UPDATE anomaly_flags
 		SET confirmed_fraud        = $1,
 		    confirmed_leakage_ghs  = $2,
@@ -1346,7 +1373,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 	officerID, _ := c.Locals("user_id").(string)
 
 	// Update field job with outcome
-	_, err = h.fieldJobRepo.DB().Exec(ctx, `
+	_, err = h.q(ctx).Exec(ctx, `
 		UPDATE field_jobs
 		SET outcome             = $1::field_job_outcome,
 		    outcome_notes       = $2,
@@ -1369,7 +1396,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 	var anomalyFlagID *uuid.UUID
 	var accountID *uuid.UUID
 	var districtID uuid.UUID
-	row := h.fieldJobRepo.DB().QueryRow(ctx, `
+	row := h.q(ctx).QueryRow(ctx, `
 		SELECT fj.account_id, fj.district_id,
 		       af.id
 		FROM field_jobs fj
@@ -1396,7 +1423,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 		residentialRateGHS := 10.8320
 		vatMult := 1.20
 		var dbRate, dbVAT float64
-		if err := h.flagRepo.DB().QueryRow(ctx, `
+		if err := h.q(ctx).QueryRow(ctx, `
 			SELECT
 			  COALESCE(AVG(tr.rate_per_m3), 10.8320),
 			  COALESCE((SELECT 1.0 + rate_percentage/100.0 FROM vat_config WHERE is_active=TRUE ORDER BY effective_from DESC LIMIT 1), 1.20)
@@ -1409,7 +1436,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 
 		// Update the linked anomaly flag to UNMETERED_CONSUMPTION
 		if anomalyFlagID != nil {
-			h.flagRepo.DB().Exec(ctx, `
+			h.q(ctx).Exec(ctx, `
 				UPDATE anomaly_flags
 				SET anomaly_type         = 'UNMETERED_CONSUMPTION',
 				    alert_level          = 'HIGH',
@@ -1436,7 +1463,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 		// Address doesn't exist → FRAUDULENT_ACCOUNT (GWL internal fraud)
 		// Escalate to GWL management + GRA. Do NOT create recovery event.
 		if anomalyFlagID != nil {
-			h.flagRepo.DB().Exec(ctx, `
+			h.q(ctx).Exec(ctx, `
 				UPDATE anomaly_flags
 				SET anomaly_type     = 'FRAUDULENT_ACCOUNT',
 				    alert_level      = 'CRITICAL',
@@ -1459,7 +1486,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 	case "METER_FOUND_OK":
 		// GPS data was wrong — dismiss the ADDRESS_UNVERIFIED flag
 		if anomalyFlagID != nil {
-			h.flagRepo.DB().Exec(ctx, `
+			h.q(ctx).Exec(ctx, `
 				UPDATE anomaly_flags
 				SET status           = 'FALSE_POSITIVE',
 				    false_positive   = TRUE,
@@ -1481,7 +1508,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 	case "CATEGORY_MISMATCH_CONFIRMED":
 		// Commercial use confirmed, billed as residential
 		if anomalyFlagID != nil {
-			h.flagRepo.DB().Exec(ctx, `
+			h.q(ctx).Exec(ctx, `
 				UPDATE anomaly_flags
 				SET field_outcome    = 'CATEGORY_MISMATCH_CONFIRMED'::field_job_outcome,
 				    field_job_id     = $1,
@@ -1500,7 +1527,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 	case "ILLEGAL_CONNECTION_FOUND":
 		// Illegal tap/bypass found
 		if anomalyFlagID != nil {
-			h.flagRepo.DB().Exec(ctx, `
+			h.q(ctx).Exec(ctx, `
 				UPDATE anomaly_flags
 				SET anomaly_type     = 'UNAUTHORISED_CONSUMPTION',
 				    alert_level      = 'CRITICAL',
@@ -1533,7 +1560,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 	}
 	if leakageConfirmingOutcomes[req.Outcome] && anomalyFlagID != nil {
 		// Update the anomaly flag status to ACKNOWLEDGED (field visit done)
-		_, _ = h.flagRepo.DB().Exec(ctx, `
+		_, _ = h.q(ctx).Exec(ctx, `
 			UPDATE anomaly_flags
 			SET status     = CASE WHEN status = 'OPEN' THEN 'ACKNOWLEDGED' ELSE status END,
 			    updated_at = NOW()
@@ -1546,7 +1573,7 @@ func (h *FieldJobHandler) RecordFieldJobOutcome(c *fiber.Ctx) error {
 				officerUUID = &oid
 			}
 		}
-		_, _ = h.flagRepo.DB().Exec(ctx, `
+		_, _ = h.q(ctx).Exec(ctx, `
 			UPDATE revenue_recovery_events
 			SET status             = 'FIELD_VERIFIED',
 			    field_verified_at  = NOW(),

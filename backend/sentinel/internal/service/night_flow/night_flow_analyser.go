@@ -1,6 +1,7 @@
 package night_flow
 
 import (
+	"sync"
 	"context"
 	"fmt"
 	"time"
@@ -18,8 +19,9 @@ import (
 // - Compare district production records vs billed consumption
 // - Flag districts where production >> billing (implies unaccounted flow)
 type NightFlowAnalyser struct {
+	mu                 sync.RWMutex
 	logger             *zap.Logger
-	nightFlowThreshold float64                // % of daily average that triggers flag (from system_config)
+	nightFlowThreshold float64                // % of daily average that triggers flag; hot-reloadable
 	tariffCfg          *entities.TariffConfig // DB-loaded PURC rates (no hardcoding)
 }
 
@@ -238,4 +240,13 @@ func (n *NightFlowAnalyser) AnalyseRationingAnomaly(
 	}
 
 	return nil, nil
+}
+
+// UpdateNightFlowPct updates the night flow threshold at runtime.
+// Called by the sentinel hot-reload goroutine every 5 minutes.
+// Safe to call concurrently — protected by mu.
+func (n *NightFlowAnalyser) UpdateNightFlowPct(pct float64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.nightFlowThreshold = pct
 }

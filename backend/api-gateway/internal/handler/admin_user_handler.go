@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -17,8 +20,11 @@ import (
 
 // AdminUserHandler handles user management for SYSTEM_ADMIN role
 type AdminUserHandler struct {
-	db     *pgxpool.Pool
-	logger *zap.Logger
+	db            *pgxpool.Pool
+	logger        *zap.Logger
+	kcURL         string // KEYCLOAK_URL
+	kcRealm       string // KEYCLOAK_REALM
+	kcAdminSecret string // KEYCLOAK_ADMIN_CLIENT_SECRET
 }
 
 // q returns the Querier for this request (RLS tx if present, else pool).
@@ -31,8 +37,14 @@ func (h *AdminUserHandler) q(ctx context.Context) repository.Querier {
 	return h.db
 }
 
-func NewAdminUserHandler(db *pgxpool.Pool, logger *zap.Logger) *AdminUserHandler {
-	return &AdminUserHandler{db: db, logger: logger}
+func NewAdminUserHandler(db *pgxpool.Pool, logger *zap.Logger, kcURL, kcRealm, kcAdminSecret string) *AdminUserHandler {
+	return &AdminUserHandler{
+		db:            db,
+		logger:        logger,
+		kcURL:         kcURL,
+		kcRealm:       kcRealm,
+		kcAdminSecret: kcAdminSecret,
+	}
 }
 
 type SystemUser struct {
@@ -143,6 +155,9 @@ func (h *AdminUserHandler) CreateUser(c *fiber.Ctx) error {
 	if req.Email == "" || req.FullName == "" || req.Role == "" {
 		return response.BadRequest(c, "MISSING_FIELDS", "email, full_name, and role are required")
 	}
+	if req.Password == "" {
+		return response.BadRequest(c, "MISSING_PASSWORD", "password is required to create a user")
+	}
 
 	// BE-FIX-01: validRoles must match the user_role PostgreSQL enum exactly.
 	// Previous values (AUDIT_MANAGER, DISTRICT_MANAGER, GRA_LIAISON, READONLY_VIEWER)
@@ -197,15 +212,105 @@ func (h *AdminUserHandler) CreateUser(c *fiber.Ctx) error {
 		zap.String("created_by", c.Locals("user_id").(string)),
 	)
 
+	// Provision user in Keycloak so they can log in immediately.
+	kcProvisioned := h.provisionKeycloakUser(c.UserContext(), req.Email, req.FullName, req.Password)
+	if !kcProvisioned {
+		h.logger.Warn("Keycloak provisioning skipped — user must be created manually in Keycloak",
+			zap.String("user_id", userID.String()),
+			zap.String("email", req.Email),
+		)
+	}
+
 	return c.Status(201).JSON(fiber.Map{
 		"success": true,
 		"data": fiber.Map{
-			"id":    userID,
-			"email": req.Email,
-			"role":  req.Role,
-			"note":  "Password must be set via Keycloak admin console or reset email",
+			"id":                  userID,
+			"email":               req.Email,
+			"role":                req.Role,
+			"keycloak_provisioned": kcProvisioned,
 		},
 	})
+}
+
+// provisionKeycloakUser creates a user account in Keycloak so they can log in immediately.
+// Returns true if the user was created (or already existed), false if Keycloak is not
+// configured or unreachable. A false return is non-fatal — the GN-WAAS DB record is saved.
+func (h *AdminUserHandler) provisionKeycloakUser(ctx context.Context, email, fullName, password string) bool {
+	if h.kcURL == "" || h.kcRealm == "" || h.kcAdminSecret == "" {
+		return false // Keycloak not configured (dev/test mode)
+	}
+
+	// Step 1: Get admin access token via client_credentials
+	tokenURL := strings.TrimRight(h.kcURL, "/") + "/realms/master/protocol/openid-connect/token"
+	tokenBody := "grant_type=client_credentials&client_id=admin-cli&client_secret=" + h.kcAdminSecret
+	tokenReq, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL,
+		strings.NewReader(tokenBody))
+	if err != nil {
+		h.logger.Warn("provisionKeycloakUser: failed to build token request", zap.Error(err))
+		return false
+	}
+	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	tokenResp, err := client.Do(tokenReq)
+	if err != nil {
+		h.logger.Warn("provisionKeycloakUser: Keycloak token request failed", zap.Error(err))
+		return false
+	}
+	defer tokenResp.Body.Close()
+
+	var tokenData struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(tokenResp.Body).Decode(&tokenData); err != nil || tokenData.AccessToken == "" {
+		h.logger.Warn("provisionKeycloakUser: failed to decode token response", zap.Error(err))
+		return false
+	}
+
+	// Step 2: Create user in Keycloak (split fullName into first/last best-effort)
+	parts := strings.SplitN(fullName, " ", 2)
+	firstName := parts[0]
+	lastName := ""
+	if len(parts) > 1 {
+		lastName = parts[1]
+	}
+
+	userPayload := map[string]interface{}{
+		"username":  email,
+		"email":     email,
+		"firstName": firstName,
+		"lastName":  lastName,
+		"enabled":   true,
+		"credentials": []map[string]interface{}{
+			{"type": "password", "value": password, "temporary": true},
+		},
+	}
+	userBody, _ := json.Marshal(userPayload)
+	createURL := fmt.Sprintf("%s/admin/realms/%s/users",
+		strings.TrimRight(h.kcURL, "/"), h.kcRealm)
+	createReq, err := http.NewRequestWithContext(ctx, http.MethodPost, createURL,
+		bytes.NewReader(userBody))
+	if err != nil {
+		h.logger.Warn("provisionKeycloakUser: failed to build create request", zap.Error(err))
+		return false
+	}
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+tokenData.AccessToken)
+
+	createResp, err := client.Do(createReq)
+	if err != nil {
+		h.logger.Warn("provisionKeycloakUser: Keycloak create request failed", zap.Error(err))
+		return false
+	}
+	defer createResp.Body.Close()
+
+	// 201 Created = success; 409 Conflict = user already exists (treat as success)
+	if createResp.StatusCode == http.StatusCreated || createResp.StatusCode == http.StatusConflict {
+		return true
+	}
+	h.logger.Warn("provisionKeycloakUser: unexpected Keycloak status",
+		zap.Int("status", createResp.StatusCode))
+	return false
 }
 
 // UpdateUser godoc

@@ -1,6 +1,7 @@
 package phantom_checker
 
 import (
+	"sync"
 	"context"
 	"fmt"
 	"math"
@@ -24,8 +25,9 @@ import (
 //     → If field finds no meter: UNMETERED_CONSUMPTION (revenue leakage)
 //     → If field finds no address: FRAUDULENT_ACCOUNT (GWL internal fraud)
 type PhantomCheckerService struct {
+	mu                   sync.RWMutex
 	logger               *zap.Logger
-	phantomMonths        int            // Months of identical readings = phantom
+	phantomMonths        int            // Months of identical readings = phantom; hot-reloadable
 	roundNumberTolerance float64        // Tolerance for "suspiciously round" readings
 	tariffCfg            *entities.TariffConfig // DB-loaded PURC rates (no hardcoding)
 }
@@ -345,4 +347,13 @@ func (p *PhantomCheckerService) checkZeroVariance(
 		SentinelVersion: "1.0.0",
 		CreatedAt:       time.Now().UTC(),
 	}
+}
+
+// UpdateMonthsThreshold updates the phantom meter detection window at runtime.
+// Called by the sentinel hot-reload goroutine every 5 minutes.
+// Safe to call concurrently — protected by mu.
+func (p *PhantomCheckerService) UpdateMonthsThreshold(months int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.phantomMonths = months
 }

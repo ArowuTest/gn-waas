@@ -417,3 +417,61 @@ func (r *AuditEventRepository) GetByDistrictTx(
 	}
 	return events, total, rows.Err()
 }
+
+// GetAllForExport returns all audit events for a district within a calendar month,
+// without pagination limits. Used exclusively for CSV/PDF regulatory exports.
+// NEVER use this for paginated API responses — it has no row cap.
+// If districtID is uuid.Nil, returns records for ALL districts (admin export).
+func (r *AuditEventRepository) GetAllForExport(
+	ctx context.Context,
+	districtID uuid.UUID,
+	periodStart, periodEnd time.Time,
+) ([]*domain.AuditEvent, error) {
+	conditions := []string{"ae.created_at >= $1 AND ae.created_at < $2"}
+	args := []interface{}{periodStart, periodEnd}
+	argIdx := 3
+
+	if districtID != (uuid.UUID{}) {
+		conditions = append(conditions, fmt.Sprintf("ae.district_id = $%d", argIdx))
+		args = append(args, districtID)
+		argIdx++
+	}
+	_ = argIdx // suppress unused warning if no more conditions added
+
+	query := fmt.Sprintf(`
+		SELECT ae.id, ae.audit_reference, ae.account_id, ae.district_id, ae.anomaly_flag_id,
+		       ae.status, ae.assigned_officer_id, ae.gra_status,
+		       ae.gwl_billed_ghs, ae.shadow_bill_ghs, ae.variance_pct,
+		       ae.is_locked, ae.created_at, ae.updated_at
+		FROM audit_events ae
+		WHERE %s
+		ORDER BY ae.created_at DESC`,
+		strings.Join(conditions, " AND "),
+	)
+
+	rows, err := r.q(ctx).Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("GetAllForExport: %w", err)
+	}
+	defer rows.Close()
+
+	var events []*domain.AuditEvent
+	for rows.Next() {
+		e := &domain.AuditEvent{}
+		err := rows.Scan(
+			&e.ID, &e.AuditReference, &e.AccountID, &e.DistrictID, &e.AnomalyFlagID,
+			&e.Status, &e.AssignedOfficerID, &e.GRAStatus,
+			&e.GWLBilledGHS, &e.ShadowBillGHS, &e.VariancePct,
+			&e.IsLocked, &e.CreatedAt, &e.UpdatedAt,
+		)
+		if err != nil {
+			r.logger.Warn("GetAllForExport: scan error", zap.Error(err))
+			continue
+		}
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetAllForExport rows: %w", err)
+	}
+	return events, nil
+}

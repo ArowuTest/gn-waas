@@ -169,8 +169,8 @@ func (h *RevenueRecoveryHandler) ListEvents(c *fiber.Ctx) error {
 		ID            uuid.UUID  `json:"id"`
 		AuditEventID  uuid.UUID  `json:"audit_event_id"`
 		DistrictName  string     `json:"district_name"`
-		AccountNumber string     `json:"account_number"`
-		AccountHolder string     `json:"account_holder"`
+		AccountNumber *string    `json:"account_number,omitempty"`
+		AccountHolder *string    `json:"account_holder,omitempty"`
 		VarianceGHS   float64    `json:"variance_ghs"`
 		RecoveredGHS  float64    `json:"recovered_ghs"`
 		SuccessFeeGHS float64    `json:"success_fee_ghs"`
@@ -193,7 +193,7 @@ func (h *RevenueRecoveryHandler) ListEvents(c *fiber.Ctx) error {
 		       rr.recovery_type, rr.status, rr.confirmed_at, rr.collected_at, rr.created_at
 		FROM revenue_recovery_events rr
 		JOIN districts d ON rr.district_id = d.id
-		JOIN water_accounts wa ON rr.account_id = wa.id
+		LEFT JOIN water_accounts wa ON rr.account_id = wa.id
 		WHERE `+where+`
 		ORDER BY rr.created_at DESC
 		LIMIT $`+strconv.Itoa(idx)+` OFFSET $`+strconv.Itoa(idx+1), args...,

@@ -1,6 +1,7 @@
 package reconciler
 
 import (
+	"sync"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -16,8 +17,9 @@ import (
 // Compares GWL actual bills against GN-WAAS shadow bills
 // Flags variances exceeding the configurable threshold
 type ReconcilerService struct {
+	mu        sync.RWMutex
 	logger    *zap.Logger
-	threshold float64 // Loaded from system_config (default 15%)
+	threshold float64 // Loaded from system_config (default 15%); hot-reloadable
 }
 
 func NewReconcilerService(logger *zap.Logger, varianceThresholdPct float64) *ReconcilerService {
@@ -163,4 +165,13 @@ func (r *ReconcilerService) computeHash(
 	)
 	h := sha256.Sum256([]byte(input))
 	return fmt.Sprintf("%x", h[:])
+}
+
+// UpdateVarianceThreshold updates the variance threshold at runtime without restart.
+// Called by the sentinel hot-reload goroutine every 5 minutes.
+// Safe to call concurrently — protected by mu.
+func (r *ReconcilerService) UpdateVarianceThreshold(pct float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.threshold = pct
 }

@@ -104,7 +104,7 @@ func TestHealthHandler_ResponseStructure(t *testing.T) {
 
 func TestAdminUserHandler_ListUsers_RequiresSystemAdmin(t *testing.T) {
 	app := newTestApp()
-	h := handler.NewAdminUserHandler(nil, zap.NewNop())
+	h := handler.NewAdminUserHandler(nil, zap.NewNop(), "", "", "")
 
 	// Inject a non-admin role via locals middleware
 	app.Use(func(c *fiber.Ctx) error {
@@ -122,7 +122,7 @@ func TestAdminUserHandler_ListUsers_RequiresSystemAdmin(t *testing.T) {
 
 func TestAdminUserHandler_CreateUser_RequiresSystemAdmin(t *testing.T) {
 	app := newTestApp()
-	h := handler.NewAdminUserHandler(nil, zap.NewNop())
+	h := handler.NewAdminUserHandler(nil, zap.NewNop(), "", "", "")
 
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("rls_user_role", "FIELD_OFFICER")
@@ -141,7 +141,7 @@ func TestAdminUserHandler_CreateUser_RequiresSystemAdmin(t *testing.T) {
 
 func TestAdminUserHandler_UpdateUser_InvalidUUID(t *testing.T) {
 	app := newTestApp()
-	h := handler.NewAdminUserHandler(nil, zap.NewNop())
+	h := handler.NewAdminUserHandler(nil, zap.NewNop(), "", "", "")
 
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("rls_user_role", "SYSTEM_ADMIN")
@@ -158,7 +158,7 @@ func TestAdminUserHandler_UpdateUser_InvalidUUID(t *testing.T) {
 
 func TestAdminUserHandler_ResetPassword_RequiresSystemAdmin(t *testing.T) {
 	app := newTestApp()
-	h := handler.NewAdminUserHandler(nil, zap.NewNop())
+	h := handler.NewAdminUserHandler(nil, zap.NewNop(), "", "", "")
 
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("rls_user_role", "AUDIT_MANAGER")

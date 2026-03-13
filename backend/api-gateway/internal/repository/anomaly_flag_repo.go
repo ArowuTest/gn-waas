@@ -292,15 +292,17 @@ func (r *AnomalyFlagRepository) CreateAnomalyFlag(ctx context.Context,
 		) RETURNING ` + anomalyFlagSelectCols
 		insertArgs = []interface{}{districtID, accountID, anomalyType, alertLevel, title, description, estimatedLossGHS, source}
 	} else {
+		// District-level flag: no specific account associated.
+		// account_id is nullable per migration 032 — insert NULL explicitly.
+		// The previous subquery fallback (SELECT first account from district) would
+		// cause a NOT NULL constraint violation on new districts with no water accounts yet.
 		insertSQL = `
 		INSERT INTO anomaly_flags (
 			district_id, account_id, anomaly_type, alert_level,
 			title, description, estimated_loss_ghs,
 			status, evidence_data, created_at, updated_at
 		) VALUES (
-			$1,
-			(SELECT id FROM water_accounts WHERE district_id = $1 ORDER BY created_at LIMIT 1),
-			$2::anomaly_type, $3::alert_level,
+			$1, NULL, $2::anomaly_type, $3::alert_level,
 			$4, $5, $6,
 			'OPEN', jsonb_build_object('source', $7::text), NOW(), NOW()
 		) RETURNING ` + anomalyFlagSelectCols

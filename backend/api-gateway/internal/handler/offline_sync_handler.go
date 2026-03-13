@@ -31,6 +31,7 @@ package handler
 //   - Replay attacks prevented by client_sequence monotonic check
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -38,6 +39,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
+
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 )
 
 // OfflineSyncHandler handles field officer sync operations
@@ -49,6 +53,15 @@ type OfflineSyncHandler struct {
 func NewOfflineSyncHandler(db *pgxpool.Pool, logger *zap.Logger) *OfflineSyncHandler {
 	return &OfflineSyncHandler{db: db, logger: logger}
 }
+// q returns the RLS-activated querier for domain data writes.
+// The offline_sync_queue housekeeping writes (Push/Pull) stay on h.db directly.
+func (h *OfflineSyncHandler) q(ctx context.Context) repository.Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return h.db
+}
+
 
 // ── PULL: GET /api/v1/sync/pull ───────────────────────────────────────────────
 // Returns all data the field officer needs for offline work:
@@ -76,6 +89,7 @@ func (h *OfflineSyncHandler) Pull(c *fiber.Ctx) error {
 
 	// Register device if new
 	if deviceID != "" {
+		// Device registration is housekeeping — uses pool directly (not RLS-sensitive)
 		h.db.Exec(c.Context(), `
 			INSERT INTO user_devices (user_id, device_id, last_seen_at)
 			VALUES ($1, $2, NOW())
@@ -222,7 +236,7 @@ func (h *OfflineSyncHandler) Pull(c *fiber.Ctx) error {
 		VarianceThresholdAdjPct float64 `json:"variance_threshold_adj_pct"`
 		NightFlowBaselineAdjM3  float64 `json:"night_flow_baseline_adj_m3"`
 	}
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT season::text, variance_threshold_adj_pct, night_flow_baseline_adj_m3
 		FROM seasonal_threshold_config
 		WHERE is_active = true
@@ -239,7 +253,7 @@ func (h *OfflineSyncHandler) Pull(c *fiber.Ctx) error {
 
 	// 4. Fetch pending sync actions for this device (to show sync status)
 	var pendingCount int
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT COUNT(*) FROM offline_sync_queue
 		WHERE user_id = $1 AND status = 'PENDING'
 	`, userID).Scan(&pendingCount)
@@ -306,7 +320,7 @@ func (h *OfflineSyncHandler) Push(c *fiber.Ctx) error {
 
 		// Insert into sync queue
 		var queueID uuid.UUID
-		err := h.db.QueryRow(c.Context(), `
+		err := h.q(c.UserContext()).QueryRow(c.UserContext(), `
 			INSERT INTO offline_sync_queue (
 				device_id, user_id, action_type, entity_type, entity_id,
 				payload, client_timestamp, client_sequence, status, sync_batch_id
@@ -331,7 +345,7 @@ func (h *OfflineSyncHandler) Push(c *fiber.Ctx) error {
 		status, msg := h.applyAction(c, userID, action.ActionType, entityID, action.Payload, clientTS)
 
 		// Update queue status
-		h.db.Exec(c.Context(), `
+		h.q(c.UserContext()).Exec(c.UserContext(), `
 			UPDATE offline_sync_queue SET status = $1::sync_status, processed_at = NOW()
 			WHERE id = $2
 		`, status, queueID)
@@ -397,7 +411,7 @@ func (h *OfflineSyncHandler) applyJobUpdate(
 	// field_jobs has no 'assigned_to' column; the correct column is 'assigned_officer_id'.
 	var assignedOfficerID uuid.UUID
 	var serverUpdatedAt time.Time
-	err := h.db.QueryRow(c.Context(),
+	err := h.q(c.UserContext()).QueryRow(c.UserContext(),
 		`SELECT assigned_officer_id, updated_at FROM field_jobs WHERE id = $1`, jobID,
 	).Scan(&assignedOfficerID, &serverUpdatedAt)
 	if err != nil {
@@ -419,7 +433,7 @@ func (h *OfflineSyncHandler) applyJobUpdate(
 	// Apply status update
 	if status, ok := payload["status"].(string); ok {
 		notes, _ := payload["notes"].(string)
-		_, err = h.db.Exec(c.Context(), `
+		_, err = h.q(c.UserContext()).Exec(c.UserContext(), `
 			UPDATE field_jobs SET
 				status     = $1::field_job_status,
 				notes      = COALESCE(NULLIF($2, ''), notes),
@@ -446,7 +460,7 @@ func (h *OfflineSyncHandler) applyGPSConfirm(
 		return "REJECTED", "latitude and longitude required"
 	}
 
-	_, err := h.db.Exec(c.Context(), `
+	_, err := h.q(c.UserContext()).Exec(c.UserContext(), `
 		UPDATE water_accounts SET
 			gps_latitude        = $1,
 			gps_longitude       = $2,
@@ -482,7 +496,7 @@ func (h *OfflineSyncHandler) applyMeterReading(
 	// BUG-SYNC-03 fix: calibration_factor now exists on water_accounts (migration 036).
 	// Default 1.0 is safe if the row is not found (no calibration applied).
 	var calibFactor float64 = 1.0
-	h.db.QueryRow(c.Context(),
+	h.q(c.UserContext()).QueryRow(c.UserContext(),
 		`SELECT calibration_factor FROM water_accounts WHERE id = $1`, accountID,
 	).Scan(&calibFactor)
 
@@ -501,7 +515,7 @@ func (h *OfflineSyncHandler) applyMeterReading(
 	//                                (was: ON CONFLICT (account_id, read_at) — wrong;
 	//                                 the unique constraint is on reading_date, not read_at)
 	readingDate := clientTS.Truncate(24 * time.Hour)
-	_, err := h.db.Exec(c.Context(), `
+	_, err := h.q(c.UserContext()).Exec(c.UserContext(), `
 		INSERT INTO meter_readings (
 			account_id, reading_date, reading_m3,
 			adjusted_reading_m3, calibration_factor_applied,
@@ -543,11 +557,11 @@ func (h *OfflineSyncHandler) applyAnomalyReport(
 	}
 
 	var districtID uuid.UUID
-	h.db.QueryRow(c.Context(),
+	h.q(c.UserContext()).QueryRow(c.UserContext(),
 		`SELECT district_id FROM water_accounts WHERE id = $1`, accountID,
 	).Scan(&districtID)
 
-	_, err := h.db.Exec(c.Context(), `
+	_, err := h.q(c.UserContext()).Exec(c.UserContext(), `
 		INSERT INTO anomaly_flags (
 			account_id, district_id, anomaly_type, alert_level,
 			description, created_at
@@ -568,7 +582,7 @@ func (h *OfflineSyncHandler) Status(c *fiber.Ctx) error {
 	deviceID := c.Query("device_id")
 
 	var pending, applied, conflicts, rejected int
-	h.db.QueryRow(c.Context(), `
+	h.q(c.UserContext()).QueryRow(c.UserContext(), `
 		SELECT
 			COUNT(*) FILTER (WHERE status = 'PENDING'),
 			COUNT(*) FILTER (WHERE status = 'APPLIED'),

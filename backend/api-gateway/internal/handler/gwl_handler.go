@@ -3,7 +3,10 @@ package handler
 import (
 	"time"
 
+	"context"
+
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
+	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -20,6 +23,16 @@ type GWLHandler struct {
 func NewGWLHandler(caseRepo *repository.GWLCaseRepository, logger *zap.Logger) *GWLHandler {
 	return &GWLHandler{caseRepo: caseRepo, logger: logger}
 }
+// q returns the RLS-activated querier for this request context.
+// All DB reads/writes in GWLHandler go through this method to ensure
+// district-level row-level security is enforced.
+func (h *GWLHandler) q(ctx context.Context) repository.Querier {
+	if tx, ok := rls.TxFromContext(ctx); ok {
+		return tx
+	}
+	return h.caseRepo.DB()
+}
+
 
 // ── GET /api/v1/gwl/cases/summary ────────────────────────────────────────────
 // Returns KPI strip data for the dashboard header
@@ -161,7 +174,7 @@ func (h *GWLHandler) AssignToFieldOfficer(c *fiber.Ctx) error {
 		}
 	} else {
 		var acctStr string
-		if err := h.caseRepo.DB().QueryRow(c.UserContext(),
+		if err := h.q(c.UserContext()).QueryRow(c.UserContext(),
 			`SELECT account_id FROM anomaly_flags WHERE id = $1`, flagID).Scan(&acctStr); err != nil {
 			return response.BadRequest(c, "NOT_FOUND", "case not found")
 		}
@@ -296,7 +309,7 @@ func (h *GWLHandler) RequestReclassification(c *fiber.Ctx) error {
 		}
 	} else {
 		var acctStr, distStr string
-		if err := h.caseRepo.DB().QueryRow(c.UserContext(),
+		if err := h.q(c.UserContext()).QueryRow(c.UserContext(),
 			`SELECT account_id, district_id FROM anomaly_flags WHERE id = $1`, flagID).Scan(&acctStr, &distStr); err != nil {
 			return response.BadRequest(c, "NOT_FOUND", "case not found")
 		}
@@ -397,7 +410,7 @@ func (h *GWLHandler) RequestCredit(c *fiber.Ctx) error {
 		}
 	} else {
 		var acctStr, distStr string
-		if err := h.caseRepo.DB().QueryRow(c.UserContext(),
+		if err := h.q(c.UserContext()).QueryRow(c.UserContext(),
 			`SELECT account_id, district_id FROM anomaly_flags WHERE id = $1`, flagID).Scan(&acctStr, &distStr); err != nil {
 			return response.BadRequest(c, "NOT_FOUND", "case not found")
 		}
@@ -494,7 +507,7 @@ func (h *GWLHandler) UpdateCreditStatus(c *fiber.Ctx) error {
 		return response.BadRequest(c, "BAD_REQUEST", "status must be APPROVED, REJECTED, APPLIED_IN_GWL, or CANCELLED")
 	}
 
-	_, err = h.caseRepo.DB().Exec(c.UserContext(), `
+	_, err = h.q(c.UserContext()).Exec(c.UserContext(), `
 		UPDATE credit_requests
 		SET status = $1, updated_at = NOW()
 		WHERE id = $2`,

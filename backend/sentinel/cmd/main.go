@@ -159,6 +159,31 @@ func main() {
 		reconcilerSvc, phantomSvc, nightFlowSvc, tariffCfg, logger,
 	)
 
+	// ── Hot-reload thresholds every 5 minutes ────────────────────────────────
+	// Allows admin portal updates to system_config to take effect without restart.
+	// Each service method is mutex-protected so this goroutine is safe to run
+	// concurrently with ongoing scan jobs.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			newVariance := loadConfigFloat(context.Background(), db, logger,
+				"sentinel.shadow_bill_variance_pct", 15.0)
+			newNightFlow := loadConfigFloat(context.Background(), db, logger,
+				"sentinel.night_flow_pct_of_daily", 30.0)
+			newPhantom := int(loadConfigFloat(context.Background(), db, logger,
+				"sentinel.phantom_meter_months", 6.0))
+			reconcilerSvc.UpdateVarianceThreshold(newVariance)
+			phantomSvc.UpdateMonthsThreshold(newPhantom)
+			nightFlowSvc.UpdateNightFlowPct(newNightFlow)
+			logger.Info("Sentinel thresholds refreshed from system_config",
+				zap.Float64("shadow_bill_variance_pct", newVariance),
+				zap.Float64("night_flow_pct_of_daily", newNightFlow),
+				zap.Int("phantom_meter_months", newPhantom),
+			)
+		}
+	}()
+
 	// ── HTTP Handler ──────────────────────────────────────────────────────────
 	sentinelHandler := handler.NewSentinelHandler(orch, anomalyRepo, districtRepo, logger)
 

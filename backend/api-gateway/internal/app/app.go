@@ -1,6 +1,7 @@
 package app
 
 import (
+	"os"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -115,7 +116,9 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	gwlCaseRepo     := repository.NewGWLCaseRepository(db, logger)
 	gwlHandler       := handler.NewGWLHandler(gwlCaseRepo, logger)
 	reportHandler    := handler.NewReportHandler(gwlCaseRepo, auditRepo, fieldJobRepo, logger)
-	adminUserHandler := handler.NewAdminUserHandler(db, logger)
+	adminUserHandler := handler.NewAdminUserHandler(db, logger,
+		cfg.Keycloak.URL, cfg.Keycloak.Realm,
+		os.Getenv("KEYCLOAK_ADMIN_CLIENT_SECRET"))
 	healthHandler   := handler.NewHealthHandler(db)
 
 	evidenceHandler    := handler.NewEvidenceHandler(evidenceStorage, logger)
