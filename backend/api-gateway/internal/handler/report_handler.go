@@ -396,7 +396,7 @@ func (h *ReportHandler) GetGRAComplianceCSV(c *fiber.Ctx) error {
 		c.Set("X-Truncated", "true")
 		h.logger.Warn("GetGRAComplianceCSV: result truncated at exportMaxRows",
 			zap.String("district_id", districtID.String()),
-			zap.String("period", periodFilter),
+			zap.String("period", periodStr),
 		)
 	}
 	c.Set("X-Record-Count", fmt.Sprintf("%d", len(events)))
