@@ -26,6 +26,11 @@ type MeterReadingRecord struct {
 	TamperDetected   bool
 	DistrictCode     string
 	CreatedAt        time.Time
+	// Evidence fields — populated for FIELD_APP submissions, zero/empty for AMR/IoT
+	GpsLat      float64
+	GpsLng      float64
+	GpsAccuracyM float64
+	PhotoHash   string
 }
 
 // MeterReadingRepository handles persistence of meter readings

@@ -671,7 +671,9 @@ class MobileConfig {
   final String maintenanceMessage;
 
   const MobileConfig({
-    this.geofenceRadiusM          = 100.0,
+    // 10.0m fallback: meaningful GPS lock if config endpoint unreachable on first launch.
+    // Live value: system_config key field.gps_fence_radius_m (seeded as 5.0m).
+    this.geofenceRadiusM          = 10.0,
     this.requireBiometric         = true,
     this.blindAuditDefault        = true,
     this.requireSurroundingsPhoto = true,
@@ -689,7 +691,7 @@ class MobileConfig {
   static const MobileConfig defaults = MobileConfig();
 
   factory MobileConfig.fromJson(Map<String, dynamic> json) => MobileConfig(
-    geofenceRadiusM:          (json['geofence_radius_m']          as num?)?.toDouble() ?? 100.0,
+    geofenceRadiusM:          (json['geofence_radius_m']          as num?)?.toDouble() ?? 10.0,
     requireBiometric:         json['require_biometric']           as bool?  ?? true,
     blindAuditDefault:        json['blind_audit_default']         as bool?  ?? true,
     requireSurroundingsPhoto: json['require_surroundings_photo']  as bool?  ?? true,

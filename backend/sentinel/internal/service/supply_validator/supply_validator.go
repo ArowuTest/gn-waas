@@ -188,11 +188,22 @@ func (v *SupplyValidator) ValidateDistrict(
 }
 
 // loadSchedule loads the supply windows for a district from the supply_schedules table.
+//
+// Schema note: supply_schedules was created in migration 002 with start_time/end_time
+// TIMESTAMPTZ columns for event-based schedule logging.  Migration 013 added
+// day_of_week, start_hour, end_hour, is_active for recurring weekly schedules —
+// the columns this validator needs.  Those columns are NULLABLE (no NOT NULL
+// constraint) so a scan into *int is required; rows where any column is NULL
+// are skipped to avoid panics on districts that only have legacy timestamptz rows.
 func (v *SupplyValidator) loadSchedule(ctx context.Context, districtID uuid.UUID) ([]SupplyWindow, error) {
 	rows, err := v.db.Query(ctx, `
 		SELECT day_of_week, start_hour, end_hour
 		FROM supply_schedules
-		WHERE district_id = $1 AND is_active = true
+		WHERE district_id = $1
+		  AND is_active = true
+		  AND day_of_week IS NOT NULL
+		  AND start_hour  IS NOT NULL
+		  AND end_hour    IS NOT NULL
 		ORDER BY day_of_week, start_hour`,
 		districtID,
 	)
@@ -203,11 +214,22 @@ func (v *SupplyValidator) loadSchedule(ctx context.Context, districtID uuid.UUID
 
 	var windows []SupplyWindow
 	for rows.Next() {
-		var w SupplyWindow
-		if err := rows.Scan(&w.DayOfWeek, &w.StartHour, &w.EndHour); err != nil {
+		// Use pointers so we can detect NULL even though the WHERE clause already
+		// filters them out — belt-and-suspenders against future schema changes.
+		var dow, sh, eh *int
+		if err := rows.Scan(&dow, &sh, &eh); err != nil {
 			return nil, err
 		}
-		windows = append(windows, w)
+		if dow == nil || sh == nil || eh == nil {
+			v.logger.Warn("supply_schedules row has NULL weekly schedule columns — skipping",
+				zap.String("district_id", districtID.String()))
+			continue
+		}
+		windows = append(windows, SupplyWindow{
+			DayOfWeek: *dow,
+			StartHour: *sh,
+			EndHour:   *eh,
+		})
 	}
 	return windows, rows.Err()
 }

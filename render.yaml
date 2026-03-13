@@ -11,27 +11,21 @@ databases:
 
 services:
   # ── API Gateway ──────────────────────────────────────────────────────────────
-  # Uses runtime: docker so the Dockerfile is used.
-  # The Dockerfile (backend/api-gateway/Dockerfile) copies database/migrations/
-  # and database/seeds/ into the image at /app/migrations/ and /app/seeds/,
-  # and sets MIGRATIONS_DIR=/app/migrations and SEEDS_DIR=/app/seeds.
-  # dockerContext must be the repo root so the Dockerfile can COPY shared/go/
-  # and COPY database/migrations/ (both relative to repo root).
+  # runtime: docker — uses backend/api-gateway/Dockerfile with dockerContext: .
+  # (repo root) so the Dockerfile can COPY shared/go/ and COPY database/migrations/
+  # relative to the root.  The Dockerfile bakes migrations + seeds into the image
+  # at /app/migrations and /app/seeds and sets MIGRATIONS_DIR + SEEDS_DIR internally,
+  # so those env vars are NOT overridden here.
   - type: web
     name: gnwaas-api-gateway
-    runtime: go
+    runtime: docker
     region: oregon
     plan: free
     autoDeploy: yes
-    rootDir: backend/api-gateway
-    buildCommand: GOWORK=off go build -ldflags="-w -s" -o api-gateway ./cmd/main.go
-    startCommand: ./api-gateway
+    dockerfilePath: backend/api-gateway/Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
-      - key: MIGRATIONS_DIR
-        value: /opt/render/project/src/database/migrations
-      - key: SEEDS_DIR
-        value: /opt/render/project/src/database/seeds
       - key: APP_ENV
         # "staging" enables dev-login for demo purposes.
         # Change to "production" + DEV_MODE=false to fully lock down.

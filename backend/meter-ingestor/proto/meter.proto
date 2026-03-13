@@ -14,13 +14,18 @@ message MeterReading {
   double  reading_m3       = 3;  // Cumulative reading in cubic metres
   double  flow_rate_m3h    = 4;  // Instantaneous flow rate (m³/hr), 0 if not available
   double  pressure_bar     = 5;  // Line pressure in bar, 0 if not available
-  string  read_method      = 6;  // "AMR", "MANUAL", "GPRS", "NB_IOT"
+  string  read_method      = 6;  // "AMR", "MANUAL", "GPRS", "NB_IOT", "FIELD_APP"
   string  reader_id        = 7;  // Badge/device ID of reader (empty for AMR)
   google.protobuf.Timestamp reading_timestamp = 8;
   double  battery_voltage  = 9;  // IoT device battery (V), 0 if N/A
   bool    tamper_detected  = 10; // Tamper flag from smart meter
   string  district_code    = 11; // District code for routing
   map<string, string> metadata = 12; // Extensible key-value metadata
+  // Evidence fields — required for FIELD_APP submissions; optional for AMR/IoT
+  double  gps_lat          = 13; // Latitude at time of reading (0.0 if N/A)
+  double  gps_lng          = 14; // Longitude at time of reading (0.0 if N/A)
+  double  gps_accuracy_m   = 15; // GPS horizontal accuracy in metres (0 if N/A)
+  string  photo_hash       = 16; // SHA-256 hex hash of meter photo (empty if N/A)
 }
 
 message MeterReadingResponse {

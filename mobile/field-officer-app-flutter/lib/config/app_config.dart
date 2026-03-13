@@ -22,7 +22,11 @@ class AppConfig {
   );
 
   // GPS geofence radius in metres
-  static const double geofenceRadiusMetres = 100.0;
+  // Offline / pre-config-load fallback geofence radius.
+  // The live value comes from system_config key field.gps_fence_radius_m (seeded as 5.0m).
+  // 10m is used here so the GPS lock still has teeth if the config endpoint is
+  // unreachable on first launch — 100m would effectively disable the GPS check.
+  static const double geofenceRadiusMetres = 10.0;
 
   // Offline sync interval in seconds
   static const int syncIntervalSeconds = 30;

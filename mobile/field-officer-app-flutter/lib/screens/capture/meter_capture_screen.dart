@@ -64,7 +64,9 @@ class _MeterCaptureScreenState extends ConsumerState<MeterCaptureScreen> {
       final pos = await loc.getCurrentPosition();
       // Use admin-controlled geofence radius from remote config
       final configAsync = ref.read(mobileConfigProvider);
-      final geofenceRadius = configAsync.whenOrNull(data: (c) => c.geofenceRadiusM) ?? 100.0;
+      // 10.0m fallback keeps GPS lock meaningful when config is not yet loaded.
+      // The live value is served from system_config (field.gps_fence_radius_m = 5.0m).
+      final geofenceRadius = configAsync.whenOrNull(data: (c) => c.geofenceRadiusM) ?? 10.0;
       final within = loc.isWithinFenceWithRadius(pos.lat, pos.lng, job.gpsLat, job.gpsLng, geofenceRadius);
 
       if (within) {

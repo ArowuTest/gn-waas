@@ -8,6 +8,7 @@ package handler
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/ArowuTest/gn-waas/backend/meter-ingestor/internal/repository"
@@ -19,6 +20,56 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// ─── Proto → Record conversion ───────────────────────────────────────────────
+
+// protoToRecord converts a protobuf MeterReading into a MeterReadingRecord.
+//
+// Evidence fields (gps_lat, gps_lng, gps_accuracy_m, photo_hash) are carried
+// in the proto metadata map using well-known keys until the .pb.go is
+// regenerated from the updated meter.proto (which adds them as first-class
+// fields 13-16).  This allows preCheck() to validate GPS/photo presence for
+// FIELD_APP submissions without requiring a protoc run in CI.
+func protoToRecord(r *pb.MeterReading) *repository.MeterReadingRecord {
+	ts := time.Now()
+	if r.ReadingTimestamp != nil {
+		ts = r.ReadingTimestamp.AsTime()
+	}
+	// Extract evidence fields from metadata map
+	meta := r.Metadata
+	var gpsLat, gpsLng, gpsAccM float64
+	var photoHash string
+	if meta != nil {
+		if v, ok := meta["gps_lat"]; ok {
+			gpsLat, _ = strconv.ParseFloat(v, 64)
+		}
+		if v, ok := meta["gps_lng"]; ok {
+			gpsLng, _ = strconv.ParseFloat(v, 64)
+		}
+		if v, ok := meta["gps_accuracy_m"]; ok {
+			gpsAccM, _ = strconv.ParseFloat(v, 64)
+		}
+		photoHash = meta["photo_hash"]
+	}
+	return &repository.MeterReadingRecord{
+		GWLAccountNumber: r.GwlAccountNumber,
+		DeviceID:         r.DeviceId,
+		ReadingM3:        r.ReadingM3,
+		FlowRateM3H:      r.FlowRateM3H,
+		PressureBar:      r.PressureBar,
+		ReadMethod:       r.ReadMethod,
+		ReaderID:         r.ReaderId,
+		ReadingTimestamp: ts,
+		BatteryVoltage:   r.BatteryVoltage,
+		TamperDetected:   r.TamperDetected,
+		DistrictCode:     r.DistrictCode,
+		// Evidence fields from metadata — populated for FIELD_APP; zero/empty for AMR/IoT
+		GpsLat:       gpsLat,
+		GpsLng:       gpsLng,
+		GpsAccuracyM: gpsAccM,
+		PhotoHash:    photoHash,
+	}
+}
 
 // ─── gRPC Server ─────────────────────────────────────────────────────────────
 
@@ -54,25 +105,7 @@ func (h *GRPCHandler) SubmitReading(
 		return nil, status.Error(codes.InvalidArgument, "reading_m3 cannot be negative")
 	}
 
-	ts := time.Now()
-	if req.ReadingTimestamp != nil {
-		ts = req.ReadingTimestamp.AsTime()
-	}
-
-	rec := &repository.MeterReadingRecord{
-		GWLAccountNumber: req.GwlAccountNumber,
-		DeviceID:         req.DeviceId,
-		ReadingM3:        req.ReadingM3,
-		FlowRateM3H:      req.FlowRateM3H,
-		PressureBar:      req.PressureBar,
-		ReadMethod:       req.ReadMethod,
-		ReaderID:         req.ReaderId,
-		ReadingTimestamp: ts,
-		BatteryVoltage:   req.BatteryVoltage,
-		TamperDetected:   req.TamperDetected,
-		DistrictCode:     req.DistrictCode,
-	}
-
+	rec := protoToRecord(req)
 	readingID, preCheck, err := h.svc.IngestReading(ctx, rec)
 	if err != nil {
 		h.logger.Error("Failed to ingest reading", zap.Error(err), zap.String("account", req.GwlAccountNumber))
@@ -80,11 +113,11 @@ func (h *GRPCHandler) SubmitReading(
 	}
 
 	return &pb.MeterReadingResponse{
-		Accepted:      true,
-		ReadingId:     readingID.String(),
-		Message:       "Reading accepted",
+		Accepted:       true,
+		ReadingId:      readingID.String(),
+		Message:        "Reading accepted",
 		AnomalyFlagged: preCheck.Flagged,
-		AnomalyReason: preCheck.Reason,
+		AnomalyReason:  preCheck.Reason,
 	}, nil
 }
 
@@ -103,38 +136,21 @@ func (h *GRPCHandler) SubmitBatch(
 
 	var records []*repository.MeterReadingRecord
 	for _, r := range req.Readings {
-		ts := time.Now()
-		if r.ReadingTimestamp != nil {
-			ts = r.ReadingTimestamp.AsTime()
-		}
-		records = append(records, &repository.MeterReadingRecord{
-			GWLAccountNumber: r.GwlAccountNumber,
-			DeviceID:         r.DeviceId,
-			ReadingM3:        r.ReadingM3,
-			FlowRateM3H:      r.FlowRateM3H,
-			PressureBar:      r.PressureBar,
-			ReadMethod:       r.ReadMethod,
-			ReaderID:         r.ReaderId,
-			ReadingTimestamp: ts,
-			BatteryVoltage:   r.BatteryVoltage,
-			TamperDetected:   r.TamperDetected,
-			DistrictCode:     r.DistrictCode,
-		})
+		records = append(records, protoToRecord(r))
 	}
 
 	accepted, rejected, flagged, errs := h.svc.IngestBatch(ctx, records)
 
 	return &pb.BatchMeterReadingResponse{
-		Accepted:      int32(accepted),
-		Rejected:      int32(rejected),
+		Accepted:       int32(accepted),
+		Rejected:       int32(rejected),
 		AnomalyFlagged: int32(flagged),
-		Errors:        errs,
-		BatchId:       req.BatchId,
+		Errors:         errs,
+		BatchId:        req.BatchId,
 	}, nil
 }
 
 // StreamReadings handles a client-side streaming RPC from AMR gateways.
-// The new grpc API: server calls SendAndClose to return the response.
 func (h *GRPCHandler) StreamReadings(
 	stream pb.MeterIngestorService_StreamReadingsServer,
 ) error {
@@ -148,25 +164,7 @@ func (h *GRPCHandler) StreamReadings(
 			break
 		}
 
-		ts := time.Now()
-		if req.ReadingTimestamp != nil {
-			ts = req.ReadingTimestamp.AsTime()
-		}
-
-		rec := &repository.MeterReadingRecord{
-			GWLAccountNumber: req.GwlAccountNumber,
-			DeviceID:         req.DeviceId,
-			ReadingM3:        req.ReadingM3,
-			FlowRateM3H:      req.FlowRateM3H,
-			PressureBar:      req.PressureBar,
-			ReadMethod:       req.ReadMethod,
-			ReaderID:         req.ReaderId,
-			ReadingTimestamp: ts,
-			BatteryVoltage:   req.BatteryVoltage,
-			TamperDetected:   req.TamperDetected,
-			DistrictCode:     req.DistrictCode,
-		}
-
+		rec := protoToRecord(req)
 		_, preCheck, ingestErr := h.svc.IngestReading(stream.Context(), rec)
 		if ingestErr != nil {
 			rejected++
@@ -263,7 +261,6 @@ func (h *GRPCHandler) GetReadingHistory(
 }
 
 // ─── HTTP REST Handler ────────────────────────────────────────────────────────
-// Used by the field officer mobile app and manual upload tools.
 
 type HTTPHandler struct {
 	svc    *service.MeterIngestorService
@@ -388,11 +385,11 @@ func (h *HTTPHandler) SubmitBatch(c *fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{
 		"success": true,
 		"data": fiber.Map{
-			"batch_id":       req.BatchID,
-			"accepted":       accepted,
-			"rejected":       rejected,
+			"batch_id":        req.BatchID,
+			"accepted":        accepted,
+			"rejected":        rejected,
 			"anomaly_flagged": flagged,
-			"errors":         errs,
+			"errors":          errs,
 		},
 	})
 }

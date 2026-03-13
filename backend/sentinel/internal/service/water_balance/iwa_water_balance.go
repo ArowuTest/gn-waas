@@ -583,7 +583,7 @@ func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceRes
 			unauthorised_consumption_m3, metering_inaccuracies_m3, data_handling_errors_m3,
 			main_leakage_m3, storage_overflow_m3, service_conn_leakage_m3,
 			nrw_percent, ili_score, iwa_grade,
-			estimated_revenue_recovery_ghs, data_confidence_score,
+			estimated_revenue_recovery_ghs, data_confidence_score, data_confidence_grade_awwa,
 			computed_at
 		) VALUES (
 			$1, $2, $3,
@@ -593,7 +593,7 @@ func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceRes
 			$9, $10, $11,
 			$12, $13, $14,
 			$15, $16, $17,
-			$18, $19,
+			$18, $19, $20,
 			NOW()
 		)
 		ON CONFLICT (district_id, period_start, period_end)
@@ -614,6 +614,7 @@ func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceRes
 			iwa_grade                     = EXCLUDED.iwa_grade,
 			estimated_revenue_recovery_ghs = EXCLUDED.estimated_revenue_recovery_ghs,
 			data_confidence_score         = EXCLUDED.data_confidence_score,
+			data_confidence_grade_awwa    = EXCLUDED.data_confidence_grade_awwa,
 			computed_at                   = NOW()`,
 		r.DistrictID, r.PeriodStart, r.PeriodEnd,
 		r.SystemInputM3,
@@ -622,7 +623,7 @@ func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceRes
 		r.UnauthorisedConsumptionM3, r.MeteringInaccuraciesM3, r.DataHandlingErrorsM3,
 		r.MainLeakageM3, r.StorageOverflowM3, r.ServiceConnectionLeakM3,
 		r.NRWPercent, r.ILI, r.IWAGrade,
-		r.EstimatedRevenueRecoveryGHS, r.DataConfidenceScore,
+		r.EstimatedRevenueRecoveryGHS, r.DataConfidenceScore, r.DataConfidenceGrade,
 	)
 	return err
 }

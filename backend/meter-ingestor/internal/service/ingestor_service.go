@@ -136,6 +136,25 @@ func (s *MeterIngestorService) preCheck(
 	rec *repository.MeterReadingRecord,
 ) *PreCheckResult {
 
+	// ── FIELD_APP evidence check ──────────────────────────────────────────────
+	// Submissions from the Flutter field officer app (read_method = "FIELD_APP")
+	// must carry GPS coordinates and a photo hash.  AMR/IoT gateways do not have
+	// these fields and are not subject to this check.
+	if rec.ReadMethod == "FIELD_APP" {
+		if rec.GpsLat == 0 && rec.GpsLng == 0 {
+			return &PreCheckResult{
+				Flagged: true,
+				Reason:  "FIELD_APP submission missing GPS coordinates — possible tampered client or offline-forged reading",
+			}
+		}
+		if rec.PhotoHash == "" {
+			return &PreCheckResult{
+				Flagged: true,
+				Reason:  "FIELD_APP submission missing photo hash — evidence photo required for field readings",
+			}
+		}
+	}
+
 	// Tamper flag from smart meter hardware
 	if rec.TamperDetected {
 		return &PreCheckResult{
