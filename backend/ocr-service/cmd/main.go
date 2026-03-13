@@ -127,7 +127,8 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	port := getEnv("APP_PORT", "3005")
+	// Render injects PORT at runtime; fall back to APP_PORT then 3005 for local dev.
+	port := getEnv("PORT", getEnv("APP_PORT", "3005"))
 	go func() {
 		logger.Info("OCR Service listening", zap.String("port", port))
 		if err := app.Listen(":" + port); err != nil {

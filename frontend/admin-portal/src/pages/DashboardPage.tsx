@@ -104,12 +104,12 @@ function WaterBalanceBar({ wb }: { wb: ReturnType<typeof useWaterBalance>['data'
         <div className="flex items-center gap-3">
           <div>
             <p className="text-xs text-gray-500">NRW</p>
-            <p className="text-lg font-black text-gray-900">{latest.nrw_percent.toFixed(1)}%</p>
+            <p className="text-lg font-black text-gray-900">{latest.nrw_percent?.toFixed(1) ?? '—'}%</p>
           </div>
           <div className="w-px h-8 bg-gray-200" />
           <div>
             <p className="text-xs text-gray-500">ILI Score</p>
-            <p className="text-lg font-black text-gray-900">{latest.ili.toFixed(2)}</p>
+            <p className="text-lg font-black text-gray-900">{latest.ili?.toFixed(2) ?? '—'}</p>
           </div>
           <div className="w-px h-8 bg-gray-200" />
           <div>
@@ -119,6 +119,21 @@ function WaterBalanceBar({ wb }: { wb: ReturnType<typeof useWaterBalance>['data'
         </div>
         <ILIGradeBadge grade={latest.iwa_grade} />
       </div>
+      {/* Staleness indicator — warn if data is older than 7 days */}
+      {(() => {
+        const ts = latest.computed_at ?? latest.period_start
+        if (!ts) return null
+        const ageMs = Date.now() - new Date(ts).getTime()
+        const ageDays = Math.floor(ageMs / 86_400_000)
+        const label = new Date(ts).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        const isStale = ageDays > 7
+        return (
+          <p className={`text-xs mt-1 ${isStale ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>
+            {isStale ? `⚠ Data is ${ageDays} days old — ` : 'Last computed: '}
+            {label}{isStale ? '. Run a Sentinel scan to refresh.' : ''}
+          </p>
+        )
+      })()}
     </div>
   )
 }

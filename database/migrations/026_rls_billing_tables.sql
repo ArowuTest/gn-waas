@@ -56,6 +56,11 @@ CREATE POLICY rls_gwl_bills_district ON gwl_bills
 -- ─── shadow_bills ────────────────────────────────────────────────────────────
 -- GN-WAAS shadow bill calculations (PURC tariff recalculation).
 -- No district_id column; district is derived via account_id → water_accounts.
+--
+-- CONFIRMED: shadow_bills is a TABLE, not a view. Migration 021 only converted
+-- gwl_billing_records into a compatibility VIEW; shadow_bills was unchanged.
+-- ENABLE ROW LEVEL SECURITY on a TABLE is valid here.
+-- (gwl_billing_records as a VIEW intentionally skips RLS — see migration 033.)
 ALTER TABLE shadow_bills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shadow_bills FORCE ROW LEVEL SECURITY;
 

@@ -42,7 +42,8 @@ export default function NRWSummaryPage() {
   const [sortBy, setSortBy]           = useState<'nrw_desc' | 'nrw_asc' | 'name' | 'loss_desc'>('nrw_desc')
 
   const { data: summaries, isLoading, isError, refetch, isFetching } = useNRWSummary(
-    districtFilter || undefined
+    districtFilter || undefined,
+    period,
   )
   const { data: districts = [] } = useDistricts()
 
@@ -55,8 +56,8 @@ export default function NRWSummaryPage() {
 
     return [...rows].sort((a, b) => {
       switch (sortBy) {
-        case 'nrw_desc':  return (b.loss_ratio_pct ?? 0) - (a.loss_ratio_pct ?? 0)
-        case 'nrw_asc':   return (a.loss_ratio_pct ?? 0) - (b.loss_ratio_pct ?? 0)
+        case 'nrw_desc':  return (b.loss_ratio_pct ?? -Infinity) - (a.loss_ratio_pct ?? -Infinity)
+        case 'nrw_asc':   return (a.loss_ratio_pct ?? Infinity)  - (b.loss_ratio_pct ?? Infinity)
         case 'name':      return a.district_name.localeCompare(b.district_name)
         case 'loss_desc': return b.total_estimated_loss_ghs - a.total_estimated_loss_ghs
         default:          return 0

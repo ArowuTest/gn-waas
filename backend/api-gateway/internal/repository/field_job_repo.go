@@ -33,9 +33,10 @@ func (r *FieldJobRepository) q(ctx context.Context) Querier {
 	return r.db
 }
 
-// DB returns the underlying connection pool (for direct queries in handlers).
-func (r *FieldJobRepository) DB() *pgxpool.Pool {
-	return r.db
+// QuerierFromContext returns the RLS-activated querier for the given context.
+// Replaces the old DB() accessor; honours the RLS transaction set by rls.Middleware.
+func (r *FieldJobRepository) QuerierFromContext(ctx context.Context) Querier {
+	return r.q(ctx)
 }
 
 func (r *FieldJobRepository) Create(ctx context.Context, job *domain.FieldJob) (*domain.FieldJob, error) {
@@ -454,7 +455,17 @@ func (r *FieldJobRepository) WriteEvidence(ctx context.Context, jobID uuid.UUID,
 }
 
 // ListAll returns all field jobs with optional filters for admin/supervisor view.
-func (r *FieldJobRepository) ListAll(ctx context.Context, status, alertLevel, districtID string) ([]*EnrichedFieldJob, error) {
+func (r *FieldJobRepository) ListAll(ctx context.Context, status, alertLevel, districtID string, limit, offset int) ([]*EnrichedFieldJob, int, error) {
+	// Cap limit to prevent runaway queries; default 100, max 200.
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
 	query := `
 		SELECT
 			fj.id, fj.job_reference, fj.audit_event_id, fj.account_id, fj.district_id,
@@ -486,11 +497,29 @@ func (r *FieldJobRepository) ListAll(ctx context.Context, status, alertLevel, di
 			WHEN 'DISPATCHED' THEN 3 WHEN 'QUEUED' THEN 4 ELSE 5 END,
 			fj.priority DESC,
 			fj.created_at DESC
-		LIMIT 500`
+		LIMIT $4 OFFSET $5`
 
-	rows, err := r.q(ctx).Query(ctx, query, status, alertLevel, districtID)
+	// Get total count first (same filters, no pagination).
+	countQuery := `
+		SELECT COUNT(*)
+		FROM field_jobs fj
+		LEFT JOIN LATERAL (
+			SELECT alert_level FROM anomaly_flags
+			WHERE account_id = fj.account_id AND status = 'OPEN'
+			ORDER BY created_at DESC LIMIT 1
+		) af ON true
+		WHERE ($1 = '' OR fj.status = $1::field_job_status)
+		  AND ($2 = '' OR af.alert_level::text = $2)
+		  AND ($3 = '' OR fj.district_id::text = $3)`
+
+	var total int
+	if err := r.q(ctx).QueryRow(ctx, countQuery, status, alertLevel, districtID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("ListAll count failed: %w", err)
+	}
+
+	rows, err := r.q(ctx).Query(ctx, query, status, alertLevel, districtID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("ListAll field jobs failed: %w", err)
+		return nil, 0, fmt.Errorf("ListAll field jobs failed: %w", err)
 	}
 	defer rows.Close()
 
@@ -508,14 +537,14 @@ func (r *FieldJobRepository) ListAll(ctx context.Context, status, alertLevel, di
 			&j.AccountHolderName, &j.GWLAccountNumber, &j.AddressLine1,
 			&j.AnomalyType, &j.AlertLevel, &j.EstimatedLossGHS,
 		); err != nil {
-			return nil, fmt.Errorf("ListAll scan failed: %w", err)
+			return nil, 0, fmt.Errorf("ListAll scan failed: %w", err)
 		}
 		// Populate GPS aliases for Flutter/admin portal compatibility
 		j.GpsLat = j.TargetGPSLat
 		j.GpsLng = j.TargetGPSLng
 		jobs = append(jobs, j)
 	}
-	return jobs, rows.Err()
+	return jobs, total, rows.Err()
 }
 
 // AssignOfficer assigns a field officer to a job and sets status to DISPATCHED.
@@ -625,8 +654,9 @@ func (r *FieldJobRepository) GetByOfficerEnriched(ctx context.Context, officerID
 			&j.AnomalyType, &j.AlertLevel, &j.EstimatedLossGHS,
 		)
 		if err != nil {
-			r.logger.Warn("Failed to scan enriched field job", zap.Error(err))
-			continue
+			// Return the error so the caller can respond with 500 rather than silently
+			// returning a truncated list that would appear as "no jobs" to the officer.
+			return nil, fmt.Errorf("GetByOfficerEnriched scan failed: %w", err)
 		}
 		// Populate GPS aliases so Flutter (gps_lat/gps_lng) and admin portal
 		// both receive the target coordinates under the expected JSON keys.
@@ -727,7 +757,16 @@ func (r *DistrictRepository) LogAdminAction(ctx context.Context, entityType, ent
 // ─── RLS-Activated Variants ───────────────────────────────────────────────────
 
 // ListAllTx is identical to ListAll but runs inside an RLS-activated transaction.
-func (r *FieldJobRepository) ListAllTx(ctx context.Context, q Querier, status, alertLevel, districtID string) ([]*EnrichedFieldJob, error) {
+func (r *FieldJobRepository) ListAllTx(ctx context.Context, q Querier, status, alertLevel, districtID string, limit, offset int) ([]*EnrichedFieldJob, int, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
 	query := `
 		SELECT
 			fj.id, fj.job_reference, fj.audit_event_id, fj.account_id, fj.district_id,
@@ -759,11 +798,29 @@ func (r *FieldJobRepository) ListAllTx(ctx context.Context, q Querier, status, a
 			WHEN 'DISPATCHED' THEN 3 WHEN 'QUEUED' THEN 4 ELSE 5 END,
 			fj.priority DESC,
 			fj.created_at DESC
-		LIMIT 500`
+		LIMIT $4 OFFSET $5`
 
-	rows, err := q.Query(ctx, query, status, alertLevel, districtID)
+	// Count query for total.
+	countQuery := `
+		SELECT COUNT(*)
+		FROM field_jobs fj
+		LEFT JOIN LATERAL (
+			SELECT alert_level FROM anomaly_flags
+			WHERE account_id = fj.account_id AND status = 'OPEN'
+			ORDER BY created_at DESC LIMIT 1
+		) af ON true
+		WHERE ($1 = '' OR fj.status = $1::field_job_status)
+		  AND ($2 = '' OR af.alert_level::text = $2)
+		  AND ($3 = '' OR fj.district_id::text = $3)`
+
+	var total int
+	if err := q.QueryRow(ctx, countQuery, status, alertLevel, districtID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("ListAllTx count failed: %w", err)
+	}
+
+	rows, err := q.Query(ctx, query, status, alertLevel, districtID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("ListAllTx field jobs failed: %w", err)
+		return nil, 0, fmt.Errorf("ListAllTx field jobs failed: %w", err)
 	}
 	defer rows.Close()
 
@@ -781,11 +838,11 @@ func (r *FieldJobRepository) ListAllTx(ctx context.Context, q Querier, status, a
 			&j.AccountHolderName, &j.GWLAccountNumber, &j.AddressLine1,
 			&j.AnomalyType, &j.AlertLevel, &j.EstimatedLossGHS,
 		); err != nil {
-			return nil, fmt.Errorf("ListAllTx scan failed: %w", err)
+			return nil, 0, fmt.Errorf("ListAllTx scan failed: %w", err)
 		}
 		jobs = append(jobs, j)
 	}
-	return jobs, rows.Err()
+	return jobs, total, rows.Err()
 }
 
 // GetByOfficerEnrichedTx is identical to GetByOfficerEnriched but runs inside

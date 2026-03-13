@@ -6,7 +6,6 @@ import (
 	"context"
 
 	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/repository"
-	"github.com/ArowuTest/gn-waas/backend/api-gateway/internal/rls"
 	"github.com/ArowuTest/gn-waas/shared/go/http/response"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -24,13 +23,10 @@ func NewGWLHandler(caseRepo *repository.GWLCaseRepository, logger *zap.Logger) *
 	return &GWLHandler{caseRepo: caseRepo, logger: logger}
 }
 // q returns the RLS-activated querier for this request context.
-// All DB reads/writes in GWLHandler go through this method to ensure
-// district-level row-level security is enforced.
+// Delegates to the repo's QuerierFromContext which honours the RLS tx if
+// set by rls.Middleware, otherwise falls back to the pool.
 func (h *GWLHandler) q(ctx context.Context) repository.Querier {
-	if tx, ok := rls.TxFromContext(ctx); ok {
-		return tx
-	}
-	return h.caseRepo.DB()
+	return h.caseRepo.QuerierFromContext(ctx)
 }
 
 

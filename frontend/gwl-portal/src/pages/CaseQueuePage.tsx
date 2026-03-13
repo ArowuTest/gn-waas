@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Download, RefreshCw, X } from 'lucide-react';
 import { useCases, useDistricts } from '../hooks/useQueries';
+import { api } from '../utils/api';
 import { Badge, Button, Select, Input, Spinner, EmptyState, Table } from '../components/ui';
 import {
   formatGHS, formatDate,
@@ -87,8 +88,23 @@ export default function CaseQueuePage() {
     setPage(0);
   };
 
-  const handleExport = () => {
-    exportToCSV(cases, [
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      // Fetch ALL matching cases (not just the current page) for a complete export.
+      const params: Record<string, string | number> = { limit: 5000, offset: 0, sort_by: 'estimated_loss_ghs' };
+      if (search)     params.search      = search;
+      if (districtId) params.district_id = districtId;
+      if (status)     params.gwl_status  = status;
+      if (severity)   params.severity    = severity;
+      if (flagType)   params.flag_type   = flagType;
+      if (dateFrom)   params.date_from   = dateFrom;
+      if (dateTo)     params.date_to     = dateTo;
+      const res = await api.get('/gwl/cases', { params });
+      const allCases = res.data?.data?.cases ?? res.data?.cases ?? [];
+      exportToCSV(allCases, [
       { header: 'Account No', accessor: (r) => r.account_number || '' },
       { header: 'Account Holder', accessor: (r) => r.account_holder || '' },
       { header: 'Category', accessor: (r) => r.account_category || '' },
@@ -101,7 +117,13 @@ export default function CaseQueuePage() {
       { header: 'Assigned Officer', accessor: (r) => r.assigned_officer_name || '' },
       { header: 'Days Open', accessor: (r) => r.days_open },
       { header: 'Flagged On', accessor: (r) => formatDate(r.created_at) },
-    ], 'gwl-cases.csv');
+      ], 'gwl-cases.csv');
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('Export failed. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -118,9 +140,9 @@ export default function CaseQueuePage() {
           <Button variant="secondary" size="sm" onClick={() => refetch()}>
             <RefreshCw className="w-4 h-4" />
           </Button>
-          <Button variant="secondary" size="sm" onClick={handleExport}>
-            <Download className="w-4 h-4" />
-            Export CSV
+          <Button variant="secondary" size="sm" onClick={handleExport} disabled={isExporting}>
+            <Download className={`w-4 h-4 ${isExporting ? 'animate-spin' : ''}`} />
+            {isExporting ? 'Exporting…' : 'Export CSV'}
           </Button>
           <Button
             variant={showFilters ? 'primary' : 'secondary'}

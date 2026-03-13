@@ -142,7 +142,9 @@ function ConfigRow({
       <td>
         {editing ? (
           <div className="action-buttons">
-            <button className="btn-save" onClick={handleSave}>✓ Save</button>
+            <button className="btn-save" onClick={handleSave} disabled={saveStatus === 'saving'}>
+              {saveStatus === 'saving' ? '⏳ Saving…' : '✓ Save'}
+            </button>
             <button className="btn-cancel" onClick={handleCancel}>✕</button>
           </div>
         ) : (

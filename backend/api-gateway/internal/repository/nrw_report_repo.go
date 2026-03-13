@@ -13,15 +13,20 @@ import (
 )
 
 // NRWReportRepository handles Non-Revenue Water reporting queries.
-// All data is derived from the audit_events, anomaly_flags, and water_accounts tables —
-// no hardcoded values.
+// All data is derived from the audit_events, anomaly_flags, water_balance_records,
+// and water_accounts tables — no hardcoded values.
 type NRWReportRepository struct {
-	db     *pgxpool.Pool
-	logger *zap.Logger
+	db         *pgxpool.Pool
+	logger     *zap.Logger
+	districtRepo *DistrictRepository
 }
 
 func NewNRWReportRepository(db *pgxpool.Pool, logger *zap.Logger) *NRWReportRepository {
-	return &NRWReportRepository{db: db, logger: logger}
+	return &NRWReportRepository{
+		db:           db,
+		logger:       logger,
+		districtRepo: NewDistrictRepository(db, logger),
+	}
 }
 
 // q returns the Querier to use for this request.
@@ -100,7 +105,9 @@ func (r *NRWReportRepository) GetNRWSummary(ctx context.Context, districtID *uui
 			COALESCE(flag_stats.total_estimated_loss, 0)                 AS total_estimated_loss_ghs,
 			COALESCE(audit_stats.total_confirmed_loss, 0)                AS total_confirmed_loss_ghs,
 			COALESCE(audit_stats.total_recovered, 0)                     AS total_recovered_ghs,
-			d.loss_ratio_pct,
+			-- LIVE NRW %%: use most-recent water_balance_records.nrw_percent;
+			-- fall back to the static d.loss_ratio_pct column if no WB record exists.
+			COALESCE(wb_latest.nrw_percent, d.loss_ratio_pct)            AS loss_ratio_pct,
 			d.data_confidence_grade,
 			d.is_pilot_district,
 			d.zone_type
@@ -131,6 +138,16 @@ func (r *NRWReportRepository) GetNRWSummary(ctx context.Context, districtID *uui
 			WHERE status = 'COMPLETED' AND created_at BETWEEN $1 AND $2
 			GROUP BY district_id
 		) audit_stats ON audit_stats.district_id = d.id
+		-- Pick the most-recently computed water balance row per district.
+		-- This gives a live nrw_percent from sentinel rather than the stale
+		-- d.loss_ratio_pct which was only populated at seed time.
+		LEFT JOIN LATERAL (
+			SELECT nrw_percent
+			FROM water_balance_records
+			WHERE district_id = d.id
+			ORDER BY COALESCE(computed_at, period_start) DESC
+			LIMIT 1
+		) wb_latest ON true
 		WHERE d.is_active = TRUE %s
 		ORDER BY COALESCE(flag_stats.total_estimated_loss, 0) DESC`, districtFilter)
 
@@ -224,8 +241,7 @@ func (r *NRWReportRepository) GetDistrictNRWTrend(ctx context.Context, districtI
 
 // GetMyDistrictSummary returns a summary for a specific district (used by GWL staff portal)
 func (r *NRWReportRepository) GetMyDistrictSummary(ctx context.Context, districtID uuid.UUID) (*domain.District, *NRWSummaryRow, error) {
-	distRepo := &DistrictRepository{db: r.db, logger: r.logger}
-	district, err := distRepo.GetByID(ctx, districtID)
+	district, err := r.districtRepo.GetByID(ctx, districtID)
 	if err != nil {
 		return nil, nil, err
 	}

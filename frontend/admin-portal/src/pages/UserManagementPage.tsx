@@ -225,7 +225,11 @@ export default function UserManagementPage() {
 
   const resetPassword = useMutation({
     mutationFn: (id: string) => apiClient.post(`/admin/users/${id}/reset-password`),
-    onSuccess: () => alert('Password reset email sent'),
+    onSuccess: () => alert('Password reset link sent — user will receive an email shortly.'),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Unknown error'
+      alert(`Failed to reset password: ${msg}`)
+    },
   })
 
   const handleSave = (data: any) => {
@@ -354,8 +358,9 @@ export default function UserManagementPage() {
                         <button
                           className="btn-icon btn-icon--reset"
                           title="Reset Password"
+                          disabled={resetPassword.isPending}
                           onClick={() => resetPassword.mutate(user.id)}
-                        >🔑</button>
+                        >{resetPassword.isPending ? '⏳' : '🔑'}</button>
                         {isActive && (
                           <button
                             className="btn-icon btn-icon--deactivate"

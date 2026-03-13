@@ -154,6 +154,12 @@ services:
         value: 10000
       - key: GRA_SANDBOX_MODE
         value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gnwaas-postgres
+          property: connectionString
+      - key: DB_SSLMODE
+        value: require
 
   # ── OCR Service ──────────────────────────────────────────────────────────────
   - type: web
@@ -172,5 +178,8 @@ services:
         value: tesseract
       - key: TEMP_DIR
         value: /tmp
+      - key: PORT
+        # Render routes external traffic to this port; ocr-service now reads PORT first.
+        value: "10000"
       - key: APP_PORT
-        value: "3005"
+        value: "10000"

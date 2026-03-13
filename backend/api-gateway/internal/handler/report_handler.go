@@ -539,7 +539,10 @@ func (h *ReportHandler) GetFieldJobsCSV(c *fiber.Ctx) error {
 	periodStr := c.Query("period", time.Now().AddDate(0, -1, 0).Format("2006-01"))
 	districtIDStr := c.Query("district_id", "")
 
-	jobs, err := h.fieldJobRepo.ListAll(c.UserContext(), "", "", districtIDStr)
+	// Export up to 200 jobs per request (paginated if needed via offset param).
+	limit := 200
+	offset := c.QueryInt("offset", 0)
+	jobs, _, err := h.fieldJobRepo.ListAll(c.UserContext(), "", "", districtIDStr, limit, offset)
 	if err != nil {
 		h.logger.Error("GetFieldJobsCSV: ListAll failed", zap.Error(err))
 		return response.InternalError(c, "failed to fetch field jobs")

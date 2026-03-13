@@ -347,11 +347,9 @@ func NewFieldJobHandler(
 	}
 }
 // q returns the RLS-activated querier for this request context.
+// Delegates to the repo's QuerierFromContext which honours the RLS tx from ctx.
 func (h *FieldJobHandler) q(ctx context.Context) repository.Querier {
-	if tx, ok := rls.TxFromContext(ctx); ok {
-		return tx
-	}
-	return h.fieldJobRepo.DB()
+	return h.fieldJobRepo.QuerierFromContext(ctx)
 }
 
 
@@ -376,11 +374,13 @@ func (h *FieldJobHandler) GetMyJobs(c *fiber.Ctx) error {
 	// RLS enforces district scoping via the transaction set by rls.Middleware.
 	if role == "FIELD_SUPERVISOR" {
 		districtIDStr, _ := c.Locals("rls_district_id").(string)
-		jobs, listErr := h.fieldJobRepo.ListAll(c.UserContext(), "", "", districtIDStr)
+		limit := c.QueryInt("limit", 100)
+		offset := c.QueryInt("offset", 0)
+		jobs, total, listErr := h.fieldJobRepo.ListAll(c.UserContext(), "", "", districtIDStr, limit, offset)
 		if listErr != nil {
 			return response.InternalError(c, "Failed to fetch jobs")
 		}
-		return response.OK(c, jobs)
+		return response.OK(c, fiber.Map{"jobs": jobs, "total": total, "limit": limit, "offset": offset})
 	}
 
 	// FIELD_OFFICER / GRA_OFFICER: return only jobs assigned to this user.
@@ -764,22 +764,12 @@ func (h *FieldJobHandler) ListAllJobs(c *fiber.Ctx) error {
 	}
 
 	// RLS is enforced by the rls.Middleware applied to the /api/v1 group.
-	jobs, jobErr := h.fieldJobRepo.ListAll(c.UserContext(), status, alertLevel, districtID)
+	jobs, total, jobErr := h.fieldJobRepo.ListAll(c.UserContext(), status, alertLevel, districtID, limit, offset)
 	if jobErr != nil {
 		h.logger.Error("Failed to list field jobs", zap.Error(jobErr))
 		return response.InternalError(c, "Failed to list field jobs")
 	}
-	// Apply in-memory pagination (ListAll returns all matching)
-	total := len(jobs)
-	start := offset
-	if start > total {
-		start = total
-	}
-	end := start + limit
-	if end > total {
-		end = total
-	}
-	return response.OKWithMeta(c, jobs[start:end], &response.Meta{
+	return response.OKWithMeta(c, jobs, &response.Meta{
 		Total:    intPtr(total),
 		Page:     intPtr(offset/limit + 1),
 		PageSize: &limit,
@@ -1692,7 +1682,7 @@ func (h *AuditHandler) UpdateAuditEvent(c *fiber.Ctx) error {
 		GRAStatus        string    `json:"gra_status"`
 		UpdatedAt        time.Time `json:"updated_at"`
 	}
-	err := h.auditRepo.DB().QueryRow(c.UserContext(), query, args...).Scan(
+	err := h.q(c.UserContext()).QueryRow(c.UserContext(), query, args...).Scan(
 		&ev.ID, &ev.AuditReference, &ev.Status, &ev.Notes,
 		&ev.GWLBilledGHS, &ev.ShadowBillGHS, &ev.VariancePct,
 		&ev.ConfirmedLossGHS, &ev.GRAStatus, &ev.UpdatedAt,
@@ -1703,4 +1693,102 @@ func (h *AuditHandler) UpdateAuditEvent(c *fiber.Ctx) error {
 	}
 
 	return response.OK(c, ev)
+}
+
+// GetComplianceSummary godoc
+// GET /api/v1/audits/compliance-summary
+// Returns pre-aggregated GRA compliance KPIs for the admin portal.
+// Replaces the old pattern of fetching 500 audit rows client-side and computing
+// rates in the browser — which systematically understated compliance for districts
+// with >500 events.
+//
+// Query params:
+//   district_id (uuid, optional) — scope to a single district
+//   period      (YYYY-MM, optional) — month to summarise; defaults to current month
+func (h *AuditHandler) GetComplianceSummary(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+
+	var districtID uuid.UUID
+	var hasDistrict bool
+	if d := c.Query("district_id"); d != "" {
+		id, err := uuid.Parse(d)
+		if err != nil {
+			return response.BadRequest(c, "INVALID_DISTRICT_ID", "invalid district_id")
+		}
+		districtID = id
+		hasDistrict = true
+	}
+
+	periodStr := c.Query("period", time.Now().Format("2006-01"))
+	periodStart, err := time.Parse("2006-01", periodStr)
+	if err != nil {
+		return response.BadRequest(c, "INVALID_PERIOD", "period must be YYYY-MM")
+	}
+	periodEnd := periodStart.AddDate(0, 1, 0)
+
+	args := []interface{}{periodStart, periodEnd}
+	districtClause := ""
+	if hasDistrict {
+		districtClause = "AND ae.district_id = $3"
+		args = append(args, districtID)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			COUNT(*)                                                  AS total_events,
+			COUNT(*) FILTER (WHERE ae.status = 'COMPLETED')          AS completed_events,
+			COUNT(*) FILTER (WHERE ae.gra_status = 'SIGNED')         AS gra_signed,
+			COUNT(*) FILTER (WHERE ae.gra_status IN ('PENDING','PROVISIONAL','RETRY_QUEUED')) AS gra_pending,
+			COUNT(*) FILTER (WHERE ae.gra_status = 'FAILED')         AS gra_failed,
+			COALESCE(SUM(ae.confirmed_loss_ghs), 0)                  AS total_confirmed_loss_ghs,
+			COALESCE(SUM(ae.recovery_invoice_ghs), 0)                AS total_recovery_invoice_ghs,
+			COALESCE(SUM(ae.vat_collected_ghs), 0)                   AS total_vat_collected_ghs
+		FROM audit_events ae
+		WHERE ae.created_at >= $1 AND ae.created_at < $2
+		  AND ae.status != 'DRAFT'
+		  %s`, districtClause)
+
+	var s struct {
+		TotalEvents             int     `json:"total_events"`
+		CompletedEvents         int     `json:"completed_events"`
+		GRASigned               int     `json:"gra_signed"`
+		GRAPending              int     `json:"gra_pending"`
+		GRAFailed               int     `json:"gra_failed"`
+		TotalConfirmedLossGHS   float64 `json:"total_confirmed_loss_ghs"`
+		TotalRecoveryInvoiceGHS float64 `json:"total_recovery_invoice_ghs"`
+		TotalVATCollectedGHS    float64 `json:"total_vat_collected_ghs"`
+	}
+	err = h.q(ctx).QueryRow(ctx, query, args...).Scan(
+		&s.TotalEvents, &s.CompletedEvents,
+		&s.GRASigned, &s.GRAPending, &s.GRAFailed,
+		&s.TotalConfirmedLossGHS, &s.TotalRecoveryInvoiceGHS, &s.TotalVATCollectedGHS,
+	)
+	if err != nil {
+		h.logger.Error("GetComplianceSummary failed", zap.Error(err))
+		return response.InternalError(c, "failed to fetch compliance summary")
+	}
+
+	// Compute derived rates.
+	complianceRate := 0.0
+	if s.CompletedEvents > 0 {
+		complianceRate = float64(s.GRASigned) / float64(s.CompletedEvents) * 100
+	}
+	completionRate := 0.0
+	if s.TotalEvents > 0 {
+		completionRate = float64(s.CompletedEvents) / float64(s.TotalEvents) * 100
+	}
+
+	return response.OK(c, fiber.Map{
+		"period":                    periodStr,
+		"total_events":              s.TotalEvents,
+		"completed_events":          s.CompletedEvents,
+		"gra_signed":                s.GRASigned,
+		"gra_pending":               s.GRAPending,
+		"gra_failed":                s.GRAFailed,
+		"compliance_rate_pct":       complianceRate,
+		"completion_rate_pct":       completionRate,
+		"total_confirmed_loss_ghs":  s.TotalConfirmedLossGHS,
+		"total_recovery_invoice_ghs": s.TotalRecoveryInvoiceGHS,
+		"total_vat_collected_ghs":   s.TotalVATCollectedGHS,
+	})
 }

@@ -69,28 +69,24 @@ function useGRAComplianceSummary(period: string, districtId: string) {
     queryKey: ['gra-compliance-summary', period, districtId],
     enabled: !!districtId,
     queryFn: async () => {
-      // Fetch all audit records for the period to compute summary client-side
-      const res = await apiClient.get('/audits', {
+      // Use the dedicated aggregate endpoint — avoids the old 500-row cap
+      // that silently understated compliance rates for busy districts.
+      const res = await apiClient.get('/audits/compliance-summary', {
         params: {
           district_id: districtId,
-          limit: 500,
+          period,
         },
       })
-      const records: GRAComplianceRecord[] = res.data?.data?.data ?? []
-      const signed   = records.filter(r => r.gra_status === 'SIGNED').length
-      const pending  = records.filter(r => r.gra_status === 'PENDING').length
-      const failed   = records.filter(r => r.gra_status === 'FAILED').length
-      const total    = records.length
-      const totalVat = records.reduce((sum, r) => sum + (r.vat_amount_ghs ?? 0), 0)
+      const d = res.data?.data ?? res.data
       return {
-        total_invoices:          total,
-        signed_count:            signed,
-        pending_count:           pending,
-        failed_count:            failed,
-        compliance_rate_pct:     total > 0 ? (signed / total) * 100 : 0,
-        total_vat_collected_ghs: totalVat,
+        total_invoices:          d.total_events         ?? 0,
+        signed_count:            d.gra_signed           ?? 0,
+        pending_count:           d.gra_pending          ?? 0,
+        failed_count:            d.gra_failed           ?? 0,
+        compliance_rate_pct:     d.compliance_rate_pct  ?? 0,
+        total_vat_collected_ghs: d.total_vat_collected_ghs ?? 0,
         period,
-      }
+      } as GRAComplianceSummary
     },
     staleTime: 30_000,
   })

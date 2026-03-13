@@ -123,17 +123,17 @@ SELECT
     ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.145, 2)
         AS service_conn_leakage_m3,
 
-    -- NRW % (varies 45–58 % by district)
-    ROUND((45.0 + ABS(hashtext(d.id::text || gs.period_start::text) % 13))::numeric, 2)
-        AS nrw_percent,
+    -- NRW %, ILI, and IWA grade are intentionally seeded as NULL.
+    -- Sentinel will compute and back-fill them from the water-balance components
+    -- on the next scan, ensuring the values are always derived consistently
+    -- from the same formula rather than seeded independently.
+    NULL::numeric AS nrw_percent,
 
-    -- ILI score (Infrastructure Leakage Index): 3.5–8.5 range for Ghana
-    ROUND((3.5 + (ABS(hashtext(d.id::text)) % 50) / 10.0)::numeric, 2)
-        AS ili_score,
+    -- ILI score: also NULL — let sentinel compute from system_input / UARL formula.
+    NULL::numeric AS ili_score,
 
-    -- IWA grade: C or D (typical for developing-country utilities)
-    CASE WHEN ABS(hashtext(d.id::text)) % 2 = 0 THEN 'C' ELSE 'D' END
-        AS iwa_grade,
+    -- IWA grade: derived from ILI by sentinel; NULL until first scan.
+    NULL::varchar AS iwa_grade,
 
     -- Estimated revenue recovery (GHS): apparent losses × avg tariff GHS 10.83/m³
     ROUND((8000 + (hashtext(d.id::text || gs.period_start::text) % 17000)) * 0.12 * 10.83, 2)

@@ -27,7 +27,7 @@ export const QUERY_KEYS = {
   accounts: (districtId?: string) => ['accounts', districtId] as const,
   accountSearch: (q: string, districtId?: string) => ['accounts', 'search', q, districtId] as const,
   account: (id: string) => ['accounts', id] as const,
-  nrwSummary: (districtId?: string) => ['reports', 'nrw', districtId] as const,
+  nrwSummary: (districtId?: string, period?: string) => ['reports', 'nrw', districtId, period] as const,
   nrwTrend: (districtId: string) => ['reports', 'nrw', districtId, 'trend'] as const,
   anomalyFlags: (districtId?: string) => ['anomaly-flags', districtId] as const,
   auditEvents: (districtId?: string) => ['audits', districtId] as const,
@@ -223,11 +223,21 @@ export function useAccount(id: string) {
 // ============================================================
 
 /** Fetch NRW summary for all districts (or a specific one) */
-export function useNRWSummary(districtId?: string) {
+export function useNRWSummary(districtId?: string, period?: string) {
   return useQuery<NRWSummaryRow[]>({
-    queryKey: QUERY_KEYS.nrwSummary(districtId),
+    queryKey: QUERY_KEYS.nrwSummary(districtId, period),
     queryFn: async () => {
-      const params = districtId ? { district_id: districtId } : {}
+      const params: Record<string, string> = {}
+      if (districtId) params.district_id = districtId
+      if (period) {
+        // Translate UI period shorthand to from/to date strings
+        const now = new Date()
+        const to = now.toISOString().split('T')[0]
+        const days = period === '30d' ? 30 : period === '90d' ? 90 : period === '6m' ? 180 : 365
+        const from = new Date(now.getTime() - days * 86400_000).toISOString().split('T')[0]
+        params.from = from
+        params.to   = to
+      }
       const { data } = await apiClient.get<{ data: NRWSummaryRow[] }>('/reports/nrw', { params })
       return data.data ?? []
     },

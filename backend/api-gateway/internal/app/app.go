@@ -690,6 +690,8 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── Audit Events ──────────────────────────────────────────────────────────
 	audits := api.Group("/audits")
 	audits.Get("/dashboard", auditHandler.GetDashboardStats)
+	// Aggregate GRA compliance KPIs — replaces client-side 500-row computation.
+	audits.Get("/compliance-summary", auditHandler.GetComplianceSummary)
 	audits.Post("/",
 		middleware.RequireRoles("SYSTEM_ADMIN", "FIELD_OFFICER", "FIELD_SUPERVISOR", "GWL_MANAGER"),
 		auditHandler.CreateAuditEvent,

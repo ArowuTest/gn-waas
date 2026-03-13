@@ -251,6 +251,15 @@ export default function CaseDetailPage() {
                     {gwlCase.field_job_status}
                   </Badge>
                 )}
+                {gwlCase.field_job_id && (
+                  <button
+                    onClick={() => navigate(`/field-assignments?job_id=${gwlCase.field_job_id}`)}
+                    className="ml-auto text-xs text-blue-600 hover:underline flex items-center gap-1"
+                    title="View field job detail"
+                  >
+                    🔗 View Job
+                  </button>
+                )}
               </div>
               {gwlCase.gwl_assigned_at && (
                 <p className="text-xs text-gray-400 mt-2">
