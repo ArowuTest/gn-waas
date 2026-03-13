@@ -128,8 +128,21 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		ReadTimeout:  time.Duration(cfg.Server.ReadTimeoutSec) * time.Second,
 		WriteTimeout: time.Duration(cfg.Server.WriteTimeoutSec) * time.Second,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			// Fiber raises "Cannot HEAD /path" when a HEAD request hits a route
+			// that has no explicit HEAD handler (only GET). This is a Fiber v2
+			// routing quirk — not a real error. Render's health-check probes
+			// send HEAD / which triggers this on every probe. Suppress it.
+			code := fiber.StatusInternalServerError
+			if fe, ok := err.(*fiber.Error); ok {
+				code = fe.Code
+			}
+			if code == fiber.StatusMethodNotAllowed || code == fiber.StatusNotFound {
+				// Log at DEBUG (not ERROR) — these are expected routing misses
+				logger.Debug("Routing miss", zap.Int("status", code), zap.String("path", c.Path()), zap.String("method", c.Method()))
+				return c.Status(code).JSON(fiber.Map{"error": err.Error()})
+			}
 			logger.Error("Unhandled error", zap.Error(err))
-			return c.Status(500).JSON(fiber.Map{"error": "Internal server error"})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
 		},
 	})
 
@@ -162,6 +175,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 
 	// ── Health check (no auth) ────────────────────────────────────────────────
 	app.Get("/health", healthHandler.HealthCheck)
+	app.Head("/health", healthHandler.HealthCheck) // Render probe sends HEAD /health
 	app.Get("/ready", healthHandler.ReadinessCheck)
 
 	// ── Mobile app config (no auth — needed before login) ────────────────────
