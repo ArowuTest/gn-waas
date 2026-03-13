@@ -124,47 +124,37 @@ func (r *AuditEventRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 // GetByDistrict returns audit events for a district with pagination.
 // If districtID is uuid.Nil, returns events for ALL districts (admin use).
 func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uuid.UUID, status, graStatus string, limit, offset int) ([]*domain.AuditEvent, int, error) {
-	var args []interface{}
-	var where string
+	// Build conditions and args together so column references are always
+	// pre-qualified with the "ae." alias. This avoids the previous
+	// string-replacement approach which was order-sensitive and fragile.
+	conditions := []string{"1=1"}
+	args := []interface{}{}
 	argIdx := 1
-	if districtID != uuid.Nil {
-		args = append(args, districtID)
-		where = "district_id = $1"
-		argIdx = 2
-	} else {
-		where = "1=1" // all districts
-	}
 
+	if districtID != uuid.Nil {
+		conditions = append(conditions, fmt.Sprintf("ae.district_id = $%d", argIdx))
+		args = append(args, districtID)
+		argIdx++
+	}
 	if status != "" {
-		where += fmt.Sprintf(" AND status = $%d::audit_status", argIdx)
+		conditions = append(conditions, fmt.Sprintf("ae.status = $%d::audit_status", argIdx))
 		args = append(args, status)
 		argIdx++
 	}
 	if graStatus != "" {
-		where += fmt.Sprintf(" AND gra_status = $%d::gra_compliance_status", argIdx)
+		conditions = append(conditions, fmt.Sprintf("ae.gra_status = $%d::gra_compliance_status", argIdx))
 		args = append(args, graStatus)
 		argIdx++
 	}
 
-	// Qualify column names in WHERE to avoid ambiguity with JOINed tables.
-	// IMPORTANT: replace "gra_status" BEFORE "status" to avoid double-replacement
-	// (e.g. "gra_status" → "ae.gra_status" then "status" → "ae.status" would produce
-	// "ae.gra_ae.status" which is invalid SQL).
-	qualifiedWhere := strings.ReplaceAll(where, "district_id", "ae.district_id")
-	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, "gra_status", "ae.gra_status")
-	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, "ae.gra_ae.status", "ae.gra_status") // safety net
-	// Only replace bare "status" (not "gra_status" which is already qualified)
-	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, " status ", " ae.status ")
-	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, " status=", " ae.status=")
-	qualifiedWhere = strings.ReplaceAll(qualifiedWhere, "AND status", "AND ae.status")
+	whereClause := strings.Join(conditions, " AND ")
 
 	var total int
-	r.q(ctx).QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM audit_events ae WHERE %s", qualifiedWhere), args...).Scan(&total)
+	r.q(ctx).QueryRow(ctx, fmt.Sprintf(
+		"SELECT COUNT(*) FROM audit_events ae WHERE %s", whereClause,
+	), args...).Scan(&total)
 
 	args = append(args, limit, offset)
-	// FIX: expanded SELECT to include fields required by GRACompliancePage and AuditsPage:
-	// account_number, account_holder (from water_accounts), district_name (from districts),
-	// gra_sdc_id (receipt number), gra_qr_code_url, gra_signed_at, confirmed_loss_ghs, success_fee_ghs
 	rows, err := r.q(ctx).Query(ctx, fmt.Sprintf(`
 		SELECT ae.id, ae.audit_reference, ae.account_id, ae.district_id, ae.anomaly_flag_id,
 		       ae.status, ae.assigned_officer_id, ae.gra_status,
@@ -173,14 +163,14 @@ func (r *AuditEventRepository) GetByDistrict(ctx context.Context, districtID uui
 		       ae.gra_sdc_id, ae.gra_qr_code_url, ae.gra_signed_at,
 		       ae.is_locked, ae.created_at, ae.updated_at,
 		       COALESCE(wa.gwl_account_number, '')  AS account_number,
-		       COALESCE(wa.account_holder_name, '')   AS account_holder,
-		       COALESCE(d.district_name, '')    AS district_name
+		       COALESCE(wa.account_holder_name, '')  AS account_holder,
+		       COALESCE(d.district_name, '')         AS district_name
 		FROM audit_events ae
 		LEFT JOIN water_accounts wa ON wa.id = ae.account_id
 		LEFT JOIN districts d ON d.id = ae.district_id
 		WHERE %s
 		ORDER BY ae.created_at DESC
-		LIMIT $%d OFFSET $%d`, qualifiedWhere, argIdx, argIdx+1), args...)
+		LIMIT $%d OFFSET $%d`, whereClause, argIdx, argIdx+1), args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("GetByDistrict failed: %w", err)
 	}
@@ -428,11 +418,17 @@ func (r *AuditEventRepository) GetByDistrictTx(
 // without pagination limits. Used exclusively for CSV/PDF regulatory exports.
 // NEVER use this for paginated API responses — it has no row cap.
 // If districtID is uuid.Nil, returns records for ALL districts (admin export).
+//
+// A safety cap of exportMaxRows is applied. If the result set is truncated,
+// the second return value is true and callers should set an X-Truncated header
+// so downstream consumers know the export is incomplete (NEW-3).
+const exportMaxRows = 50_000 // ~50 MB at typical row size; adjust before national rollout
+
 func (r *AuditEventRepository) GetAllForExport(
 	ctx context.Context,
 	districtID uuid.UUID,
 	periodStart, periodEnd time.Time,
-) ([]*domain.AuditEvent, error) {
+) ([]*domain.AuditEvent, bool, error) {
 	conditions := []string{"ae.created_at >= $1 AND ae.created_at < $2"}
 	args := []interface{}{periodStart, periodEnd}
 	argIdx := 3
@@ -442,8 +438,9 @@ func (r *AuditEventRepository) GetAllForExport(
 		args = append(args, districtID)
 		argIdx++
 	}
-	_ = argIdx // suppress unused warning if no more conditions added
+	_ = argIdx
 
+	// Fetch up to exportMaxRows+1 so we can detect truncation without a separate COUNT query.
 	query := fmt.Sprintf(`
 		SELECT ae.id, ae.audit_reference, ae.account_id, ae.district_id, ae.anomaly_flag_id,
 		       ae.status, ae.assigned_officer_id, ae.gra_status,
@@ -451,13 +448,15 @@ func (r *AuditEventRepository) GetAllForExport(
 		       ae.is_locked, ae.created_at, ae.updated_at
 		FROM audit_events ae
 		WHERE %s
-		ORDER BY ae.created_at DESC`,
+		ORDER BY ae.created_at DESC
+		LIMIT %d`,
 		strings.Join(conditions, " AND "),
+		exportMaxRows+1,
 	)
 
 	rows, err := r.q(ctx).Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("GetAllForExport: %w", err)
+		return nil, false, fmt.Errorf("GetAllForExport: %w", err)
 	}
 	defer rows.Close()
 
@@ -477,7 +476,12 @@ func (r *AuditEventRepository) GetAllForExport(
 		events = append(events, e)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("GetAllForExport rows: %w", err)
+		return nil, false, fmt.Errorf("GetAllForExport rows: %w", err)
 	}
-	return events, nil
+
+	truncated := len(events) > exportMaxRows
+	if truncated {
+		events = events[:exportMaxRows]
+	}
+	return events, truncated, nil
 }

@@ -385,11 +385,19 @@ func (h *ReportHandler) GetGRAComplianceCSV(c *fiber.Ctx) error {
 	periodStart := time.Date(periodParsed.Year(), periodParsed.Month(), 1, 0, 0, 0, 0, time.UTC)
 	periodEnd := periodStart.AddDate(0, 1, 0) // exclusive (start of next month)
 
-	// GetAllForExport fetches ALL records without a row cap — correct for regulatory docs
-	events, err := h.auditRepo.GetAllForExport(c.UserContext(), districtID, periodStart, periodEnd)
+	// GetAllForExport fetches records up to the safety cap (50k) — correct for regulatory docs.
+	// If truncated, an X-Truncated header signals the client that not all rows are present.
+	events, truncated, err := h.auditRepo.GetAllForExport(c.UserContext(), districtID, periodStart, periodEnd)
 	if err != nil {
 		h.logger.Error("GetGRAComplianceCSV: GetAllForExport failed", zap.Error(err))
 		return response.InternalError(c, "failed to fetch audit events")
+	}
+	if truncated {
+		c.Set("X-Truncated", "true")
+		h.logger.Warn("GetGRAComplianceCSV: result truncated at exportMaxRows",
+			zap.String("district_id", districtID.String()),
+			zap.String("period", periodFilter),
+		)
 	}
 	c.Set("X-Record-Count", fmt.Sprintf("%d", len(events)))
 
@@ -463,10 +471,17 @@ func (h *ReportHandler) GetAuditTrailCSV(c *fiber.Ctx) error {
 	periodStart2 := time.Date(periodParsed2.Year(), periodParsed2.Month(), 1, 0, 0, 0, 0, time.UTC)
 	periodEnd2 := periodStart2.AddDate(0, 1, 0)
 
-	events, err := h.auditRepo.GetAllForExport(c.UserContext(), districtID, periodStart2, periodEnd2)
+	events, truncated2, err := h.auditRepo.GetAllForExport(c.UserContext(), districtID, periodStart2, periodEnd2)
 	if err != nil {
 		h.logger.Error("GetAuditTrailCSV: GetAllForExport failed", zap.Error(err))
 		return response.InternalError(c, "failed to fetch audit trail")
+	}
+	if truncated2 {
+		c.Set("X-Truncated", "true")
+		h.logger.Warn("GetAuditTrailCSV: result truncated at exportMaxRows",
+			zap.String("district_id", districtID.String()),
+			zap.String("period", periodStr),
+		)
 	}
 	c.Set("X-Record-Count", fmt.Sprintf("%d", len(events)))
 

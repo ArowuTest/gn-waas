@@ -209,24 +209,30 @@ func (h *WhistleblowerHandler) ListTips(c *fiber.Ctx) error {
 		LEFT JOIN districts d ON d.id = wt.district_id
 		WHERE 1=1
 	`
+	// Build filter conditions for both the main query and the count query.
+	// A dedicated countArgs slice is used instead of args[:argIdx-1] to avoid
+	// off-by-one bugs when LIMIT/OFFSET are appended to args later (NEW-1).
 	args := []interface{}{}
+	countArgs := []interface{}{}
 	argIdx := 1
 
 	if statusFilter != "" {
 		query += fmt.Sprintf(" AND wt.status = $%d::tip_status", argIdx)
 		args = append(args, statusFilter)
+		countArgs = append(countArgs, statusFilter)
 		argIdx++
 	}
 	if categoryFilter != "" {
 		query += fmt.Sprintf(" AND wt.category = $%d::tip_category", argIdx)
 		args = append(args, categoryFilter)
+		countArgs = append(countArgs, categoryFilter)
 		argIdx++
 	}
 
-	// COUNT query — same WHERE conditions, no LIMIT/OFFSET
+	// COUNT query reuses the same parameterised conditions via countArgs.
 	countQuery := `SELECT COUNT(*) FROM whistleblower_tips wt LEFT JOIN districts d ON d.id = wt.district_id WHERE 1=1`
 	if statusFilter != "" {
-		countQuery += fmt.Sprintf(" AND wt.status = $%d::tip_status", 1)
+		countQuery += fmt.Sprintf(" AND wt.status = $1::tip_status")
 	}
 	if categoryFilter != "" {
 		countArgIdx := 1
@@ -234,7 +240,7 @@ func (h *WhistleblowerHandler) ListTips(c *fiber.Ctx) error {
 		countQuery += fmt.Sprintf(" AND wt.category = $%d::tip_category", countArgIdx)
 	}
 	var total int
-	_ = h.db.QueryRow(c.Context(), countQuery, args[:argIdx-1]...).Scan(&total)
+	_ = h.db.QueryRow(c.Context(), countQuery, countArgs...).Scan(&total)
 
 	query += fmt.Sprintf(" ORDER BY wt.created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, limit, offset)

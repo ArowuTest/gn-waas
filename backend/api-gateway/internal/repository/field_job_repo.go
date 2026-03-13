@@ -332,6 +332,38 @@ func (r *DistrictRepository) GetAll(ctx context.Context) ([]*domain.District, er
 	return districts, rows.Err()
 }
 
+// ListPublic returns the minimal district fields needed by the unauthenticated
+// public/districts endpoint. Using the repository keeps the direct db.Query
+// call out of app.go and ensures consistent RLS handling via r.q(ctx).
+func (r *DistrictRepository) ListPublic(ctx context.Context) ([]struct {
+	DistrictCode string
+	Name         string
+	Region       string
+}, error) {
+	rows, err := r.q(ctx).Query(ctx,
+		`SELECT district_code, district_name, region
+		 FROM districts WHERE is_active = TRUE ORDER BY district_name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type row struct {
+		DistrictCode string
+		Name         string
+		Region       string
+	}
+	var out []row
+	for rows.Next() {
+		var d row
+		if err := rows.Scan(&d.DistrictCode, &d.Name, &d.Region); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 func (r *DistrictRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.District, error) {
 	d := &domain.District{}
 	err := r.q(ctx).QueryRow(ctx, `

@@ -462,9 +462,20 @@ func (s *IWAWaterBalanceService) compute(input *WaterBalanceInput) *WaterBalance
 	}
 
 	// IWA Infrastructure Leakage Index (ILI)
-	// Simplified: ILI = Current Annual Real Losses / (SystemInput × 0.08)
-	// (8% of system input is the IWA "unavoidable" real loss benchmark for Ghana)
-	unavoidableRealLossM3 := r.SystemInputM3 * 0.08
+	// ILI = Current Annual Real Losses / Unavoidable Annual Real Losses (UARL)
+	//
+	// When full pipe-network parameters (length, connections, pressure) are available
+	// the UARL is computed via computeUARL() above using the IWA M36 formula:
+	//   UARL (m³/yr) = (0.8×Lm + 25×Nc + 0.02×Lp) × P × 0.001
+	//
+	// For the simplified proxy used here (no night-flow/IoT data):
+	//   UARL ≈ 4 % of system input volume
+	// This matches the WHO/IWA "technically achievable minimum" for Ghana's
+	// pipe infrastructure and is consistent with the donor-report handler.
+	// The previous value (0.08 / 8 %) overstated the UARL, causing ILI to read
+	// ~2× too low — making performance appear better than reality to World Bank donors.
+	// Reference: IWA M36, 3rd Ed. §6.3; confirmed with donor_report_handler.go line ~131.
+	unavoidableRealLossM3 := r.SystemInputM3 * 0.04 // 4 % proxy, aligned with donor report
 	if unavoidableRealLossM3 > 0 {
 		r.ILI = r.TotalRealLossesM3 / unavoidableRealLossM3
 	}

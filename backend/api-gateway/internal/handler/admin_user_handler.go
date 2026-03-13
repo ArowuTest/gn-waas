@@ -240,6 +240,17 @@ func (h *AdminUserHandler) provisionKeycloakUser(ctx context.Context, email, ful
 		return false // Keycloak not configured (dev/test mode)
 	}
 
+	// SECURITY: the user-creation payload includes the plaintext password (NEW-2).
+	// Enforce HTTPS so it is never transmitted over plain HTTP. The only permitted
+	// exception is localhost (integration testing without TLS termination).
+	isLocalhost := strings.HasPrefix(h.kcURL, "http://localhost") ||
+		strings.HasPrefix(h.kcURL, "http://127.0.0.1")
+	if !strings.HasPrefix(h.kcURL, "https://") && !isLocalhost {
+		h.logger.Error("provisionKeycloakUser: KEYCLOAK_URL must use HTTPS in non-localhost environments — refusing to send credentials over plain HTTP",
+			zap.String("kcURL", h.kcURL))
+		return false
+	}
+
 	// Step 1: Get admin access token via client_credentials
 	tokenURL := strings.TrimRight(h.kcURL, "/") + "/realms/master/protocol/openid-connect/token"
 	tokenBody := "grant_type=client_credentials&client_id=admin-cli&client_secret=" + h.kcAdminSecret

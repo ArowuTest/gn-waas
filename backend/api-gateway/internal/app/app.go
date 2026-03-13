@@ -1364,25 +1364,21 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 			Name         string `json:"name"`
 			Region       string `json:"region"`
 		}
-		// Direct query — RLS policy on districts is USING(true) so all rows visible
-		rows, err := db.Query(c.Context(),
-			`SELECT district_code, district_name, region FROM districts ORDER BY district_name`)
+		// Route through DistrictRepository so queries go through r.q(ctx) rather
+		// than a direct db reference embedded in app.go (issue #3).
+		rows, err := districtRepo.ListPublic(c.Context())
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "failed to fetch districts"})
 		}
-		defer rows.Close()
-		var districts []districtPublic
-		for rows.Next() {
-			var d districtPublic
-			if err := rows.Scan(&d.DistrictCode, &d.Name, &d.Region); err != nil {
-				continue
-			}
-			districts = append(districts, d)
+		out := make([]districtPublic, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, districtPublic{
+				DistrictCode: r.DistrictCode,
+				Name:         r.Name,
+				Region:       r.Region,
+			})
 		}
-		if districts == nil {
-			districts = []districtPublic{}
-		}
-		return c.JSON(fiber.Map{"districts": districts})
+		return c.JSON(fiber.Map{"districts": out})
 	})
 
 	// ── Whistleblower Admin (SYSTEM_ADMIN only) ───────────────────────────────
