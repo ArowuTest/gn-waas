@@ -72,8 +72,8 @@ class GNWAASApp extends ConsumerWidget {
     final cur = current.split('.').map(int.tryParse).toList();
     final req = required.split('.').map(int.tryParse).toList();
     // Pad shorter version with zeros
-    while (cur.length < req.length) cur.add(0);
-    while (req.length < cur.length) req.add(0);
+    while (cur.length < req.length) { cur.add(0); }
+    while (req.length < cur.length) { req.add(0); }
     for (int i = 0; i < cur.length; i++) {
       final c = cur[i] ?? 0;
       final r = req[i] ?? 0;
