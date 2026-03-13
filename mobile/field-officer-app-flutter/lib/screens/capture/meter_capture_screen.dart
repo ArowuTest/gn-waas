@@ -27,7 +27,9 @@ class _MeterCaptureScreenState extends ConsumerState<MeterCaptureScreen> {
   MeterPhoto? _capturedPhoto;
   OcrResult? _ocrResult;
   double? _manualReading;
-  final _notesCtrl = TextEditingController();
+  // OCR conflict flag: set when manual reading deviates beyond admin-configured tolerance
+  bool _ocrConflict = false;
+  final _notesCtrl  = TextEditingController();
   final _manualCtrl = TextEditingController();
   CameraController? _cameraCtrl;
   List<CameraDescription> _cameras = [];
@@ -170,8 +172,15 @@ class _MeterCaptureScreenState extends ConsumerState<MeterCaptureScreen> {
       jobId:         job.id,
       ocrReadingM3:  reading,
       ocrConfidence: _ocrResult?.confidence ?? 0.0,
-      ocrStatus:     _ocrResult?.status ?? OcrStatus.manual,
-      officerNotes:  _notesCtrl.text,
+      // If officer overrode OCR with a manual reading, the status is MANUAL
+      // even if OCR succeeded.  This tells the Sentinel reconciler to use
+      // the manual reading as authoritative and flag for review if _ocrConflict.
+      ocrStatus:     (_manualReading != null && _ocrResult != null)
+                         ? OcrStatus.manual
+                         : (_ocrResult?.status ?? OcrStatus.manual),
+      officerNotes:  _ocrConflict
+                         ? '[OCR CONFLICT] ${_notesCtrl.text}'.trim()
+                         : _notesCtrl.text,
       gpsLat:        _capturedPhoto!.gpsLat,
       gpsLng:        _capturedPhoto!.gpsLng,
       gpsAccuracyM:  _capturedPhoto!.gpsAccuracyM,
@@ -420,8 +429,50 @@ class _MeterCaptureScreenState extends ConsumerState<MeterCaptureScreen> {
             suffixText: 'm³',
             suffixStyle: const TextStyle(color: Color(0xFF94A3B8)),
           ),
-          onChanged: (v) => _manualReading = double.tryParse(v),
+          onChanged: (v) {
+            final parsed = double.tryParse(v);
+            setState(() {
+              _manualReading = parsed;
+              // OCR conflict check (SRS-MOB-004 / field.ocr_conflict_tolerance_pct)
+              // Warn the officer if their manual entry deviates from the OCR result
+              // by more than the admin-configured tolerance percentage.
+              if (parsed != null && _ocrResult != null && _ocrResult!.readingM3 > 0) {
+                final tolerancePct = ref.read(mobileConfigProvider)
+                    .whenOrNull(data: (c) => c.ocrConflictTolerancePct) ?? 2.0;
+                final diffPct = ((parsed - _ocrResult!.readingM3).abs() /
+                    _ocrResult!.readingM3) * 100;
+                _ocrConflict = diffPct > tolerancePct;
+              } else {
+                _ocrConflict = false;
+              }
+            });
+          },
         ),
+        // Conflict warning banner — shown when manual reading diverges from OCR
+        if (_ocrConflict) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF7C2D12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFEF4444)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Color(0xFFFCA5A5), size: 18),
+                SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Manual reading differs significantly from OCR result. '
+                    'Please verify the meter and confirm this reading is correct.',
+                    style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
 
         SizedBox(

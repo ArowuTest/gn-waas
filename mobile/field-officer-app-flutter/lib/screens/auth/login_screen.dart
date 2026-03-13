@@ -17,7 +17,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey        = GlobalKey<FormState>();
   final _emailCtrl      = TextEditingController();
   final _passwordCtrl   = TextEditingController();
-  bool  _obscurePassword = true;
+  bool  _obscurePassword    = true;
   bool  _biometricAvailable = false;
 
   @override
@@ -32,8 +32,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (mounted) setState(() => _biometricAvailable = available);
   }
 
+  /// True when the admin has set require_biometric=true AND the device supports it.
+  /// In that case the Sign In button will trigger biometric verification first.
+  bool get _biometricRequired {
+    final configAsync = ref.read(mobileConfigProvider);
+    final requireBio = configAsync.whenOrNull(data: (c) => c.requireBiometric) ?? false;
+    return requireBio && _biometricAvailable;
+  }
+
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // If the admin has mandated biometric and the device supports it,
+    // require a biometric pass before accepting the password.
+    if (_biometricRequired) {
+      final bio = ref.read(biometricServiceProvider);
+      final verified = await bio.authenticate(
+        reason: 'Biometric verification required to sign in',
+      );
+      if (!verified) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometric verification failed. Sign-in blocked.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     await ref.read(authProvider.notifier).login(
       _emailCtrl.text.trim(),
       _passwordCtrl.text,
@@ -216,9 +245,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             strokeWidth: 2, color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          'Sign In',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      : Text(
+                          // When biometric is required by admin policy, signal it
+                          _biometricRequired ? 'Sign In (Biometric Required)' : 'Sign In',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                         ),
                 ),
 
@@ -246,9 +276,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 32),
 
                 // ── Dev Quick Login (staging only) ────────────────────────
-                // SECURITY NOTE: These buttons are for demo/staging environments only.
-                // They pre-fill credentials for testing. Remove before production.
-                if (const bool.fromEnvironment('SHOW_DEV_LOGIN', defaultValue: true)) ...[
+                // SECURITY NOTE: These buttons pre-fill test credentials.
+                // They are HIDDEN by default (defaultValue: false).
+                // To enable for a staging build use:
+                //   flutter run --dart-define=SHOW_DEV_LOGIN=true
+                // They must NEVER appear in a production APK/IPA.
+                if (const bool.fromEnvironment('SHOW_DEV_LOGIN', defaultValue: false)) ...[
                   const Divider(color: Color(0xFF1e293b), height: 32),
                   const Text(
                     'Dev Quick Login',
