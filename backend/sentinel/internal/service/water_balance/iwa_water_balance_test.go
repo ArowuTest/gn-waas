@@ -79,30 +79,38 @@ func TestComputeWaterBalance_WorldClassGrade(t *testing.T) {
 		PeriodEnd:   time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
 
 		SystemInputM3:       10_000,
-		BilledMeteredM3:     8_500,
-		BilledUnmeteredM3:   200,
-		UnbilledMeteredM3:   100,
+		BilledMeteredM3:     9_300,
+		BilledUnmeteredM3:   100,
+		UnbilledMeteredM3:   50,
 		UnbilledUnmeteredM3: 0,
 
-		// Very low losses
+		// Very low losses — real losses total 300 m³ (3% of system input)
+		// With 0.04 proxy: UARL = 400 m³, ILI = 300/400 = 0.75 → Grade A
 		UnauthorisedConsumptionM3: 100,
 		MeteringInaccuraciesM3:    50,
 		DataHandlingErrorsM3:      50,
-		MainLeakageM3:             700,
-		StorageOverflowM3:         100,
-		ServiceConnectionLeakM3:   200,
+		MainLeakageM3:             150,
+		StorageOverflowM3:         80,
+		ServiceConnectionLeakM3:   70,
 	}
 
 	result := svc.ComputeForTest(input)
 
-	// NRW = 1200/10000 = 12%
-	if result.NRWPercent > 15 {
-		t.Errorf("Expected NRW < 15%%, got %.1f%%", result.NRWPercent)
+	// NRW = (200 apparent + 300 real) / 10000 = 5%
+	if result.NRWPercent > 10 {
+		t.Errorf("Expected NRW < 10%%, got %.1f%%", result.NRWPercent)
 	}
 
-	// Should be Grade A or B
-	if result.IWAGrade != "A" && result.IWAGrade != "B" {
-		t.Errorf("Expected Grade A or B for 12%% NRW, got %s", result.IWAGrade)
+	// Real losses = 300 m³; UARL proxy = 10000 × 0.04 = 400 m³ → ILI = 0.75
+	// ILI < 1.0 with NRW < 20% → Grade A
+	// This verifies the ILI formula uses the correct 0.04 proxy (IWA M36).
+	if result.IWAGrade != "A" {
+		t.Errorf("Expected Grade A (ILI≈0.75, NRW≈5%%); got grade=%s ILI=%.2f NRW=%.1f%%",
+			result.IWAGrade, result.ILI, result.NRWPercent)
+	}
+	// Verify ILI is computed correctly: 300 / (10000 × 0.04) = 0.75 ± tolerance
+	if result.ILI < 0.5 || result.ILI > 1.0 {
+		t.Errorf("ILI out of expected range [0.5, 1.0] for world-class scenario: got %.3f", result.ILI)
 	}
 }
 
