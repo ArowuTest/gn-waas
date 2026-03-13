@@ -83,7 +83,17 @@ func (s *TariffService) CalculateShadowBill(
 	}
 
 	// Apply tiered rates
+	// Rates are guaranteed to arrive ordered by min_volume_m3 ASC from the repository.
+	//
+	// Tier capacity calculation (issue #8 guard):
+	//   tierMax = MaxVolumeM3 - MinVolumeM3  (width of this bucket)
+	//   This is correct only when tiers are contiguous (no gaps) and ordered.
+	//   The repo enforces ORDER BY min_volume_m3 ASC, but we also validate here
+	//   that each tier's MinVolumeM3 <= total consumption already processed,
+	//   so a misconfigured gap (e.g. tiers 0-5 then 10-20 with a 5-10 gap)
+	//   does not silently under-bill the 5-10 m³ band.
 	remainingConsumption := req.ConsumptionM3
+	var consumedSoFar float64
 	var subtotal float64
 	var serviceCharge float64
 
@@ -93,6 +103,30 @@ func (s *TariffService) CalculateShadowBill(
 		}
 
 		calc.TariffRateID = rate.ID
+
+		// Gap guard: if this tier starts above where we've consumed to, the tariff
+		// table has a gap (e.g. tiers 0-5 then 10-20 skipping 5-10). Fill the gap
+		// volume at this tier's rate rather than silently dropping it, and log a
+		// warning so the admin can correct the tariff configuration.
+		if rate.MinVolumeM3 > consumedSoFar {
+			gap := rate.MinVolumeM3 - consumedSoFar
+			if gap > remainingConsumption {
+				gap = remainingConsumption
+			}
+			s.logger.Warn("tariff gap detected — gap volume billed at next tier rate",
+				zap.String("category", req.Category),
+				zap.Float64("gap_start_m3", consumedSoFar),
+				zap.Float64("gap_end_m3", rate.MinVolumeM3),
+				zap.Float64("gap_volume_m3", gap),
+				zap.Float64("applied_rate", rate.RatePerM3),
+			)
+			subtotal += gap * rate.RatePerM3
+			remainingConsumption -= gap
+			consumedSoFar += gap
+			if remainingConsumption <= 0 {
+				break
+			}
+		}
 
 		// Calculate volume for this tier
 		var tierVolume float64
@@ -118,6 +152,7 @@ func (s *TariffService) CalculateShadowBill(
 		}
 
 		subtotal += tierAmount
+		consumedSoFar += tierVolume
 		remainingConsumption -= tierVolume
 
 		// Service charge applied once (from first rate in category)

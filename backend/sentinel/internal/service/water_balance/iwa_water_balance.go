@@ -3,6 +3,7 @@ package water_balance
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/ArowuTest/gn-waas/backend/sentinel/internal/domain/entities"
@@ -112,7 +113,11 @@ type WaterBalanceResult struct {
 	EstimatedRevenueRecoveryGHS float64 `json:"estimated_revenue_recovery_ghs"`
 
 	// Data quality
-	DataConfidenceScore float64 `json:"data_confidence_score"` // 0-100
+	// DataConfidenceScore is the internal 0-100 precision score used for computation.
+	// DataConfidenceGrade is the 1-10 AWWA Grading Matrix scale mandated by SRS-ADM-003.
+	// Formula: grade = ceil(score / 10), clamped to [1, 10].
+	DataConfidenceScore float64 `json:"data_confidence_score"` // 0-100 (internal)
+	DataConfidenceGrade int     `json:"data_confidence_grade"` // 1-10  (AWWA / spec)
 	ComputedAt          time.Time `json:"computed_at"`
 }
 
@@ -495,6 +500,14 @@ func (s *IWAWaterBalanceService) compute(input *WaterBalanceInput) *WaterBalance
 
 	// Data confidence score (0-100)
 	r.DataConfidenceScore = s.computeConfidenceScore(input)
+	// Convert 0-100 score to 1-10 AWWA grade: ceil(score/10), clamped to [1,10].
+	grade := int(math.Ceil(r.DataConfidenceScore / 10.0))
+	if grade < 1 {
+		grade = 1
+	} else if grade > 10 {
+		grade = 10
+	}
+	r.DataConfidenceGrade = grade
 
 	return r
 }
@@ -546,6 +559,21 @@ func (s *IWAWaterBalanceService) computeConfidenceScore(input *WaterBalanceInput
 
 // persist upserts the water balance result into water_balance_records
 func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceResult) error {
+	// Column mapping against migration 003_billing_and_shadow_ledger.sql:
+	//
+	//  Writable columns supplied here:
+	//    system_input_volume_m3, billed_metered_m3, billed_unmetered_m3,
+	//    unbilled_metered_m3, unbilled_unmetered_m3,
+	//    unauthorised_consumption_m3, metering_inaccuracies_m3, data_handling_errors_m3,
+	//    main_leakage_m3, storage_overflow_m3, service_conn_leakage_m3
+	//
+	//  GENERATED ALWAYS AS STORED (must NOT be supplied in INSERT):
+	//    total_authorised_m3, total_apparent_losses_m3,
+	//    total_real_losses_m3, total_nrw_m3
+	//
+	//  Sentinel-computed scalars (migration 023 columns):
+	//    nrw_percent, ili_score, iwa_grade,
+	//    estimated_revenue_recovery_ghs, data_confidence_score, computed_at
 	_, err := s.db.Exec(ctx, `
 		INSERT INTO water_balance_records (
 			district_id, period_start, period_end,
@@ -553,7 +581,7 @@ func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceRes
 			billed_metered_m3, billed_unmetered_m3,
 			unbilled_metered_m3, unbilled_unmetered_m3,
 			unauthorised_consumption_m3, metering_inaccuracies_m3, data_handling_errors_m3,
-			main_leakage_m3, storage_overflow_m3,
+			main_leakage_m3, storage_overflow_m3, service_conn_leakage_m3,
 			nrw_percent, ili_score, iwa_grade,
 			estimated_revenue_recovery_ghs, data_confidence_score,
 			computed_at
@@ -563,9 +591,9 @@ func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceRes
 			$5, $6,
 			$7, $8,
 			$9, $10, $11,
-			$12, $13,
-			$14, $15, $16,
-			$17, $18,
+			$12, $13, $14,
+			$15, $16, $17,
+			$18, $19,
 			NOW()
 		)
 		ON CONFLICT (district_id, period_start, period_end)
@@ -574,9 +602,13 @@ func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceRes
 			billed_metered_m3             = EXCLUDED.billed_metered_m3,
 			billed_unmetered_m3           = EXCLUDED.billed_unmetered_m3,
 			unbilled_metered_m3           = EXCLUDED.unbilled_metered_m3,
+			unbilled_unmetered_m3         = EXCLUDED.unbilled_unmetered_m3,
 			unauthorised_consumption_m3   = EXCLUDED.unauthorised_consumption_m3,
 			metering_inaccuracies_m3      = EXCLUDED.metering_inaccuracies_m3,
+			data_handling_errors_m3       = EXCLUDED.data_handling_errors_m3,
 			main_leakage_m3               = EXCLUDED.main_leakage_m3,
+			storage_overflow_m3           = EXCLUDED.storage_overflow_m3,
+			service_conn_leakage_m3       = EXCLUDED.service_conn_leakage_m3,
 			nrw_percent                   = EXCLUDED.nrw_percent,
 			ili_score                     = EXCLUDED.ili_score,
 			iwa_grade                     = EXCLUDED.iwa_grade,
@@ -588,7 +620,7 @@ func (s *IWAWaterBalanceService) persist(ctx context.Context, r *WaterBalanceRes
 		r.BilledMeteredM3, r.BilledUnmeteredM3,
 		r.UnbilledMeteredM3, r.UnbilledUnmeteredM3,
 		r.UnauthorisedConsumptionM3, r.MeteringInaccuraciesM3, r.DataHandlingErrorsM3,
-		r.MainLeakageM3, r.StorageOverflowM3,
+		r.MainLeakageM3, r.StorageOverflowM3, r.ServiceConnectionLeakM3,
 		r.NRWPercent, r.ILI, r.IWAGrade,
 		r.EstimatedRevenueRecoveryGHS, r.DataConfidenceScore,
 	)
