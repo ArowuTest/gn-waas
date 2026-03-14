@@ -500,3 +500,53 @@ export interface WaterBalanceRecord {
   data_confidence_score: number
   computed_at: string
 }
+
+// ============================================================
+// ANOMALY FLAG ACTIONS
+// ============================================================
+
+/** Confirm or dismiss an anomaly flag.
+ *  Maps to PATCH /api/v1/sentinel/anomalies/:id/confirm
+ */
+export function useConfirmAnomaly() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      confirmedFraud,
+      resolutionNotes,
+    }: {
+      id: string
+      confirmedFraud: boolean
+      resolutionNotes?: string
+    }) => {
+      const { data } = await apiClient.patch(`/sentinel/anomalies/${id}/confirm`, {
+        confirmed_fraud: confirmedFraud,
+        resolution_notes: resolutionNotes ?? '',
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['anomaly-flags'] })
+    },
+  })
+}
+
+/** Move an anomaly to INVESTIGATING status (acknowledge it).
+ *  Uses a generic status-update endpoint PATCH /api/v1/anomaly-flags/:id/status
+ */
+export function useUpdateAnomalyStatus() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
+      const { data } = await apiClient.patch(`/anomaly-flags/${id}/status`, {
+        status,
+        resolution_notes: notes ?? '',
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['anomaly-flags'] })
+    },
+  })
+}

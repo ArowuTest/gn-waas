@@ -7,8 +7,8 @@
  * status updates and field-job dispatch.
  */
 import { useState } from 'react'
-import { AlertTriangle, Filter, RefreshCw, Loader2, Eye, ChevronDown, ChevronUp } from 'lucide-react'
-import { useAnomalyFlags } from '../hooks/useQueries'
+import { AlertTriangle, Filter, RefreshCw, Loader2, Eye, ChevronDown, ChevronUp, Search, CheckCircle, XCircle } from 'lucide-react'
+import { useAnomalyFlags, useUpdateAnomalyStatus, useConfirmAnomaly } from '../hooks/useQueries'
 import { useAuth } from '../contexts/AuthContext'
 import type { AnomalyFlag } from '../types'
 
@@ -39,6 +39,35 @@ const STATUS_COLORS: Record<string, string> = {
 
 function FlagRow({ flag }: { flag: AnomalyFlag }) {
   const [expanded, setExpanded] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null)
+
+  const updateStatus = useUpdateAnomalyStatus()
+  const confirmAnomaly = useConfirmAnomaly()
+
+  const handleAction = async (action: 'investigate' | 'confirm' | 'false_positive' | 'resolve') => {
+    setActionMsg(null)
+    try {
+      if (action === 'investigate') {
+        await updateStatus.mutateAsync({ id: flag.id, status: 'INVESTIGATING', notes })
+        setActionMsg({ text: 'Marked as Under Investigation', ok: true })
+      } else if (action === 'confirm') {
+        await confirmAnomaly.mutateAsync({ id: flag.id, confirmedFraud: true, resolutionNotes: notes })
+        setActionMsg({ text: 'Confirmed as fraud — recovery event created', ok: true })
+      } else if (action === 'false_positive') {
+        await confirmAnomaly.mutateAsync({ id: flag.id, confirmedFraud: false, resolutionNotes: notes })
+        setActionMsg({ text: 'Marked as False Positive', ok: true })
+      } else if (action === 'resolve') {
+        await updateStatus.mutateAsync({ id: flag.id, status: 'RESOLVED', notes })
+        setActionMsg({ text: 'Marked as Resolved', ok: true })
+      }
+    } catch {
+      setActionMsg({ text: 'Action failed — please try again', ok: false })
+    }
+  }
+
+  const isBusy = updateStatus.isPending || confirmAnomaly.isPending
+  const isActionable = flag.status === 'OPEN' || flag.status === 'INVESTIGATING'
 
   return (
     <>
@@ -107,6 +136,69 @@ function FlagRow({ flag }: { flag: AnomalyFlag }) {
                 )}
               </div>
             </div>
+
+            {/* ── Action Panel ─────────────────────────────────── */}
+            {isActionable && (
+              <div className="mt-4 pt-4 border-t border-green-200">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Take Action</p>
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Investigation notes (optional)…"
+                  rows={2}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none bg-white"
+                  onClick={e => e.stopPropagation()}
+                />
+                <div className="flex flex-wrap gap-2" onClick={e => e.stopPropagation()}>
+                  {flag.status === 'OPEN' && (
+                    <button
+                      disabled={isBusy}
+                      onClick={() => handleAction('investigate')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 rounded-lg hover:bg-yellow-200 disabled:opacity-50"
+                    >
+                      <Search className="w-3.5 h-3.5" />
+                      Acknowledge &amp; Investigate
+                    </button>
+                  )}
+                  {flag.status === 'INVESTIGATING' && (
+                    <button
+                      disabled={isBusy}
+                      onClick={() => handleAction('resolve')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300 rounded-lg hover:bg-blue-200 disabled:opacity-50"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Mark Resolved
+                    </button>
+                  )}
+                  <button
+                    disabled={isBusy}
+                    onClick={() => handleAction('confirm')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-100 text-red-800 border border-red-300 rounded-lg hover:bg-red-200 disabled:opacity-50"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Confirm Fraud
+                  </button>
+                  <button
+                    disabled={isBusy}
+                    onClick={() => handleAction('false_positive')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    False Positive
+                  </button>
+                </div>
+                {actionMsg && (
+                  <p className={`mt-2 text-xs font-medium ${actionMsg.ok ? 'text-green-700' : 'text-red-600'}`}>
+                    {actionMsg.ok ? '✓' : '✗'} {actionMsg.text}
+                  </p>
+                )}
+              </div>
+            )}
+            {!isActionable && flag.status !== 'OPEN' && (
+              <p className="mt-3 text-xs text-gray-400 italic">
+                This anomaly is {flag.status.toLowerCase()} — no further actions available.
+              </p>
+            )}
           </td>
         </tr>
       )}

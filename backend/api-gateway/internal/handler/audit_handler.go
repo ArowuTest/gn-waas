@@ -1792,3 +1792,56 @@ func (h *AuditHandler) GetComplianceSummary(c *fiber.Ctx) error {
 		"total_vat_collected_ghs":   s.TotalVATCollectedGHS,
 	})
 }
+
+// ─── UpdateAnomalyStatus ──────────────────────────────────────────────────────
+// PATCH /api/v1/anomaly-flags/:id/status
+//
+// Allows GRA officers and supervisors to move an anomaly through the
+// investigation lifecycle without fully confirming it as fraud.
+//
+// Accepted transitions:
+//   OPEN          → INVESTIGATING  (acknowledge / start investigation)
+//   INVESTIGATING → OPEN           (re-open)
+//   INVESTIGATING → RESOLVED       (mark resolved without confirmed fraud)
+//   any           → FALSE_POSITIVE (dismiss as not genuine)
+//
+// For confirmed fraud use PATCH /anomaly-flags/:id/confirm instead.
+
+func (h *AnomalyFlagHandler) UpdateAnomalyStatus(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "INVALID_ID", "Invalid anomaly flag ID")
+	}
+
+	var req struct {
+		Status          string `json:"status"`
+		ResolutionNotes string `json:"resolution_notes"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.BadRequest(c, "INVALID_BODY", "Invalid request body")
+	}
+
+	allowed := map[string]bool{
+		"OPEN": true, "INVESTIGATING": true, "RESOLVED": true, "FALSE_POSITIVE": true,
+	}
+	if !allowed[req.Status] {
+		return response.BadRequest(c, "INVALID_STATUS",
+			"status must be one of: OPEN, INVESTIGATING, RESOLVED, FALSE_POSITIVE")
+	}
+
+	_, err = h.q(c.UserContext()).Exec(c.UserContext(), `
+		UPDATE anomaly_flags
+		SET status           = $1,
+		    resolution_notes = COALESCE(NULLIF($2, ''), resolution_notes),
+		    resolved_at      = CASE WHEN $1 IN ('RESOLVED','FALSE_POSITIVE') THEN NOW() ELSE resolved_at END,
+		    updated_at       = NOW()
+		WHERE id = $3`,
+		req.Status, req.ResolutionNotes, id,
+	)
+	if err != nil {
+		h.logger.Error("UpdateAnomalyStatus failed", zap.Error(err))
+		return response.InternalError(c, "Failed to update anomaly status")
+	}
+
+	return response.OK(c, fiber.Map{"id": id, "status": req.Status})
+}

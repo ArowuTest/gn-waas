@@ -778,6 +778,10 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	)
 	anomalyFlags.Get("/", flagHandler.ListAnomalyFlags)
 	anomalyFlags.Get("/:id", flagHandler.GetAnomalyFlag)
+	anomalyFlags.Patch("/:id/status",
+		middleware.RequireRoles("SYSTEM_ADMIN", "MOF_AUDITOR", "GRA_OFFICER", "FIELD_SUPERVISOR", "GWL_MANAGER"),
+		flagHandler.UpdateAnomalyStatus,
+	)
 	anomalyFlags.Patch("/:id/confirm",
 		middleware.RequireRoles("SYSTEM_ADMIN", "MOF_AUDITOR", "GRA_OFFICER"),
 		flagHandler.ConfirmAnomaly,
@@ -836,7 +840,11 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR", "GWL_MANAGER", "GWL_EXECUTIVE", "FIELD_SUPERVISOR", "GRA_OFFICER"),
 		nrwHandler.GetNRWSummary)
 	reports.Get("/nrw/my-district",
-		middleware.RequireRoles("FIELD_OFFICER", "GWL_MANAGER", "FIELD_SUPERVISOR", "GRA_OFFICER"),
+		middleware.RequireRoles(
+			"FIELD_OFFICER", "GWL_MANAGER", "FIELD_SUPERVISOR", "GRA_OFFICER",
+			// National-level read-only roles: handler falls back to first active district
+			"MINISTER_VIEW", "MOF_AUDITOR", "GWL_ANALYST", "GWL_EXECUTIVE",
+		),
 		nrwHandler.GetMyDistrictSummary,
 	)
 	reports.Get("/nrw/:district_id/trend", nrwHandler.GetDistrictNRWTrend)
