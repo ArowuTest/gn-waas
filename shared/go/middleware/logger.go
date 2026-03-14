@@ -62,9 +62,21 @@ func buildAllowedOrigins() map[string]bool {
 		"https://gwl.gnwaas.gov.gh":       true,
 		"https://gnwaas.gov.gh":           true,
 		"https://www.gnwaas.gov.gh":       true,
-		// Staging
+		// Staging sovereign domains
 		"https://admin-staging.gnwaas.gov.gh":     true,
 		"https://authority-staging.gnwaas.gov.gh": true,
+		// Vercel deployment URLs (all portals + landing page)
+		// These are the live URLs users access before the sovereign domain is active.
+		"https://gnwaas-admin.vercel.app":     true,
+		"https://gnwaas-gwl.vercel.app":       true,
+		"https://gnwaas-authority.vercel.app": true,
+		"https://gnwaas-landing.vercel.app":   true,
+		"https://waas-landing.vercel.app":     true, // observed in production (screenshot)
+		// Render static site URLs (added to render.yaml in previous fix)
+		"https://gnwaas-admin-portal.onrender.com":     true,
+		"https://gnwaas-gwl-portal.onrender.com":       true,
+		"https://gnwaas-authority-portal.onrender.com": true,
+		"https://gnwaas-landing.onrender.com":          true,
 	}
 
 	// Runtime-injectable origins (Vercel preview URLs, Render custom domains, etc.)

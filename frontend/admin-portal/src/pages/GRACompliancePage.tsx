@@ -11,6 +11,7 @@ import React from 'react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../lib/api-client'
+import { useDistricts } from '../hooks/useQueries'
 import {
   CheckCircle, XCircle, Clock, AlertTriangle,
   Download, RefreshCw, Search, Filter
@@ -134,6 +135,7 @@ export function GRACompliancePage() {
   const [districtId, setDistrict] = useState('')
   const [statusFilter, setStatus] = useState('')
   const [search, setSearch]       = useState('')
+  const { data: districts = [] } = useDistricts()
 
   const { data: recordsData, isLoading, refetch } = useGRACompliance(period, districtId, statusFilter)
   const { data: summary = {} as Partial<GRAComplianceSummary> } = useGRAComplianceSummary(period, districtId)
@@ -142,8 +144,27 @@ export function GRACompliancePage() {
 
   if (!districtId) {
     return (
-      <div className="p-8 text-center text-gray-500">
-        <p className="text-lg font-medium">Select a district to view GRA compliance records</p>
+      <div className="p-6 space-y-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">GRA Compliance</h1>
+          <p className="text-sm text-gray-500 mt-0.5">VSDC invoice signing status and VAT receipt tracking</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-md">
+          <p className="text-sm font-medium text-gray-700 mb-3">Select a district to view compliance records:</p>
+          <select
+            value={districtId}
+            onChange={e => setDistrict(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="">— Select District —</option>
+            {districts.map((d: any) => (
+              <option key={d.id} value={d.id}>{d.district_name}</option>
+            ))}
+          </select>
+          {districts.length === 0 && (
+            <p className="text-xs text-gray-400 mt-2">Loading districts…</p>
+          )}
+        </div>
       </div>
     )
   }
@@ -239,6 +260,16 @@ export function GRACompliancePage() {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex flex-wrap gap-3">
+          <select
+            value={districtId}
+            onChange={e => setDistrict(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="">— All Districts —</option>
+            {districts.map((d: any) => (
+              <option key={d.id} value={d.id}>{d.district_name}</option>
+            ))}
+          </select>
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
