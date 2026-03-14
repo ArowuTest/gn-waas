@@ -51,8 +51,30 @@ const WhistleblowerPage: React.FC = () => {
   const [stats, setStats] = useState({
     total: 0, new: 0, investigating: 0, confirmed: 0, rewards_ghs: 0,
   });
+  // UX-1: audit event search state for link-audit modal
+  const [auditQuery, setAuditQuery] = useState('');
+  const [auditResults, setAuditResults] = useState<Array<{ id: string; reference: string; account_number: string }>>([]);
+  const [auditSearching, setAuditSearching] = useState(false);
 
   const apiBase = import.meta.env.VITE_API_URL || '';
+
+  // UX-1: search audit events by reference or account number
+  const handleAuditSearch = async (q: string) => {
+    setAuditQuery(q);
+    if (q.length < 3) { setAuditResults([]); return; }
+    setAuditSearching(true);
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+      const res = await fetch(`${apiBase}/api/v1/audits?limit=8&q=${encodeURIComponent(q)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const body = await res.json();
+        setAuditResults(body?.data ?? []);
+      }
+    } catch { setAuditResults([]); }
+    finally { setAuditSearching(false); }
+  };
 
   const fetchTips = async () => {
     setLoading(true);
@@ -261,14 +283,36 @@ const WhistleblowerPage: React.FC = () => {
 
               {/* Linked Audit */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Linked Audit Event ID</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Linked Audit Event
+                  {updateForm.linked_audit_event_id && <span className="text-green-600 ml-1 text-xs">✓ linked</span>}
+                </label>
                 <input
                   type="text"
-                  value={updateForm.linked_audit_event_id}
-                  onChange={e => setUpdateForm(f => ({ ...f, linked_audit_event_id: e.target.value }))}
-                  className="w-full border rounded px-3 py-2 text-sm font-mono"
-                  placeholder="UUID of linked audit event"
+                  value={auditQuery}
+                  onChange={e => handleAuditSearch(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  placeholder="Search by audit reference or account number…"
                 />
+                {auditSearching && <p className="text-xs text-gray-400 mt-1">Searching…</p>}
+                {auditResults.length > 0 && (
+                  <ul className="mt-1 border border-gray-200 rounded-lg overflow-hidden text-sm shadow">
+                    {auditResults.map((a: any) => (
+                      <li
+                        key={a.id}
+                        className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex items-center justify-between"
+                        onClick={() => {
+                          setUpdateForm(f => ({ ...f, linked_audit_event_id: a.id }));
+                          setAuditQuery(a.reference || a.id);
+                          setAuditResults([]);
+                        }}
+                      >
+                        <span className="font-mono text-xs text-gray-700">{a.reference || a.id}</span>
+                        <span className="text-gray-400 text-xs">{a.account_number}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {/* Reward */}

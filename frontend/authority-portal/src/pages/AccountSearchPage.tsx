@@ -31,7 +31,7 @@ function AccountDetailPanel({ account }: { account: WaterAccount }) {
     )],
     ['Meter Number', account.meter_number ?? <em className="text-orange-600">Not registered</em>],
     ['Address', account.address_line1],
-    ['District Code', account.district_code ?? '—'],
+    ['District', account.district_name ?? account.district_id ?? '—'],
     ['TIN', account.account_holder_tin ?? '—'],
     ['Avg. Consumption', account.monthly_avg_consumption
       ? `${Number(account.monthly_avg_consumption).toFixed(2)} m³/month`

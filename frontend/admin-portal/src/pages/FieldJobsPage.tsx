@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../lib/api-client'
+import { useDistricts } from '../hooks/useQueries'
 import {
   MapPin, User, Clock, AlertTriangle, CheckCircle,
   RefreshCw, Eye, Navigation, Filter, Search
@@ -233,6 +234,12 @@ export function FieldJobsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [newJob, setNewJob] = useState({ account_id: '', district_id: '', priority: 2, notes: '' })
   const [createError, setCreateError] = useState('')
+  // UX-1: account search state for the Dispatch Job modal
+  const [accountQuery, setAccountQuery] = useState('')
+  const [accountSearchResults, setAccountSearchResults] = useState<Array<{ id: string; gwl_account_number: string; account_holder_name: string }>>([])
+  const [accountSearching, setAccountSearching] = useState(false)
+
+  const { data: districtsData } = useDistricts()
 
   const createJobMutation = useMutation({
     mutationFn: async (payload: typeof newJob) => {
@@ -247,12 +254,29 @@ export function FieldJobsPage() {
       queryClient.invalidateQueries({ queryKey: ['field-jobs'] })
       setShowCreate(false)
       setNewJob({ account_id: '', district_id: '', priority: 2, notes: '' })
+      setAccountQuery('')
+      setAccountSearchResults([])
       setCreateError('')
     },
     onError: (err: any) => {
       setCreateError(err.response?.data?.error?.message || err.response?.data?.error || 'Failed to create job')
     },
   })
+
+  // UX-1: debounced account search for the dispatch modal
+  const handleAccountSearch = async (q: string) => {
+    setAccountQuery(q)
+    if (q.length < 2) { setAccountSearchResults([]); return }
+    setAccountSearching(true)
+    try {
+      const res = await apiClient.get('/accounts/search', { params: { q, limit: 8 } })
+      setAccountSearchResults(res.data?.data ?? res.data?.accounts ?? [])
+    } catch {
+      setAccountSearchResults([])
+    } finally {
+      setAccountSearching(false)
+    }
+  }
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: jobsData, isLoading: jobsLoading, refetch } = useQuery({
@@ -347,24 +371,51 @@ export function FieldJobsPage() {
             <h3 className="font-bold text-gray-900 mb-4">Dispatch New Field Job</h3>
             <div className="space-y-3 mb-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Account ID (optional)</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Account (optional)
+                  {newJob.account_id && <span className="text-green-600 ml-1">✓ selected</span>}
+                </label>
                 <input
                   type="text"
-                  value={newJob.account_id}
-                  onChange={e => setNewJob(j => ({ ...j, account_id: e.target.value }))}
-                  placeholder="UUID of the water account"
+                  value={accountQuery}
+                  onChange={e => handleAccountSearch(e.target.value)}
+                  placeholder="Search by account number or name…"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                 />
+                {accountSearching && (
+                  <p className="text-xs text-gray-400 mt-1">Searching…</p>
+                )}
+                {accountSearchResults.length > 0 && (
+                  <ul className="mt-1 border border-gray-200 rounded-lg overflow-hidden text-sm shadow">
+                    {accountSearchResults.map(a => (
+                      <li
+                        key={a.id}
+                        className="px-3 py-2 hover:bg-green-50 cursor-pointer flex items-center justify-between"
+                        onClick={() => {
+                          setNewJob(j => ({ ...j, account_id: a.id }))
+                          setAccountQuery(`${a.gwl_account_number} — ${a.account_holder_name}`)
+                          setAccountSearchResults([])
+                        }}
+                      >
+                        <span className="font-medium">{a.account_holder_name}</span>
+                        <span className="text-gray-400 text-xs font-mono">{a.gwl_account_number}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">District ID (optional)</label>
-                <input
-                  type="text"
+                <label className="block text-xs font-semibold text-gray-600 mb-1">District (optional)</label>
+                <select
                   value={newJob.district_id}
                   onChange={e => setNewJob(j => ({ ...j, district_id: e.target.value }))}
-                  placeholder="UUID of the district"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                />
+                >
+                  <option value="">— All districts / unassigned —</option>
+                  {(districtsData ?? []).map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.district_name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Priority</label>

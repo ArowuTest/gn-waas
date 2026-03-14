@@ -71,6 +71,11 @@ func (h *ReportHandler) GetMonthlyReportPDF(c *fiber.Ctx) error {
 	filename := fmt.Sprintf("GN-WAAS-Monthly-Report-%s.pdf", periodStr)
 	c.Set("Content-Type", "application/pdf")
 	c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	// API-2 fix: explicitly set Content-Length so the browser and Render's CDN/proxy
+	// know the exact size of the response. Without this, some reverse proxies (including
+	// Render's routing layer) can forward a 0-byte body because they don't know where
+	// the body ends and terminate the stream early.
+	c.Set("Content-Length", fmt.Sprintf("%d", len(pdfBytes)))
 	c.Set("X-Report-Period", periodStr)
 	c.Set("X-Generated-At", time.Now().UTC().Format(time.RFC3339))
 	c.Set("X-Generated-By", "GN-WAAS Report Engine v1.0")
@@ -364,7 +369,8 @@ func generateMonthlyReportCSV(reportData interface{}, periodStr string) []byte {
 // GET /api/v1/reports/gra-compliance/csv?period=2026-01&district_id=<uuid>
 //
 // Columns: Audit Reference, Account Number, District, GRA Status, GWL Billed (GHS),
-//          Shadow Bill (GHS), Variance (%), Is Locked, Created At
+//
+//	Shadow Bill (GHS), Variance (%), Is Locked, Created At
 func (h *ReportHandler) GetGRAComplianceCSV(c *fiber.Ctx) error {
 	periodStr := c.Query("period", time.Now().AddDate(0, -1, 0).Format("2006-01"))
 	districtIDStr := c.Query("district_id")
@@ -450,8 +456,9 @@ func (h *ReportHandler) GetGRAComplianceCSV(c *fiber.Ctx) error {
 // GET /api/v1/reports/audit-trail/csv?period=2026-01&district_id=<uuid>
 //
 // Columns: Audit Reference, Account ID, District ID, Anomaly Flag ID,
-//          Status, Assigned Officer, GRA Status, GWL Billed, Shadow Bill,
-//          Variance %, Is Locked, Created At, Updated At
+//
+//	Status, Assigned Officer, GRA Status, GWL Billed, Shadow Bill,
+//	Variance %, Is Locked, Created At, Updated At
 func (h *ReportHandler) GetAuditTrailCSV(c *fiber.Ctx) error {
 	periodStr := c.Query("period", time.Now().AddDate(0, -1, 0).Format("2006-01"))
 	districtIDStr := c.Query("district_id")
@@ -548,8 +555,9 @@ func (h *ReportHandler) GetAuditTrailCSV(c *fiber.Ctx) error {
 // GET /api/v1/reports/field-jobs/csv?period=2026-01&district_id=<uuid>
 //
 // Columns: Job Reference, Account ID, District ID, Assigned Officer ID,
-//          Status, Is Blind Audit, Priority, GPS Fence (m),
-//          Officer Lat, Officer Lng, Created At, Updated At
+//
+//	Status, Is Blind Audit, Priority, GPS Fence (m),
+//	Officer Lat, Officer Lng, Created At, Updated At
 func (h *ReportHandler) GetFieldJobsCSV(c *fiber.Ctx) error {
 	periodStr := c.Query("period", time.Now().AddDate(0, -1, 0).Format("2006-01"))
 	districtIDStr := c.Query("district_id", "")

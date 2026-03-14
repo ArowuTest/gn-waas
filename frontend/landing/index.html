@@ -1533,19 +1533,19 @@
       </div>
       <div class="hero-kpis">
         <div class="hero-kpi">
-          <div class="kpi-val">51.6%</div>
+          <div class="kpi-val" id="stat-nrw-rate">51.6%</div>
           <div class="kpi-label">Current NRW Rate</div>
         </div>
         <div class="hero-kpi">
-          <div class="kpi-val">GHS 2.1B</div>
+          <div class="kpi-val" id="stat-revenue-risk">GHS 2.1B</div>
           <div class="kpi-label">Annual Revenue at Risk</div>
         </div>
         <div class="hero-kpi">
-          <div class="kpi-val">20%</div>
+          <div class="kpi-val" id="stat-nrw-target">20%</div>
           <div class="kpi-label">NRW Target</div>
         </div>
         <div class="hero-kpi">
-          <div class="kpi-val">1.2M</div>
+          <div class="kpi-val" id="stat-accounts">1.2M</div>
           <div class="kpi-label">Accounts Under Audit</div>
         </div>
       </div>
@@ -2350,6 +2350,39 @@
     });
   })();
 
+</script>
+
+<!-- UI-1: Live platform stats — fetched from /api/v1/public/stats.
+     The hardcoded fallback values are kept in the DOM so users always see
+     something meaningful even if the API is unreachable (Render free-tier
+     spin-up, network error, etc.). Stats update silently on load. -->
+<script>
+(function loadLiveStats() {
+  var API = (window.__ENV_API_URL__ || 'https://gnwaas-api-gateway.onrender.com') + '/api/v1/public/stats';
+  fetch(API, { method: 'GET', headers: { 'Accept': 'application/json' } })
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(body) {
+      var d = body && body.data;
+      if (!d) return;
+      // Format helpers
+      function fmtPct(v) { return (Math.round(v * 10) / 10) + '%'; }
+      function fmtBillions(v) {
+        if (v >= 1) return 'GHS ' + (Math.round(v * 10) / 10) + 'B';
+        return 'GHS ' + Math.round(v * 1000) + 'M';
+      }
+      function fmtAccounts(n) {
+        if (n >= 1e6) return (Math.round(n / 1e5) / 10) + 'M';
+        if (n >= 1e3) return (Math.round(n / 100) / 10) + 'K';
+        return String(n);
+      }
+      var el = document.getElementById.bind(document);
+      if (d.nrw_rate_pct        != null && el('stat-nrw-rate'))    el('stat-nrw-rate').textContent    = fmtPct(d.nrw_rate_pct);
+      if (d.revenue_at_risk_ghs_billions != null && el('stat-revenue-risk')) el('stat-revenue-risk').textContent = fmtBillions(d.revenue_at_risk_ghs_billions);
+      if (d.nrw_target_pct      != null && el('stat-nrw-target'))  el('stat-nrw-target').textContent  = fmtPct(d.nrw_target_pct);
+      if (d.total_accounts_audited != null && el('stat-accounts'))  el('stat-accounts').textContent   = fmtAccounts(d.total_accounts_audited);
+    })
+    .catch(function() { /* silently keep hardcoded fallback values */ });
+})();
 </script>
 
 </body>

@@ -78,6 +78,7 @@ export interface WaterAccount {
   category: string
   status: string
   district_id: string
+  district_name?: string   // populated by JOIN in /accounts/search response
   meter_number: string
   address_line1: string
   gps_latitude: number
