@@ -535,7 +535,9 @@ void main() {
 
     test('defaults are sensible', () {
       const config = MobileConfig.defaults;
-      expect(config.geofenceRadiusM,    100.0);
+      // Default changed from 100.0 → 10.0 so the GPS lock stays meaningful
+      // when the config endpoint is unreachable on first launch.
+      expect(config.geofenceRadiusM,    10.0);
       expect(config.requireBiometric,   isTrue);
       expect(config.maintenanceMode,    isFalse);
     });
