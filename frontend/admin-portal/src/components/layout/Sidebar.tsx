@@ -22,7 +22,7 @@ const navGroups = [
     label: 'Overview',
     items: [
       { label: 'Dashboard',    to: '/dashboard',  icon: <LayoutDashboard size={17} /> },
-      { label: 'DMA Map',      to: '/dma-map',    icon: <Map size={17} />, roles: ['SYSTEM_ADMIN', 'MOF_AUDITOR', 'GWL_MANAGER'] },
+      { label: 'DMA Map',      to: '/dma-map',    icon: <Map size={17} />, roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'MOF_AUDITOR', 'GWL_MANAGER'] },
     ],
   },
   {
@@ -31,28 +31,28 @@ const navGroups = [
       { label: 'Anomaly Flags', to: '/anomalies',  icon: <AlertTriangle size={17} /> },
       { label: 'Audit Events',  to: '/audits',     icon: <ClipboardList size={17} /> },
       { label: 'Field Jobs',    to: '/field-jobs', icon: <MapPin size={17} /> },
-      { label: 'NRW Analysis',  to: '/nrw',        icon: <BarChart3 size={17} />, roles: ['SYSTEM_ADMIN', 'GWL_MANAGER', 'MOF_AUDITOR'] },
+      { label: 'NRW Analysis',  to: '/nrw',        icon: <BarChart3 size={17} />, roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'GWL_MANAGER', 'MOF_AUDITOR'] },
     ],
   },
   {
     label: 'Compliance',
     items: [
-      { label: 'GRA Compliance', to: '/gra',     icon: <Shield size={17} />, roles: ['SYSTEM_ADMIN', 'GRA_OFFICER', 'MOF_AUDITOR'] },
+      { label: 'GRA Compliance', to: '/gra',     icon: <Shield size={17} />, roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'GRA_OFFICER', 'MOF_AUDITOR'] },
       { label: 'Reports',        to: '/reports', icon: <FileText size={17} /> },
     ],
   },
   {
     label: 'Administration',
     items: [
-      { label: 'Users',      to: '/users',      icon: <Users size={17} />,      roles: ['SYSTEM_ADMIN'] },
-      { label: 'Districts',  to: '/districts',  icon: <Building2 size={17} />,  roles: ['SYSTEM_ADMIN'] },
-      { label: 'Mobile App', to: '/mobile-app', icon: <Smartphone size={17} />, roles: ['SYSTEM_ADMIN'] },
-      { label: 'Settings',   to: '/settings',   icon: <Settings size={17} />,   roles: ['SYSTEM_ADMIN'] },
-      { label: 'Tariffs',    to: '/tariffs',    icon: <Settings size={17} />,   roles: ['SYSTEM_ADMIN'] },
-      { label: 'Gap Tracking', to: '/gaps',      icon: <BarChart3 size={17} /> },
-      { label: 'Whistleblower', to: '/whistleblower', icon: <Shield size={17} />, roles: ['SYSTEM_ADMIN'] },
-      { label: 'Donor KPIs',   to: '/donor-kpis',    icon: <FileText size={17} />, roles: ['SYSTEM_ADMIN', 'MOF_AUDITOR'] },
-      { label: 'Sync Status',  to: '/sync-status',   icon: <Smartphone size={17} />, roles: ['SYSTEM_ADMIN'] },
+      { label: 'Users',        to: '/users',         icon: <Users size={17} />,      roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
+      { label: 'Districts',    to: '/districts',     icon: <Building2 size={17} />,  roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
+      { label: 'Mobile App',   to: '/mobile-app',    icon: <Smartphone size={17} />, roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
+      { label: 'Settings',     to: '/settings',      icon: <Settings size={17} />,   roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
+      { label: 'Tariffs',      to: '/tariffs',       icon: <Settings size={17} />,   roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
+      { label: 'Gap Tracking', to: '/gaps',           icon: <BarChart3 size={17} /> },
+      { label: 'Whistleblower', to: '/whistleblower', icon: <Shield size={17} />,    roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
+      { label: 'Donor KPIs',   to: '/donor-kpis',    icon: <FileText size={17} />,   roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'MOF_AUDITOR'] },
+      { label: 'Sync Status',  to: '/sync-status',   icon: <Smartphone size={17} />, roles: ['SUPER_ADMIN', 'SYSTEM_ADMIN'] },
     ],
   },
 ]
