@@ -86,7 +86,7 @@ export function AuditsPage() {
           <div className="p-12 text-center">
             <p className="text-gray-500">No audit events found</p>
             <p className="text-gray-400 text-sm mt-1">
-              {!filters.district_id ? 'Select a district to view audits' : 'No audits match your filters'}
+              {!filters.district_id ? 'Showing all districts — use the filter to narrow results' : 'No audits match your filters'}
             </p>
           </div>
         ) : (

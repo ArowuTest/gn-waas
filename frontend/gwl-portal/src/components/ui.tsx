@@ -187,8 +187,10 @@ interface TableProps<T> {
   data: T[];
   onRowClick?: (row: T) => void;
   keyExtractor: (row: T) => string;
+  // Optional per-row class — use for highlighting a specific row from URL state
+  rowClassName?: (row: T) => string | undefined;
 }
-export function Table<T>({ columns, data, onRowClick, keyExtractor }: TableProps<T>) {
+export function Table<T>({ columns, data, onRowClick, keyExtractor, rowClassName }: TableProps<T>) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -205,7 +207,7 @@ export function Table<T>({ columns, data, onRowClick, keyExtractor }: TableProps
           {data.map((row) => (
             <tr
               key={keyExtractor(row)}
-              className={cn('hover:bg-gray-50 transition-colors', onRowClick && 'cursor-pointer')}
+              className={cn('hover:bg-gray-50 transition-colors', onRowClick && 'cursor-pointer', rowClassName?.(row))}
               onClick={() => onRowClick?.(row)}
             >
               {columns.map((col, i) => (

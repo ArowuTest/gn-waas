@@ -68,7 +68,15 @@ export default function ReportIssuePage() {
         setTrackingId(`RPT-${Date.now().toString().slice(-8)}`)
         setSubmitted(true)
       } else {
-        setSubmitError(err.response?.data?.error || 'Submission failed. Please try again.')
+        // The API may return error as an object {code, message} or as a plain string.
+        // Rendering a non-string directly causes React Error #31 ("Objects are not valid
+        // as a React child"). Always coerce to string before storing in state.
+        const rawErr = err.response?.data?.error
+        const errMsg =
+          typeof rawErr === 'object' && rawErr !== null
+            ? (rawErr.message ?? JSON.stringify(rawErr))
+            : (rawErr ?? err.message ?? 'Submission failed. Please try again.')
+        setSubmitError(String(errMsg))
       }
     } finally {
       setSubmitting(false)

@@ -102,7 +102,11 @@ export function useAuditEvents(filters: AuditFilters) {
       const res = await apiClient.get<ApiResponse<AuditEvent[]>>(`/audits?${params.toString()}`)
       return res.data
     },
-    enabled: !!filters.district_id,
+    // Always enabled — SUPER_ADMIN sees all districts (RLS allows it);
+    // district-scoped roles see only their own district via RLS policies.
+    // Removing the district_id guard fixes UX-2 where SUPER_ADMIN saw
+    // 'Select a district to view audits' with an empty table by default.
+    enabled: true,
   })
 }
 

@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -45,6 +45,7 @@ func NewAuditHandler(
 		logger:       logger,
 	}
 }
+
 // q returns the RLS-activated querier for this request context.
 func (h *AuditHandler) q(ctx context.Context) repository.Querier {
 	if tx, ok := rls.TxFromContext(ctx); ok {
@@ -52,7 +53,6 @@ func (h *AuditHandler) q(ctx context.Context) repository.Querier {
 	}
 	return h.flagRepo.DB()
 }
-
 
 // CreateAuditEvent godoc
 // POST /api/v1/audits
@@ -346,12 +346,12 @@ func NewFieldJobHandler(
 		logger:          logger,
 	}
 }
+
 // q returns the RLS-activated querier for this request context.
 // Delegates to the repo's QuerierFromContext which honours the RLS tx from ctx.
 func (h *FieldJobHandler) q(ctx context.Context) repository.Querier {
 	return h.fieldJobRepo.QuerierFromContext(ctx)
 }
-
 
 // GetMyJobs godoc
 // GET /api/v1/field-jobs/my-jobs
@@ -376,11 +376,15 @@ func (h *FieldJobHandler) GetMyJobs(c *fiber.Ctx) error {
 		districtIDStr, _ := c.Locals("rls_district_id").(string)
 		limit := c.QueryInt("limit", 100)
 		offset := c.QueryInt("offset", 0)
-		jobs, total, listErr := h.fieldJobRepo.ListAll(c.UserContext(), "", "", districtIDStr, limit, offset)
+		jobs, _, listErr := h.fieldJobRepo.ListAll(c.UserContext(), "", "", districtIDStr, limit, offset)
 		if listErr != nil {
 			return response.InternalError(c, "Failed to fetch jobs")
 		}
-		return response.OK(c, fiber.Map{"jobs": jobs, "total": total, "limit": limit, "offset": offset})
+		// Use the standard {success:true, data:[...]} wrapper so the frontend
+		// useMyJobs hook (which reads body.data) works for all roles.
+		// Previously returned {jobs:[...], total, limit, offset} which caused a
+		// TypeError: e.filter is not a function crash on the My Jobs page.
+		return response.OK(c, jobs)
 	}
 
 	// FIELD_OFFICER / GRA_OFFICER: return only jobs assigned to this user.
@@ -494,6 +498,7 @@ type AnomalyFlagHandler struct {
 func NewAnomalyFlagHandler(flagRepo *repository.AnomalyFlagRepository, logger *zap.Logger) *AnomalyFlagHandler {
 	return &AnomalyFlagHandler{flagRepo: flagRepo, logger: logger}
 }
+
 // q returns the RLS-activated querier for this request context.
 // Uses the transaction from rls.Middleware if available, else falls back to the raw pool.
 func (h *AnomalyFlagHandler) q(ctx context.Context) repository.Querier {
@@ -502,7 +507,6 @@ func (h *AnomalyFlagHandler) q(ctx context.Context) repository.Querier {
 	}
 	return h.flagRepo.DB()
 }
-
 
 // ListAnomalyFlags GET /api/v1/anomaly-flags
 func (h *AnomalyFlagHandler) ListAnomalyFlags(c *fiber.Ctx) error {
@@ -1703,8 +1707,9 @@ func (h *AuditHandler) UpdateAuditEvent(c *fiber.Ctx) error {
 // with >500 events.
 //
 // Query params:
-//   district_id (uuid, optional) — scope to a single district
-//   period      (YYYY-MM, optional) — month to summarise; defaults to current month
+//
+//	district_id (uuid, optional) — scope to a single district
+//	period      (YYYY-MM, optional) — month to summarise; defaults to current month
 func (h *AuditHandler) GetComplianceSummary(c *fiber.Ctx) error {
 	ctx := c.UserContext()
 
@@ -1735,14 +1740,21 @@ func (h *AuditHandler) GetComplianceSummary(c *fiber.Ctx) error {
 
 	query := fmt.Sprintf(`
 		SELECT
-			COUNT(*)                                                  AS total_events,
-			COUNT(*) FILTER (WHERE ae.status = 'COMPLETED')          AS completed_events,
-			COUNT(*) FILTER (WHERE ae.gra_status = 'SIGNED')         AS gra_signed,
-			COUNT(*) FILTER (WHERE ae.gra_status IN ('PENDING','PROVISIONAL','RETRY_QUEUED')) AS gra_pending,
-			COUNT(*) FILTER (WHERE ae.gra_status = 'FAILED')         AS gra_failed,
-			COALESCE(SUM(ae.confirmed_loss_ghs), 0)                  AS total_confirmed_loss_ghs,
-			COALESCE(SUM(ae.recovery_invoice_ghs), 0)                AS total_recovery_invoice_ghs,
-			COALESCE(SUM(ae.vat_collected_ghs), 0)                   AS total_vat_collected_ghs
+			COUNT(DISTINCT ae.id)                                      AS total_events,
+			COUNT(DISTINCT ae.id) FILTER (WHERE ae.status = 'COMPLETED') AS completed_events,
+			COUNT(DISTINCT ae.id) FILTER (WHERE ae.gra_status = 'SIGNED') AS gra_signed,
+			COUNT(DISTINCT ae.id) FILTER (WHERE ae.gra_status IN ('PENDING','PROVISIONAL','RETRY_QUEUED')) AS gra_pending,
+			COUNT(DISTINCT ae.id) FILTER (WHERE ae.gra_status = 'FAILED') AS gra_failed,
+			COALESCE(SUM(ae.confirmed_loss_ghs), 0)                   AS total_confirmed_loss_ghs,
+			COALESCE(SUM(ae.recovery_invoice_ghs), 0)                 AS total_recovery_invoice_ghs,
+			-- vat_collected_ghs does not exist on audit_events; derive from
+			-- the associated GRA VSDC submission (signed submissions only).
+			COALESCE((
+				SELECT SUM(vs.vat_amount_ghs)
+				FROM gra_vsdc_submissions vs
+				WHERE vs.audit_event_id = ae.id
+				  AND vs.status = 'SIGNED'
+			), 0)                                                     AS total_vat_collected_ghs
 		FROM audit_events ae
 		WHERE ae.created_at >= $1 AND ae.created_at < $2
 		  AND ae.status != 'DRAFT'
@@ -1779,17 +1791,17 @@ func (h *AuditHandler) GetComplianceSummary(c *fiber.Ctx) error {
 	}
 
 	return response.OK(c, fiber.Map{
-		"period":                    periodStr,
-		"total_events":              s.TotalEvents,
-		"completed_events":          s.CompletedEvents,
-		"gra_signed":                s.GRASigned,
-		"gra_pending":               s.GRAPending,
-		"gra_failed":                s.GRAFailed,
-		"compliance_rate_pct":       complianceRate,
-		"completion_rate_pct":       completionRate,
-		"total_confirmed_loss_ghs":  s.TotalConfirmedLossGHS,
+		"period":                     periodStr,
+		"total_events":               s.TotalEvents,
+		"completed_events":           s.CompletedEvents,
+		"gra_signed":                 s.GRASigned,
+		"gra_pending":                s.GRAPending,
+		"gra_failed":                 s.GRAFailed,
+		"compliance_rate_pct":        complianceRate,
+		"completion_rate_pct":        completionRate,
+		"total_confirmed_loss_ghs":   s.TotalConfirmedLossGHS,
 		"total_recovery_invoice_ghs": s.TotalRecoveryInvoiceGHS,
-		"total_vat_collected_ghs":   s.TotalVATCollectedGHS,
+		"total_vat_collected_ghs":    s.TotalVATCollectedGHS,
 	})
 }
 

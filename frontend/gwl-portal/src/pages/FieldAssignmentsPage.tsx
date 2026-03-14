@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MapPin, RefreshCw, Download, UserPlus } from 'lucide-react';
 import { useCases, useDistricts, useFieldOfficers } from '../hooks/useQueries';
 import { KPICard, Badge, Button, Select, Spinner, EmptyState, Table } from '../components/ui';
@@ -12,9 +12,16 @@ import type { GWLCase, GWLStatus, Severity } from '../types';
 
 export default function FieldAssignmentsPage() {
   const navigate = useNavigate();
+  // NAV-2 fix: read job_id from URL query params so that links from
+  // CaseDetailPage (/field-assignments?job_id=...) actually highlight the job.
+  const [searchParams] = useSearchParams();
+  const jobIdFromUrl = searchParams.get('job_id') ?? undefined;
+
   const [districtId, setDistrictId] = useState('');
   const [officerId, setOfficerId] = useState('');
   const [statusFilter, setStatusFilter] = useState('FIELD_ASSIGNED');
+  // Highlighted job from URL — automatically cleared when user changes filters
+  const [highlightedJobId] = useState(jobIdFromUrl);
 
   const { data: districts } = useDistricts();
   const { data: officers } = useFieldOfficers();
@@ -155,6 +162,12 @@ export default function FieldAssignmentsPage() {
       )}
 
       {/* Assignments Table */}
+      {highlightedJobId && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          <MapPin className="w-4 h-4 flex-shrink-0" />
+          Navigated from case detail — highlighted row shows the linked job.
+        </div>
+      )}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-sm font-semibold text-gray-900">Assignment Details</h2>
@@ -169,6 +182,11 @@ export default function FieldAssignmentsPage() {
             keyExtractor={(r) => r.id}
             data={cases}
             onRowClick={(r) => navigate(`/cases/${r.id}`)}
+            rowClassName={(r) =>
+              r.id === highlightedJobId
+                ? 'bg-blue-50 ring-1 ring-inset ring-blue-300'
+                : undefined
+            }
             columns={[
               {
                 header: 'Account',

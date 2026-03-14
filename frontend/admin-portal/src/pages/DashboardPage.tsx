@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertTriangle, TrendingDown, DollarSign, CheckCircle,
   Activity, RefreshCw, Droplets, ArrowUpRight, Zap,
@@ -442,9 +443,9 @@ export function DashboardPage() {
           subtitle="System Input Volume decomposition"
           className="xl:col-span-2"
           action={
-            <a href="/nrw" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+            <Link to="/nrw" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
               Full analysis <ArrowUpRight size={12} />
-            </a>
+            </Link>
           }
         >
           <WaterBalanceBar wb={waterBalance} />
@@ -454,9 +455,9 @@ export function DashboardPage() {
           title="District NRW Heatmap"
           subtitle="Zone classification by NRW %"
           action={
-            <a href="/dma-map" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+            <Link to="/dma-map" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
               View map <ArrowUpRight size={12} />
-            </a>
+            </Link>
           }
         >
           <DistrictHeatmapSummary districts={districts ?? []} />
@@ -475,9 +476,9 @@ export function DashboardPage() {
           title="Revenue Recovery"
           subtitle="Managed-service monetisation — 3% success fee model"
           action={
-            <a href="/reports" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+            <Link to="/reports" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
               Full report <ArrowUpRight size={12} />
-            </a>
+            </Link>
           }
         >
           <RevenuePanel districtId={selectedDistrict || undefined} />
@@ -487,9 +488,9 @@ export function DashboardPage() {
           title="Workforce Oversight"
           subtitle="Field officer GPS tracking — last 30 minutes"
           action={
-            <a href="/field-jobs" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+            <Link to="/field-jobs" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
               Field jobs <ArrowUpRight size={12} />
-            </a>
+            </Link>
           }
         >
           <WorkforcePanel districtId={selectedDistrict || undefined} />
@@ -542,9 +543,9 @@ export function DashboardPage() {
           className="xl:col-span-2"
           noPadding
           action={
-            <a href="/anomalies" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+            <Link to="/anomalies" className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
               View all <ArrowUpRight size={12} />
-            </a>
+            </Link>
           }
         >
           {anomaliesLoading ? (

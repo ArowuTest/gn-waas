@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import apiClient from '../lib/api-client'
-import { Camera, CheckCircle, Search, Loader2 } from 'lucide-react'
+import { Camera, CheckCircle, Search, Loader2, MapPin } from 'lucide-react'
 
 type Step = 'account' | 'photo' | 'reading' | 'confirm' | 'done'
 
@@ -18,6 +18,32 @@ export default function MeterReadingPage() {
   const [step, setStep] = useState<Step>('account')
   const [accountNum, setAccountNum] = useState('')
   const [account, setAccount] = useState<AccountResult | null>(null)
+  // GPS state — acquired when user reaches the confirm step
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null)
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'acquiring' | 'ok' | 'denied' | 'error'>('idle')
+
+  // Acquire GPS position — called when user proceeds to Confirm step
+  const acquireGPS = () => {
+    if (!navigator.geolocation) {
+      setGpsStatus('error')
+      return
+    }
+    setGpsStatus('acquiring')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGpsCoords({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        })
+        setGpsStatus('ok')
+      },
+      (err) => {
+        setGpsStatus(err.code === err.PERMISSION_DENIED ? 'denied' : 'error')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    )
+  }
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState('')
   const [reading, setReading] = useState('')
@@ -58,6 +84,13 @@ export default function MeterReadingPage() {
         reading_m3: parseFloat(reading),
         notes: notes || undefined,
         source: 'FIELD_OFFICER',
+        // GPS evidence — always include when available so the backend
+        // preCheck() can validate GPS presence for FIELD_APP submissions.
+        ...(gpsCoords && {
+          gps_lat: gpsCoords.lat,
+          gps_lng: gpsCoords.lng,
+          gps_accuracy_m: gpsCoords.accuracy,
+        }),
       })
       setStep('done')
     } catch (err: any) {
@@ -206,7 +239,11 @@ export default function MeterReadingPage() {
             </div>
             <div className="flex gap-3">
               <button onClick={() => setStep('photo')} className="flex-1 border border-gray-200 text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-50">Back</button>
-              <button onClick={() => setStep('confirm')} disabled={!reading} className="flex-1 bg-green-800 text-white font-bold py-3 rounded-xl hover:bg-green-900 disabled:opacity-40">Review →</button>
+              <button
+                onClick={() => { setStep('confirm'); acquireGPS() }}
+                disabled={!reading}
+                className="flex-1 bg-green-800 text-white font-bold py-3 rounded-xl hover:bg-green-900 disabled:opacity-40"
+              >Review →</button>
             </div>
           </div>
         )}
@@ -226,6 +263,24 @@ export default function MeterReadingPage() {
                   <span className="font-semibold text-gray-900">{value}</span>
                 </div>
               ))}
+              {/* GPS status row */}
+              <div className="flex justify-between text-sm border-b border-gray-50 pb-2">
+                <span className="text-gray-500 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />GPS</span>
+                <span className={`font-semibold flex items-center gap-1 ${
+                  gpsStatus === 'ok' ? 'text-green-700' :
+                  gpsStatus === 'acquiring' ? 'text-blue-600' :
+                  gpsStatus === 'denied' ? 'text-orange-600' :
+                  gpsStatus === 'error' ? 'text-red-600' : 'text-gray-400'
+                }`}>
+                  {gpsStatus === 'acquiring' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {gpsStatus === 'ok' && gpsCoords
+                    ? `${gpsCoords.lat.toFixed(5)}, ${gpsCoords.lng.toFixed(5)} (±${Math.round(gpsCoords.accuracy)}m)`
+                    : gpsStatus === 'acquiring' ? 'Acquiring…'
+                    : gpsStatus === 'denied' ? 'Permission denied — submission will proceed without GPS'
+                    : gpsStatus === 'error' ? 'Unavailable — submission will proceed without GPS'
+                    : '—'}
+                </span>
+              </div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setStep('reading')} className="flex-1 border border-gray-200 text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-50">Back</button>

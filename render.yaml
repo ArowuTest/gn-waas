@@ -177,3 +177,75 @@ services:
         value: "10000"
       - key: APP_PORT
         value: "10000"
+
+  # ── Frontend Static Sites ─────────────────────────────────────────────────────
+  # Each portal is a Vite SPA deployed as a Render static site.
+  # The landing page includes public/*.html legal pages copied to dist/ on build.
+
+  - type: web
+    name: gnwaas-landing
+    runtime: static
+    region: oregon
+    autoDeploy: yes
+    rootDir: frontend/landing
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /privacy-policy.html
+        destination: /privacy-policy.html
+      - type: rewrite
+        source: /terms-of-use.html
+        destination: /terms-of-use.html
+      - type: rewrite
+        source: /data-protection.html
+        destination: /data-protection.html
+      - type: rewrite
+        source: /evat-compliance.html
+        destination: /evat-compliance.html
+      - type: rewrite
+        source: /accessibility.html
+        destination: /accessibility.html
+      # SPA fallback
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
+    name: gnwaas-admin-portal
+    runtime: static
+    region: oregon
+    autoDeploy: yes
+    rootDir: frontend/admin-portal
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
+    name: gnwaas-gwl-portal
+    runtime: static
+    region: oregon
+    autoDeploy: yes
+    rootDir: frontend/gwl-portal
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
+    name: gnwaas-authority-portal
+    runtime: static
+    region: oregon
+    autoDeploy: yes
+    rootDir: frontend/authority-portal
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

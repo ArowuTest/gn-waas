@@ -532,6 +532,42 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// Repositories retrieve the transaction via rls.TxFromContext and use it
 	// for all queries, ensuring PostgreSQL RLS policies are enforced.
 	rlsMW := rls.Middleware(db, logger)
+
+	// ── Public endpoints (no auth) — MUST be registered BEFORE the authenticated
+	// api group. In Fiber v2 a Group's middleware is applied as a prefix-based Use()
+	// handler. Any /api/v1/* route registered after api.Group("/api/v1", authMW, ...)
+	// will still be matched by authMW first, returning 401 even for public paths.
+	// Fix: register all auth-free routes here, BEFORE the api group is created.
+	// ──────────────────────────────────────────────────────────────────────────
+
+	// Whistleblower tip submission (anonymous — no login required by design)
+	_whistleblowerHandler := handler.NewWhistleblowerHandler(db, logger)
+	app.Post("/api/v1/tips", _whistleblowerHandler.SubmitTip)
+	app.Get("/api/v1/tips/:ref", _whistleblowerHandler.GetTipStatus)
+
+	// Public district list (used by whistleblower form dropdown — no auth)
+	app.Get("/api/v1/public/districts", func(c *fiber.Ctx) error {
+		type districtPublic struct {
+			DistrictCode string `json:"district_code"`
+			Name         string `json:"name"`
+			Region       string `json:"region"`
+		}
+		rows, err := districtRepo.ListPublic(c.Context())
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "failed to fetch districts"})
+		}
+		out := make([]districtPublic, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, districtPublic{
+				DistrictCode: r.DistrictCode,
+				Name:         r.Name,
+				Region:       r.Region,
+			})
+		}
+		return c.JSON(fiber.Map{"success": true, "districts": out})
+	})
+
+	// ── Authenticated API group — all routes below require a valid JWT ────────
 	api := app.Group("/api/v1", authMW, rlsMW)
 
 	// ── Districts ─────────────────────────────────────────────────────────────
@@ -615,7 +651,7 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	users := api.Group("/users")
 	users.Get("/me", userHandler.GetMe)
 	users.Get("/field-officers",
-		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "GWL_MANAGER", "FIELD_SUPERVISOR", "GRA_OFFICER"),
+		middleware.RequireRoles("SUPER_ADMIN", "SYSTEM_ADMIN", "GWL_MANAGER", "GWL_SUPERVISOR", "FIELD_SUPERVISOR", "GRA_OFFICER"),
 		userHandler.GetFieldOfficers,
 	)
 
@@ -928,10 +964,10 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	// ── Core Data Endpoints (BE-7) ───────────────────────────────────────────
 	// Read-only access to production, meter-reading, water-balance, billing data.
 	// Accessible by SUPER_ADMIN, SYSTEM_ADMIN, MOF_AUDITOR, GRA_OFFICER,
-	// AUDIT_MANAGER, and GWL roles.
+	// AUDIT_MANAGER, GWL roles, and field supervisors (Authority Portal dashboard).
 	dataRoles := middleware.RequireRoles(
 		"SUPER_ADMIN", "SYSTEM_ADMIN", "MOF_AUDITOR",
-		"GRA_OFFICER", "AUDIT_MANAGER",
+		"GRA_OFFICER", "AUDIT_MANAGER", "FIELD_SUPERVISOR",
 		"GWL_EXECUTIVE", "GWL_MANAGER", "GWL_SUPERVISOR", "GWL_ANALYST",
 	)
 	api.Get("/production-records", dataRoles, dataHandler.ListProductionRecords)
@@ -1358,38 +1394,10 @@ func New(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	})
 
 
-	// ── Whistleblower Tips (public — no auth required) ────────────────────────
-	// Anonymous tip submission. No login required by design.
-	// Rate-limited separately to prevent abuse.
-	whistleblowerHandler := handler.NewWhistleblowerHandler(db, logger)
-	app.Post("/api/v1/tips", whistleblowerHandler.SubmitTip)
-	app.Get("/api/v1/tips/:ref", whistleblowerHandler.GetTipStatus)
-
-	// ── Public district list (for whistleblower form dropdown — no auth) ──────
-	app.Get("/api/v1/public/districts", func(c *fiber.Ctx) error {
-		type districtPublic struct {
-			DistrictCode string `json:"district_code"`
-			Name         string `json:"name"`
-			Region       string `json:"region"`
-		}
-		// Route through DistrictRepository so queries go through r.q(ctx) rather
-		// than a direct db reference embedded in app.go (issue #3).
-		rows, err := districtRepo.ListPublic(c.Context())
-		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": "failed to fetch districts"})
-		}
-		out := make([]districtPublic, 0, len(rows))
-		for _, r := range rows {
-			out = append(out, districtPublic{
-				DistrictCode: r.DistrictCode,
-				Name:         r.Name,
-				Region:       r.Region,
-			})
-		}
-		return c.JSON(fiber.Map{"districts": out})
-	})
-
 	// ── Whistleblower Admin (SYSTEM_ADMIN only) ───────────────────────────────
+	// Public tip submission routes are registered before the authenticated group (above).
+	// These admin routes use the same handler instance via the closure reference.
+	whistleblowerHandler := _whistleblowerHandler
 	adminTips := api.Group("/admin/tips",
 		middleware.RequireRoles("SYSTEM_ADMIN", "SUPER_ADMIN"),
 	)
